@@ -100,9 +100,10 @@ Traffic goes through the platform's TURN servers which are whitelisted. To the n
   - `relay/mobile/tun_android.go` - Android-only: tun2socks + fdsan fix (CGo)
   - `relay/mobile/tun_stub.go` - Desktop stub (no tun2socks needed)
 - `android-app/` - Android joiner app
-  - WebView loading call page with hook injection
+  - WebView loading call page with hook injection (hidden from user)
   - VpnService capturing all device traffic
-  - Tunnel mode selector (DC / Pion Video)
+  - Tunnel mode selector (DC / Pion Video, long-press Connect button)
+  - Auto-connect: fetches current call link from link server, joins automatically
   - Go relay as .aar library (gomobile) + Pion relay as native binary
 - `creator-app/` - Electron desktop creator app
   - Webview with persistent session for login retention
@@ -118,7 +119,11 @@ Prebuilt binaries are available on [GitHub Releases](../../releases).
 
 ## Setup
 
-### Creator side (free internet, desktop)
+### Option A: Manual (no server required)
+
+The simplest setup — creator manually shares the call link each session.
+
+**Creator side (free internet, desktop)**
 
 Download and run the Electron app from [GitHub Releases](../../releases). It bundles the Go relay automatically.
 
@@ -128,13 +133,147 @@ Download and run the Electron app from [GitHub Releases](../../releases). It bun
 4. Log in, create a call
 5. Copy the join link, send it to the joiner
 
-### Joiner side (censored, Android)
+**Joiner side (censored, Android)**
 
 1. Download and install `whitelist-bypass.apk` from [GitHub Releases](../../releases)
 2. Select tunnel mode (DC or Pion Video)
-3. Paste the call link and tap GO
+3. Paste the call link and tap Connect
 4. The app joins the call, establishes the tunnel, starts VPN
 5. All device traffic flows through the call
+
+---
+
+### Option B: Always-on server (auto-connect)
+
+This setup runs the creator headlessly on a VPS with free internet. The Android app fetches the current call link automatically — no manual link sharing needed. The WebView is hidden from the user; the app shows only a Connect button.
+
+**Architecture**
+
+```
+VPS (free internet)
+  ├── creator-app (Electron + Xvfb) — keeps a VK call open 24/7
+  ├── link-server (Node.js :8080)   — exposes current call link via HTTP
+  └── relay (Go :9000)              — bridges DataChannel ↔ internet
+
+Android (censored)
+  └── App fetches http://VPS_IP:8080/link → joins call silently → VPN starts
+```
+
+**1. VPS requirements**
+
+Any Linux VPS with public IP on free internet, Node.js 18+, and a virtual display (Xvfb) for headless Electron.
+
+**2. Collect VK session cookies**
+
+The creator app needs an active VK session. Easiest method:
+
+1. Log into [vk.com](https://vk.com) in Chrome on any machine
+2. Open DevTools → Application → Storage → Cookies → `https://vk.com`
+3. Copy key cookies: `remixsid`, `remixsid_https`, `remixlang`, `remixlhk`
+
+Or run the creator Electron app on a desktop, log in via GUI, then copy the session folder to the server:
+- macOS: `~/Library/Application Support/whitelist-bypass-creator/`
+- Linux: `~/.config/whitelist-bypass-creator/`
+- Windows: `%APPDATA%\whitelist-bypass-creator\`
+
+**3. Deploy link server on VPS**
+
+Save as `/opt/whitelist-bypass/link-server.js`:
+
+```js
+const http = require('http');
+let currentLink = '';
+
+http.createServer((req, res) => {
+  res.setHeader('Access-Control-Allow-Origin', '*');
+  if (req.method === 'POST' && req.url === '/link') {
+    let body = '';
+    req.on('data', d => body += d);
+    req.on('end', () => { currentLink = JSON.parse(body).link; res.end('ok'); });
+  } else if (req.url === '/link') {
+    res.end(JSON.stringify({ link: currentLink }));
+  } else {
+    res.writeHead(404); res.end();
+  }
+}).listen(8080, () => console.log('Link server on :8080'));
+```
+
+**4. Run creator headlessly**
+
+```sh
+# Install Xvfb
+apt-get install -y xvfb
+
+# Start virtual display
+Xvfb :99 -screen 0 1280x800x24 &
+
+# Run creator app
+DISPLAY=:99 ./WhitelistBypass-linux.AppImage --no-sandbox &
+
+# Run link server
+node /opt/whitelist-bypass/link-server.js &
+```
+
+**5. Auto-post call link from creator app**
+
+In the creator app, after the VK call page loads, add a script to post the join link to the link server. You can paste this in the creator app's JS console:
+
+```js
+// Run once after call is created
+fetch('http://localhost:8080/link', {
+  method: 'POST',
+  body: JSON.stringify({ link: window.location.href })
+});
+```
+
+Or automate it by adding it to the hook file (`hooks/creator-vk.js`) — the hook already runs on page load.
+
+**6. Build Android APK pointing to your VPS**
+
+```sh
+./build-app.sh -PlinkServerUrl=http://YOUR_VPS_IP:8080/link
+```
+
+**7. Run as systemd services**
+
+```ini
+# /etc/systemd/system/vk-xvfb.service
+[Unit]
+Description=Xvfb virtual display
+[Service]
+ExecStart=/usr/bin/Xvfb :99 -screen 0 1280x800x24
+Restart=always
+[Install]
+WantedBy=multi-user.target
+```
+
+```ini
+# /etc/systemd/system/vk-creator.service
+[Unit]
+Description=VK call creator (headless)
+After=vk-xvfb.service network-online.target
+[Service]
+Environment=DISPLAY=:99
+ExecStart=/opt/whitelist-bypass/WhitelistBypass-linux.AppImage --no-sandbox
+Restart=always
+[Install]
+WantedBy=multi-user.target
+```
+
+```ini
+# /etc/systemd/system/vk-linkserver.service
+[Unit]
+Description=VK call link server
+[Service]
+ExecStart=/usr/bin/node /opt/whitelist-bypass/link-server.js
+Restart=always
+[Install]
+WantedBy=multi-user.target
+```
+
+```sh
+systemctl enable --now vk-xvfb vk-creator vk-linkserver
+```
 
 ## Building from source
 
@@ -144,7 +283,7 @@ Download and run the Electron app from [GitHub Releases](../../releases). It bun
 - gomobile (`go install golang.org/x/mobile/cmd/gomobile@latest`)
 - gobind (`go install golang.org/x/mobile/cmd/gobind@latest`)
 - Android SDK + NDK 29
-- Java 11+
+- Java 17+
 - Node.js 18+
 
 ### Build scripts
@@ -155,6 +294,9 @@ Download and run the Electron app from [GitHub Releases](../../releases). It bun
 
 # Build Android APK -> prebuilts/whitelist-bypass.apk
 ./build-app.sh
+
+# Build APK with custom link server URL (Option B)
+./build-app.sh -PlinkServerUrl=http://YOUR_VPS_IP:8080/link
 
 # Build Electron apps for all platforms -> prebuilts/
 ./build-creator.sh

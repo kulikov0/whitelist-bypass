@@ -1,73 +1,69 @@
 <?xml version="1.0" encoding="utf-8"?>
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
-    xmlns:app="http://schemas.android.com/apk/res-auto"
     android:id="@+id/main"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
+    android:background="#0A0A0A"
     android:orientation="vertical">
 
+    <!-- Status area -->
     <LinearLayout
         android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:orientation="horizontal"
-        android:padding="4dp">
+        android:layout_height="0dp"
+        android:layout_weight="1"
+        android:gravity="center"
+        android:orientation="vertical">
 
-        <EditText
-            android:id="@+id/urlInput"
-            android:layout_width="0dp"
-            android:layout_height="wrap_content"
-            android:layout_weight="1"
-            android:hint="Paste call link"
-            android:inputType="textUri"
-            android:singleLine="true"
-            android:textSize="14sp" />
-
-        <Spinner
-            android:id="@+id/modeSpinner"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:minWidth="100dp" />
-
-        <Button
-            android:id="@+id/goButton"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:text="GO" />
-    </LinearLayout>
-
-    <FrameLayout
-        android:layout_width="match_parent"
-        android:layout_height="100dp">
+        <View
+            android:id="@+id/statusDot"
+            android:layout_width="80dp"
+            android:layout_height="80dp"
+            android:background="@drawable/status_dot"
+            android:layout_marginBottom="24dp" />
 
         <TextView
-            android:id="@+id/logView"
-            android:layout_width="match_parent"
-            android:layout_height="match_parent"
-            android:background="#111111"
-            android:fontFamily="monospace"
-            android:padding="4dp"
-            android:scrollbars="vertical"
-            android:textColor="#00FF00"
-            android:textSize="10sp" />
+            android:id="@+id/statusText"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="Отключено"
+            android:textColor="#888888"
+            android:textSize="18sp"
+            android:letterSpacing="0.05" />
 
-        <ImageButton
-            android:id="@+id/copyLogsButton"
-            android:layout_width="32dp"
-            android:layout_height="32dp"
-            android:scaleType="fitXY"
-            android:layout_gravity="top|end"
-            android:layout_margin="4dp"
-            android:background="?attr/selectableItemBackgroundBorderless"
-            android:contentDescription="Copy logs"
-            android:src="@drawable/ic_copy"
-            app:tint="#888888"
-            android:padding="4dp" />
-    </FrameLayout>
+    </LinearLayout>
 
+    <!-- Connect/Disconnect button -->
+    <Button
+        android:id="@+id/connectButton"
+        android:layout_width="200dp"
+        android:layout_height="56dp"
+        android:layout_gravity="center_horizontal"
+        android:layout_marginBottom="48dp"
+        android:layout_marginTop="16dp"
+        android:background="@drawable/btn_connect"
+        android:text="Подключить"
+        android:textColor="#FFFFFF"
+        android:textSize="16sp"
+        android:letterSpacing="0.03" />
+
+    <!-- Debug log (hidden, toggle with long press on status dot) -->
+    <TextView
+        android:id="@+id/logView"
+        android:layout_width="match_parent"
+        android:layout_height="120dp"
+        android:background="#111111"
+        android:fontFamily="monospace"
+        android:padding="6dp"
+        android:scrollbars="vertical"
+        android:textColor="#00CC66"
+        android:textSize="9sp"
+        android:visibility="gone" />
+
+    <!-- WebView runs hidden in background -->
     <WebView
         android:id="@+id/webView"
-        android:layout_width="match_parent"
-        android:layout_height="0dp"
-        android:layout_weight="1" />
+        android:layout_width="1dp"
+        android:layout_height="1dp"
+        android:visibility="invisible" />
 
 </LinearLayout>

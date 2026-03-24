@@ -1,21 +1,16 @@
 package bypass.whitelist
 
 import android.annotation.SuppressLint
-import android.content.ClipData
-import android.content.ClipboardManager
 import android.content.Intent
 import android.content.pm.PackageManager
+import android.graphics.Color
 import android.net.VpnService
 import android.os.Build
 import android.os.Bundle
 import android.util.Log
+import android.view.View
 import android.webkit.*
-import android.widget.AdapterView
-import android.widget.ArrayAdapter
 import android.widget.Button
-import android.widget.EditText
-import android.widget.ImageButton
-import android.widget.Spinner
 import android.widget.TextView
 import android.widget.Toast
 import androidx.activity.enableEdgeToEdge
@@ -29,12 +24,18 @@ import java.io.File
 
 class MainActivity : AppCompatActivity() {
 
-    private var tunnelMode = TunnelMode.DC
-    private var pionProcess: Process? = null
-
     private lateinit var webView: WebView
     private lateinit var logView: TextView
-    private lateinit var urlInput: EditText
+    private lateinit var statusText: TextView
+    private lateinit var statusDot: View
+    private lateinit var connectButton: Button
+
+    private var isConnected = false
+    private var isConnecting = false
+    private var autoJoinDone = false
+
+    private var tunnelMode = TunnelMode.DC
+    private var pionProcess: Process? = null
 
     private val vpnPrepLauncher = registerForActivityResult(
         ActivityResultContracts.StartActivityForResult()
@@ -44,13 +45,24 @@ class MainActivity : AppCompatActivity() {
         ActivityResultContracts.StartActivityForResult()
     ) { result ->
         if (result.resultCode == RESULT_OK) startVpnService()
-        else appendLog("VPN permission denied")
+        else {
+            appendLog("VPN permission denied")
+            setStatus(VpnStatus.CALL_DISCONNECTED)
+        }
     }
 
     private val hookVk by lazy { assets.open("joiner-vk.js").bufferedReader().readText() }
     private val hookTelemost by lazy { assets.open("joiner-telemost.js").bufferedReader().readText() }
     private val hookPionVk by lazy { assets.open("pion-vk.js").bufferedReader().readText() }
     private val hookPionTelemost by lazy { assets.open("pion-telemost.js").bufferedReader().readText() }
+
+    private fun hookForUrl(url: String): String {
+        return if (tunnelMode.isPion) {
+            if (url.contains("telemost.yandex")) hookPionTelemost else hookPionVk
+        } else {
+            if (url.contains("telemost.yandex")) hookTelemost else hookVk
+        }
+    }
 
     @SuppressLint("SetJavaScriptEnabled")
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -63,39 +75,43 @@ class MainActivity : AppCompatActivity() {
             insets
         }
 
+        statusDot = findViewById(R.id.statusDot)
+        statusText = findViewById(R.id.statusText)
+        connectButton = findViewById(R.id.connectButton)
         logView = findViewById(R.id.logView)
-        urlInput = findViewById(R.id.urlInput)
         webView = findViewById(R.id.webView)
 
         setupWebView()
-        setupModeSpinner()
+        startRelay()
 
-        val goButton = findViewById<Button>(R.id.goButton)
-        goButton.setOnClickListener {
-            val url = urlInput.text.toString().trim()
-            if (url.isNotEmpty()) {
-                stopRelay()
-                startRelay()
-                appendLog("Loading: $url")
-                webView.loadUrl(url)
-            }
-        }
-
-        findViewById<ImageButton>(R.id.copyLogsButton).setOnClickListener {
-            val clip = ClipData.newPlainText("logs", logView.text)
-            (getSystemService(CLIPBOARD_SERVICE) as ClipboardManager).setPrimaryClip(clip)
-            Toast.makeText(this, "Logs copied", Toast.LENGTH_SHORT).show()
-        }
-
+        // Pre-request VPN permission so it's ready when needed
         VpnService.prepare(this)?.let { vpnPrepLauncher.launch(it) }
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
             checkSelfPermission(android.Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) {
             requestPermissions(arrayOf(android.Manifest.permission.POST_NOTIFICATIONS), 0)
         }
 
-        if (CALL_LINK.isNotEmpty()) {
-            urlInput.setText(CALL_LINK)
-            goButton.performClick()
+        connectButton.setOnClickListener {
+            if (isConnected || isConnecting) disconnect() else connect()
+        }
+
+        // Long press status dot = toggle debug log
+        statusDot.setOnLongClickListener {
+            logView.visibility = if (logView.visibility == View.GONE) View.VISIBLE else View.GONE
+            true
+        }
+
+        // Long press connect button = cycle tunnel mode
+        connectButton.setOnLongClickListener {
+            if (!isConnected && !isConnecting) {
+                tunnelMode = if (tunnelMode == TunnelMode.DC) TunnelMode.PION_VIDEO else TunnelMode.DC
+                stopRelay()
+                startRelay()
+                appendLog("Mode switched to: ${tunnelMode.label}")
+                logView.visibility = View.VISIBLE
+                Toast.makeText(this, "Mode: ${tunnelMode.label}", Toast.LENGTH_SHORT).show()
+            }
+            true
         }
     }
 
@@ -105,27 +121,90 @@ class MainActivity : AppCompatActivity() {
         super.onDestroy()
     }
 
-    private fun setupModeSpinner() {
-        val spinner = findViewById<Spinner>(R.id.modeSpinner)
-        val adapter = ArrayAdapter(this, android.R.layout.simple_spinner_item, TunnelMode.entries.map { it.label })
-        adapter.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item)
-        spinner.adapter = adapter
-        spinner.setSelection(TunnelMode.entries.indexOf(tunnelMode))
-        spinner.onItemSelectedListener = object : AdapterView.OnItemSelectedListener {
-            var init = true
-            override fun onItemSelected(parent: AdapterView<*>?, view: android.view.View?, pos: Int, id: Long) {
-                if (init) { init = false; return }
-                tunnelMode = TunnelMode.entries[pos]
-                appendLog("Mode: ${tunnelMode.label}")
-                stopRelay()
-                startRelay()
+    private fun connect() {
+        if (isConnecting) return
+        isConnecting = true
+        autoJoinDone = false
+        webView.clearCache(true)
+        android.webkit.CookieManager.getInstance().removeAllCookies(null)
+        setStatus(VpnStatus.CONNECTING)
+        appendLog("Fetching call link...")
+        Thread {
+            var retries = 0
+            while (retries < 5) {
+                try {
+                    val conn = java.net.URL(LINK_SERVER_URL).openConnection() as java.net.HttpURLConnection
+                    conn.connectTimeout = 5000
+                    conn.readTimeout = 5000
+                    val body = conn.inputStream.bufferedReader().readText()
+                    val match = Regex("\"link\"\\s*:\\s*\"([^\"]+)\"").find(body)
+                    val link = match?.groupValues?.get(1)
+                    if (!link.isNullOrEmpty()) {
+                        appendLog("Got link, loading call...")
+                        runOnUiThread { webView.loadUrl(link) }
+                        return@Thread
+                    }
+                } catch (e: Exception) {
+                    appendLog("Server error: ${e.message}")
+                }
+                retries++
+                Thread.sleep(2000)
             }
-            override fun onNothingSelected(parent: AdapterView<*>?) {}
+            runOnUiThread {
+                isConnecting = false
+                setStatus(VpnStatus.CALL_DISCONNECTED)
+                Toast.makeText(this, "Cannot reach server", Toast.LENGTH_SHORT).show()
+            }
+        }.start()
+    }
+
+    private fun disconnect() {
+        isConnected = false
+        isConnecting = false
+        autoJoinDone = false
+        webView.loadUrl("about:blank")
+        webView.clearCache(true)
+        android.webkit.CookieManager.getInstance().removeAllCookies(null)
+        startService(Intent(this, TunnelVpnService::class.java).apply {
+            action = TunnelVpnService.ACTION_STOP
+        })
+        setStatus(VpnStatus.CALL_DISCONNECTED)
+        appendLog("Disconnected")
+    }
+
+    private fun setStatus(status: VpnStatus) {
+        runOnUiThread {
+            val (dotColor, textColor, text, btnText) = when (status) {
+                VpnStatus.STARTING, VpnStatus.CONNECTING, VpnStatus.CALL_CONNECTED,
+                VpnStatus.DATACHANNEL_OPEN -> arrayOf(
+                    Color.parseColor("#FFA500"), Color.parseColor("#FFA500"),
+                    "Подключение...", "Отключить"
+                )
+                VpnStatus.TUNNEL_ACTIVE -> {
+                    isConnected = true
+                    isConnecting = false
+                    arrayOf(Color.parseColor("#00CC66"), Color.parseColor("#00CC66"),
+                        "Подключено", "Отключить")
+                }
+                VpnStatus.TUNNEL_LOST, VpnStatus.DATACHANNEL_LOST -> arrayOf(
+                    Color.parseColor("#FFA500"), Color.parseColor("#FFA500"),
+                    "Переподключение...", "Отключить"
+                )
+                VpnStatus.CALL_DISCONNECTED, VpnStatus.CALL_FAILED -> {
+                    isConnected = false
+                    isConnecting = false
+                    arrayOf(Color.parseColor("#333333"), Color.parseColor("#888888"),
+                        "Отключено", "Подключить")
+                }
+            }
+            statusDot.background.setTint(dotColor as Int)
+            statusText.setTextColor(textColor as Int)
+            statusText.text = text as String
+            connectButton.text = btnText as String
         }
     }
 
     private fun startRelay() {
-        Log.d("RELAY", "startRelay mode=${tunnelMode.label}")
         if (tunnelMode.isPion) startPionRelay() else startDcRelay()
     }
 
@@ -140,8 +219,8 @@ class MainActivity : AppCompatActivity() {
     private fun startDcRelay() {
         val cb = LogCallback { msg ->
             appendLog(msg)
-            if (msg.contains("browser connected")) updateVpnStatus(VpnStatus.TUNNEL_ACTIVE)
-            else if (msg.contains("ws read error")) updateVpnStatus(VpnStatus.TUNNEL_LOST)
+            if (msg.contains("browser connected")) setStatus(VpnStatus.TUNNEL_ACTIVE)
+            else if (msg.contains("ws read error")) setStatus(VpnStatus.TUNNEL_LOST)
         }
         Thread {
             try {
@@ -150,7 +229,7 @@ class MainActivity : AppCompatActivity() {
                 appendLog("Relay error: ${e.message}")
             }
         }.start()
-        appendLog("Relay started DC mode (SOCKS5 :1080, WS :9000)")
+        appendLog("Relay started: DC mode")
     }
 
     private fun startPionRelay() {
@@ -161,49 +240,25 @@ class MainActivity : AppCompatActivity() {
         }
         Thread {
             try {
-                val isTelemost = urlInput.text.toString().contains("telemost")
-                val mode = tunnelMode.relayMode(isTelemost)
                 val pb = ProcessBuilder(
-                    relayBin.absolutePath, "--mode", mode, "--ws-port", "9001", "--socks-port", "1080"
+                    relayBin.absolutePath, "--mode", "vk-video-joiner",
+                    "--ws-port", "9001", "--socks-port", "1080"
                 )
                 pb.redirectErrorStream(true)
                 val proc = pb.start()
                 pionProcess = proc
-                appendLog("Pion relay started mode=$mode (signaling :9001, SOCKS5 :1080)")
+                appendLog("Relay started: Pion Video mode")
                 proc.inputStream.bufferedReader().forEachLine { line ->
                     Log.d("RELAY", line)
                     appendLog(line)
-                    if (line.contains("CONNECTED")) updateVpnStatus(VpnStatus.TUNNEL_ACTIVE)
-                    else if (line.contains("session cleaned up")) updateVpnStatus(VpnStatus.TUNNEL_LOST)
+                    if (line.contains("CONNECTED")) setStatus(VpnStatus.TUNNEL_ACTIVE)
+                    else if (line.contains("session cleaned up")) setStatus(VpnStatus.TUNNEL_LOST)
                 }
                 appendLog("Pion relay exited: ${proc.exitValue()}")
             } catch (e: Exception) {
-                Log.e("RELAY", "Pion relay error", e)
                 appendLog("Pion relay error: ${e.message}")
             }
         }.start()
-    }
-
-    private fun updateVpnStatus(status: VpnStatus) {
-        TunnelVpnService.instance?.updateStatus(status)
-    }
-
-    private fun requestVpn() {
-        val intent = VpnService.prepare(this)
-        if (intent != null) vpnLauncher.launch(intent) else startVpnService()
-    }
-
-    private fun startVpnService() {
-        startService(Intent(this, TunnelVpnService::class.java))
-        appendLog("VPN started")
-        updateVpnStatus(VpnStatus.TUNNEL_ACTIVE)
-    }
-
-    private fun hookForUrl(url: String): String {
-        if (tunnelMode.isPion) {
-            return if (url.contains("telemost.yandex")) hookPionTelemost else hookPionVk
-        }
-        return if (url.contains("telemost.yandex")) hookTelemost else hookVk
     }
 
     @SuppressLint("SetJavaScriptEnabled")
@@ -218,8 +273,6 @@ class MainActivity : AppCompatActivity() {
             setSupportMultipleWindows(false)
             useWideViewPort = true
             loadWithOverviewMode = true
-            builtInZoomControls = true
-            displayZoomControls = false
             userAgentString = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
         }
 
@@ -236,14 +289,14 @@ class MainActivity : AppCompatActivity() {
                 if (text.contains("[HOOK]")) {
                     appendLog(text)
                     when {
-                        text.contains("CALL CONNECTED") -> updateVpnStatus(VpnStatus.CALL_CONNECTED)
-                        text.contains("DataChannel open") -> updateVpnStatus(VpnStatus.DATACHANNEL_OPEN)
-                        text.contains("DataChannel closed") -> updateVpnStatus(VpnStatus.DATACHANNEL_LOST)
-                        text.contains("WebSocket connected") -> updateVpnStatus(VpnStatus.TUNNEL_ACTIVE)
-                        text.contains("WebSocket disconnected") -> updateVpnStatus(VpnStatus.TUNNEL_LOST)
-                        text.contains("Connection state: connecting") -> updateVpnStatus(VpnStatus.CONNECTING)
-                        text.contains("Connection state: disconnected") -> updateVpnStatus(VpnStatus.CALL_DISCONNECTED)
-                        text.contains("Connection state: failed") -> updateVpnStatus(VpnStatus.CALL_FAILED)
+                        text.contains("CALL CONNECTED") -> setStatus(VpnStatus.CALL_CONNECTED)
+                        text.contains("DataChannel open") -> setStatus(VpnStatus.DATACHANNEL_OPEN)
+                        text.contains("DataChannel closed") -> setStatus(VpnStatus.DATACHANNEL_LOST)
+                        text.contains("WebSocket connected") -> setStatus(VpnStatus.TUNNEL_ACTIVE)
+                        text.contains("WebSocket disconnected") -> setStatus(VpnStatus.TUNNEL_LOST)
+                        text.contains("Connection state: connecting") -> setStatus(VpnStatus.CONNECTING)
+                        text.contains("Connection state: disconnected") -> setStatus(VpnStatus.CALL_DISCONNECTED)
+                        text.contains("Connection state: failed") -> setStatus(VpnStatus.CALL_FAILED)
                     }
                 }
                 return true
@@ -263,9 +316,7 @@ class MainActivity : AppCompatActivity() {
                         if (k != null
                             && !k.equals("content-security-policy", ignoreCase = true)
                             && !k.equals("content-security-policy-report-only", ignoreCase = true)
-                        ) {
-                            headers[k] = v.joinToString(", ")
-                        }
+                        ) headers[k] = v.joinToString(", ")
                     }
                     WebResourceResponse(
                         conn.contentType?.split(";")?.firstOrNull() ?: "text/html",
@@ -287,8 +338,43 @@ if(oac){var nac=function(){var c=new oac();c.suspend();
             }
 
             override fun onPageFinished(view: WebView, url: String) {
-                appendLog("Page loaded, injecting hook for $url")
+                appendLog("Page: $url")
                 view.evaluateJavascript(hookForUrl(url), null)
+
+                // Auto-join: only once per connect attempt
+                if (url.contains("/call/join/") && !autoJoinDone) {
+                    autoJoinDone = true
+                    view.evaluateJavascript("""
+                        (function autoJoin() {
+                          var attempts = 0;
+                          var clickedTexts = {};
+                          var JOIN_BTNS = ['Join', 'Войти', 'Присоединиться', 'Войти в звонок'];
+                          var t = setInterval(function() {
+                            attempts++;
+                            var nameInput = document.querySelector('input[placeholder*="name" i], input[placeholder*="имя" i]');
+                            var btns = Array.from(document.querySelectorAll('button'));
+                            var joinBtn = btns.find(function(b) {
+                              return JOIN_BTNS.indexOf(b.textContent.trim()) !== -1;
+                            });
+                            if (joinBtn) {
+                              var txt = joinBtn.textContent.trim();
+                              if (!clickedTexts[txt]) {
+                                clickedTexts[txt] = true;
+                                if (nameInput && !nameInput.value) {
+                                  var setter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value').set;
+                                  setter.call(nameInput, 'User');
+                                  nameInput.dispatchEvent(new Event('input', { bubbles: true }));
+                                  nameInput.dispatchEvent(new Event('change', { bubbles: true }));
+                                }
+                                console.log('[HOOK] Auto-joining: ' + txt);
+                                joinBtn.click();
+                              }
+                            }
+                            if (attempts > 60) clearInterval(t);
+                          }, 500);
+                        })();
+                    """.trimIndent(), null)
+                }
             }
         }
     }
@@ -303,6 +389,17 @@ if(oac){var nac=function(){var c=new oac();c.suspend();
         }
     }
 
+    private fun requestVpn() {
+        val intent = VpnService.prepare(this)
+        if (intent != null) vpnLauncher.launch(intent) else startVpnService()
+    }
+
+    private fun startVpnService() {
+        startService(Intent(this, TunnelVpnService::class.java))
+        appendLog("VPN started")
+        setStatus(VpnStatus.TUNNEL_ACTIVE)
+    }
+
     private fun getLocalIPAddress(): String {
         try {
             val cm = getSystemService(CONNECTIVITY_SERVICE) as android.net.ConnectivityManager
@@ -310,9 +407,7 @@ if(oac){var nac=function(){var c=new oac();c.suspend();
             val props = cm.getLinkProperties(network) ?: return ""
             for (addr in props.linkAddresses) {
                 val ip = addr.address
-                if (!ip.isLoopbackAddress && ip is java.net.Inet4Address) {
-                    return ip.hostAddress ?: ""
-                }
+                if (!ip.isLoopbackAddress && ip is java.net.Inet4Address) return ip.hostAddress ?: ""
             }
         } catch (e: Exception) {
             Log.e("RELAY", "getLocalIPAddress error", e)
@@ -336,23 +431,17 @@ if(oac){var nac=function(){var c=new oac();c.suspend();
         @JavascriptInterface
         fun onTunnelReady() {
             appendLog("Tunnel ready, starting VPN...")
-            updateVpnStatus(VpnStatus.TUNNEL_ACTIVE)
+            setStatus(VpnStatus.TUNNEL_ACTIVE)
             runOnUiThread { requestVpn() }
         }
     }
 
-    private enum class TunnelMode(val label: String, val relayArg: String, val isPion: Boolean) {
-        DC("DC", "joiner", false),
-        PION_VIDEO("Pion Video", "video", true);
-
-        fun relayMode(isTelemost: Boolean): String {
-            if (!isPion) return "joiner"
-            val platform = if (isTelemost) "telemost" else "vk"
-            return "$platform-$relayArg-joiner"
-        }
+    private enum class TunnelMode(val label: String, val isPion: Boolean) {
+        DC("DataChannel", false),
+        PION_VIDEO("Pion Video", true)
     }
 
     companion object {
-        private const val CALL_LINK = "" // Open call page on app start
+        private val LINK_SERVER_URL = BuildConfig.LINK_SERVER_URL
     }
 }

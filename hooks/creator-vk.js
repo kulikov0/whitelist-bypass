@@ -8,6 +8,10 @@
   let activeDC = null;
   let dcOpen = false;
   let wsOpen = false;
+  let dcSetupDone = false;
+
+  if (window.__hookInstalled) { log('Hook already installed, skipping'); return; }
+  window.__hookInstalled = true;
 
   const OrigPC = window.RTCPeerConnection;
   window.RTCPeerConnection = function (config) {
@@ -17,7 +21,8 @@
 
     pc.addEventListener('connectionstatechange', () => {
       log('Connection state:', pc.connectionState);
-      if (pc.connectionState === 'connected') {
+      if (pc.connectionState === 'connected' && !dcSetupDone) {
+        dcSetupDone = true;
         log('=== CALL CONNECTED ===');
         setupDC(pc);
       }
