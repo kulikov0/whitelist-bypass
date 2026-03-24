@@ -29,8 +29,7 @@ type VP8DataTunnel struct {
 	stopCh     chan struct{}
 	sendQueue  chan []byte
 	onData     func([]byte)
-	onClose    func()
-	throttle   bool
+	onClose func()
 }
 
 func NewVP8DataTunnel(track *webrtc.TrackLocalStaticSample, logFn func(string, ...any)) *VP8DataTunnel {
@@ -118,10 +117,6 @@ func (t *VP8DataTunnel) Start(fps int) {
 			}
 		}
 	}()
-}
-
-func (t *VP8DataTunnel) SetThrottle(on bool) {
-	t.throttle = on
 }
 
 func (t *VP8DataTunnel) Stop() {

@@ -17,10 +17,10 @@
       "output": "../prebuilts"
     },
     "extraResources": [
-      { "from": "../hooks/creator-vk.js", "to": "hooks/creator-vk.js" },
-      { "from": "../hooks/creator-telemost.js", "to": "hooks/creator-telemost.js" },
-      { "from": "../hooks/pion-vk.js", "to": "hooks/pion-vk.js" },
-      { "from": "../hooks/pion-telemost.js", "to": "hooks/pion-telemost.js" }
+      { "from": "../hooks/dc-creator-vk.js", "to": "hooks/dc-creator-vk.js" },
+      { "from": "../hooks/dc-creator-telemost.js", "to": "hooks/dc-creator-telemost.js" },
+      { "from": "../hooks/video-vk.js", "to": "hooks/video-vk.js" },
+      { "from": "../hooks/video-telemost.js", "to": "hooks/video-telemost.js" }
     ],
     "mac": {
       "target": "dmg",

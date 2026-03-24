@@ -1,8 +1,6 @@
 package bypass.whitelist
 
 import android.annotation.SuppressLint
-import android.content.ClipData
-import android.content.ClipboardManager
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.net.VpnService
@@ -19,12 +17,12 @@ import android.widget.EditText
 import android.widget.ImageButton
 import android.widget.Spinner
 import android.widget.TextView
-import android.widget.Toast
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.view.ViewCompat
 import androidx.core.view.WindowInsetsCompat
+import androidx.core.content.FileProvider
 import androidx.core.content.edit
 import java.net.InetAddress
 
@@ -44,6 +42,7 @@ private fun maskUrl(url: String): String {
 class MainActivity : AppCompatActivity() {
 
     private var tunnelMode = TunnelMode.DC
+    private val logWriter by lazy { LogWriter(cacheDir) }
     private val relay by lazy {
         RelayController(
             nativeLibDir = applicationInfo.nativeLibraryDir,
@@ -90,6 +89,8 @@ class MainActivity : AppCompatActivity() {
         urlInput = findViewById(R.id.urlInput)
         webView = findViewById(R.id.webView)
 
+        logWriter.reset()
+
         previousUrl = getPreferences(MODE_PRIVATE).getString(PrefsKeys.URL, "")!!
         urlInput.setText(previousUrl)
 
@@ -102,6 +103,8 @@ class MainActivity : AppCompatActivity() {
         goButton.setOnClickListener {
             val url = urlInput.text.toString().trim()
             if (url.isNotEmpty()) {
+                logWriter.reset()
+                logView.text = ""
                 stopRelay()
                 startRelay()
                 appendLog("Loading: ${maskUrl(url)}")
@@ -116,9 +119,13 @@ class MainActivity : AppCompatActivity() {
         }
 
         findViewById<ImageButton>(R.id.copyLogsButton).setOnClickListener {
-            val clip = ClipData.newPlainText("logs", logView.text)
-            (getSystemService(CLIPBOARD_SERVICE) as ClipboardManager).setPrimaryClip(clip)
-            Toast.makeText(this, "Logs copied", Toast.LENGTH_SHORT).show()
+            val uri = FileProvider.getUriForFile(this, "$packageName.fileprovider", logWriter.file)
+            val share = Intent(Intent.ACTION_SEND).apply {
+                type = "text/plain"
+                putExtra(Intent.EXTRA_STREAM, uri)
+                addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+            }
+            startActivity(Intent.createChooser(share, "Share logs"))
         }
 
         TunnelVpnService.onDisconnect = { runOnUiThread { resetState() } }
@@ -156,6 +163,7 @@ class MainActivity : AppCompatActivity() {
         TunnelVpnService.onDisconnect = null
         stopRelay()
         TunnelVpnService.instance?.stop()
+        logWriter.close()
         super.onDestroy()
     }
 
@@ -311,8 +319,13 @@ if(oac){var nac=function(){var c=new oac();c.suspend();
     }
 
     private fun appendLog(msg: String) {
+        val (line, evicted) = logWriter.append(msg)
         runOnUiThread {
-            logView.append("${msg.replace("[HOOK] ", "")}\n")
+            if (evicted) {
+                logView.text = logWriter.displayText()
+            } else {
+                logView.append("$line\n")
+            }
             val scrollAmount = logView.layout?.let {
                 it.getLineTop(logView.lineCount) - logView.height
             } ?: 0
@@ -384,6 +397,7 @@ if(oac){var nac=function(){var c=new oac();c.suspend();
     private fun resetState() {
         stopRelay()
         webView.loadUrl("about:blank")
+        logWriter.reset()
         logView.text = ""
         logView.scrollTo(0, 0)
         appendLog("Disconnected")

@@ -4,75 +4,201 @@
 <style>
 * { margin: 0; padding: 0; box-sizing: border-box; }
 body { font-family: -apple-system, sans-serif; background: #1a1a1a; color: #e0e0e0; height: 100vh; display: flex; flex-direction: column; }
-.toolbar { display: flex; align-items: center; gap: 8px; padding: 8px 12px; background: #222; border-bottom: 1px solid #333; height: 40px; flex-shrink: 0; }
-.toolbar button { padding: 4px 14px; border: none; border-radius: 6px; font-size: 13px; cursor: pointer; font-weight: 500; }
-.btn-home { background: #444; color: #e0e0e0; }
+.tab-bar { display: flex; align-items: center; background: #222; border-bottom: 1px solid #333; height: 36px; flex-shrink: 0; overflow-x: auto; }
+.tab { display: flex; align-items: center; gap: 6px; padding: 0 12px; height: 100%; font-size: 12px; cursor: pointer; border-right: 1px solid #333; white-space: nowrap; color: #888; }
+.tab.active { background: #1a1a1a; color: #e0e0e0; }
+.tab .close { font-size: 14px; opacity: 0.5; cursor: pointer; margin-left: 4px; }
+.tab .close:hover { opacity: 1; }
+.tab-add { padding: 0 12px; height: 100%; display: flex; align-items: center; font-size: 16px; cursor: pointer; color: #888; }
+.tab-add:hover { color: #e0e0e0; }
+.toolbar { display: flex; align-items: center; gap: 8px; padding: 6px 12px; background: #252525; border-bottom: 1px solid #333; height: 36px; flex-shrink: 0; }
+.toolbar button { padding: 3px 12px; border: none; border-radius: 6px; font-size: 12px; cursor: pointer; font-weight: 500; }
 .btn-vk { background: #0077ff; color: white; }
 .btn-telemost { background: #fc3f1d; color: white; }
-.btn-inject { background: #f59e0b; color: black; }
-.link-text { font-family: monospace; font-size: 12px; color: #aaa; flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .content { flex: 1; position: relative; }
-.content webview { width: 100%; height: 100%; border: none; }
+.content webview { width: 100%; height: 100%; border: none; position: absolute; top: 0; left: 0; }
+.content webview.hidden { display: none; }
 .welcome { display: flex; align-items: center; justify-content: center; height: 100%; flex-direction: column; gap: 16px; }
 .welcome h1 { font-size: 22px; font-weight: 500; }
 .welcome p { color: #888; font-size: 14px; }
-.logs { display: flex; gap: 0; border-top: 1px solid #333; height: 140px; flex-shrink: 0; }
+.logs { display: flex; gap: 0; border-top: 1px solid #333; height: 120px; flex-shrink: 0; }
 .log-panel { flex: 1; display: flex; flex-direction: column; }
 .log-panel:first-child { border-right: 1px solid #333; }
-.log-title { font-size: 11px; font-weight: 600; color: #888; padding: 4px 8px; background: #1e1e1e; border-bottom: 1px solid #333; }
-.log-content { flex: 1; overflow-y: auto; padding: 4px 8px; font-family: monospace; font-size: 11px; background: #111; white-space: pre-wrap; word-break: break-all; }
+.log-title { font-size: 10px; font-weight: 600; color: #888; padding: 3px 8px; background: #1e1e1e; border-bottom: 1px solid #333; }
+.log-content { flex: 1; overflow-y: auto; padding: 3px 8px; font-family: monospace; font-size: 10px; background: #111; white-space: pre-wrap; word-break: break-all; }
 .log-content.relay { color: #4fc3f7; }
 .log-content.hook { color: #66bb6a; }
 </style>
 </head>
 <body>
-<div class="toolbar">
-  <button class="btn-home" onclick="goHome()">Home</button>
-  <button class="btn-vk" onclick="loadURL('https://vk.com/im')">VK Call</button>
+<div class="tab-bar" id="tabBar">
+  <div class="tab-add" onclick="addTab()" title="New tab">+</div>
+</div>
+<div class="toolbar" id="toolbar" style="display:none">
+  <button class="btn-vk" onclick="loadURL('https://vk.com/im')">VK</button>
   <button class="btn-telemost" onclick="loadURL('https://telemost.yandex.ru/')">Telemost</button>
   <span style="margin-left:auto;font-size:11px;color:#888">Tunnel:</span>
-  <select id="modeSelect" style="padding:3px 6px;border:1px solid #555;border-radius:6px;font-size:11px;cursor:pointer;font-weight:500;background:#333;color:#e0e0e0;outline:none" onchange="onModeChange(this.value)">
-    <option value="dc" selected>DC</option>
+  <select id="modeSelect" style="padding:2px 6px;border:1px solid #555;border-radius:6px;font-size:11px;cursor:pointer;font-weight:500;background:#333;color:#e0e0e0;outline:none" onchange="onModeChange(this.value)">
+    <option value="dc">DC</option>
     <option value="pion-video">Video</option>
   </select>
+  <span onclick="saveLogs()" style="cursor:pointer;margin-left:8px" title="Save logs"><img src="resources/icons8-download-64.png" style="height:16px;vertical-align:middle;filter:invert(1) brightness(2)"></span>
 </div>
 <div class="content" id="content">
   <div class="welcome" id="welcome">
     <h1>Whitelist Bypass - Creator</h1>
-    <p>Click VK Call or Telemost to start</p>
+    <p>Click + to add a tab</p>
   </div>
 </div>
-<div class="logs">
+<div class="logs" id="logsPanel" style="display:none">
   <div class="log-panel">
-    <div class="log-title">Relay <span onclick="copyLog('relayLog')" style="cursor:pointer;float:right;margin-left:6px" title="Copy"><img src="resources/icons8-copy-50.png" style="height:16px;vertical-align:middle;filter:invert(1) brightness(2);padding:0 4px"></span><span onclick="saveLogs()" style="cursor:pointer;float:right;margin-left:6px" title="Save all"><img src="resources/icons8-download-64.png" style="height:19px;vertical-align:middle;filter:invert(1) brightness(2);padding:0 4px"></span><span onclick="document.getElementById('relayLog').textContent=''" style="cursor:pointer;float:right" title="Clear"><span style="font-size:16px;line-height:16px">&#x2715;</span></span></div>
+    <div class="log-title">Relay <span onclick="clearLog('relay')" style="cursor:pointer;float:right" title="Clear"><span style="font-size:13px;line-height:13px">&#x2715;</span></span></div>
     <div class="log-content relay" id="relayLog"></div>
   </div>
   <div class="log-panel">
-    <div class="log-title">Hook <span onclick="copyLog('hookLog')" style="cursor:pointer;float:right;margin-left:6px" title="Copy"><img src="resources/icons8-copy-50.png" style="height:16px;vertical-align:middle;filter:invert(1) brightness(2);padding:0 4px"></span><span onclick="saveLogs()" style="cursor:pointer;float:right;margin-left:6px" title="Save all"><img src="resources/icons8-download-64.png" style="height:19px;vertical-align:middle;filter:invert(1) brightness(2);padding:0 4px"></span><span onclick="document.getElementById('hookLog').textContent=''" style="cursor:pointer;float:right" title="Clear"><span style="font-size:16px;line-height:16px">&#x2715;</span></span></div>
+    <div class="log-title">Hook <span onclick="clearLog('hook')" style="cursor:pointer;float:right" title="Clear"><span style="font-size:13px;line-height:13px">&#x2715;</span></span></div>
     <div class="log-content hook" id="hookLog"></div>
   </div>
 </div>
 <script>
-var wv = null;
-var currentMode = 'dc';
+var tabsState = {}; // tabId -> { wv, mode, relayLogs, hookLogs }
+var activeTabId = null;
+var nextTabId = 1;
+
+function addTab() {
+  var tabId = 'tab-' + (nextTabId++);
+  tabsState[tabId] = { wv: null, url: '', mode: 'dc', relayLogs: '', hookLogs: '' };
+  window.bridge.startRelay(tabId);
+  renderTabs();
+  selectTab(tabId);
+}
+
+function closeTab(tabId, e) {
+  if (e) e.stopPropagation();
+  var t = tabsState[tabId];
+  if (t && t.wv) t.wv.remove();
+  window.bridge.closeTab(tabId);
+  delete tabsState[tabId];
+  if (activeTabId === tabId) {
+    var ids = Object.keys(tabsState);
+    activeTabId = ids.length > 0 ? ids[ids.length - 1] : null;
+  }
+  renderTabs();
+  renderContent();
+}
+
+function selectTab(tabId) {
+  if (activeTabId && tabsState[activeTabId]) {
+    tabsState[activeTabId].relayLogs = document.getElementById('relayLog').textContent;
+    tabsState[activeTabId].hookLogs = document.getElementById('hookLog').textContent;
+  }
+  activeTabId = tabId;
+  renderTabs();
+  renderContent();
+}
+
+function renderTabs() {
+  var bar = document.getElementById('tabBar');
+  var html = '';
+  Object.keys(tabsState).forEach(function(id) {
+    var t = tabsState[id];
+    var label = 'New';
+    if (t.url) {
+      if (t.url.includes('vk.com')) label = 'VK';
+      else if (t.url.includes('telemost')) label = 'Telemost';
+    }
+    var cls = id === activeTabId ? 'tab active' : 'tab';
+    html += '<div class="' + cls + '" onclick="selectTab(\'' + id + '\')">' + label + ' <span class="close" onclick="closeTab(\'' + id + '\', event)">&#x2715;</span></div>';
+  });
+  html += '<div class="tab-add" onclick="addTab()" title="New tab">+</div>';
+  bar.innerHTML = html;
+}
+
+function renderContent() {
+  var content = document.getElementById('content');
+  var welcome = document.getElementById('welcome');
+  var toolbar = document.getElementById('toolbar');
+  var logsPanel = document.getElementById('logsPanel');
+  // Hide all webviews
+  var wvs = content.querySelectorAll('webview');
+  for (var i = 0; i < wvs.length; i++) wvs[i].classList.add('hidden');
+
+  if (!activeTabId || !tabsState[activeTabId]) {
+    welcome.style.display = 'flex';
+    toolbar.style.display = 'none';
+    logsPanel.style.display = 'none';
+    return;
+  }
+  welcome.style.display = 'none';
+  toolbar.style.display = 'flex';
+  logsPanel.style.display = 'flex';
+
+  var t = tabsState[activeTabId];
+  document.getElementById('modeSelect').value = t.mode;
+  document.getElementById('relayLog').textContent = t.relayLogs || '';
+  document.getElementById('hookLog').textContent = t.hookLogs || '';
+  if (t.wv) t.wv.classList.remove('hidden');
+  scrollLogs();
+}
+
+function scrollLogs() {
+  var r = document.getElementById('relayLog');
+  var h = document.getElementById('hookLog');
+  r.scrollTop = r.scrollHeight;
+  h.scrollTop = h.scrollHeight;
+}
+
+function loadURL(url) {
+  if (!activeTabId) return;
+  var t = tabsState[activeTabId];
+  if (t.wv) t.wv.remove();
+  var wv = document.createElement('webview');
+  wv.setAttribute('src', url);
+  wv.setAttribute('partition', 'persist:creator');
+  wv.setAttribute('nodeintegration', '');
+  wv.setAttribute('nodeintegrationinsubframes', '');
+  wv.style.width = '100%';
+  wv.style.height = '100%';
+  wv.style.position = 'absolute';
+  wv.style.top = '0';
+  wv.style.left = '0';
+  wv.dataset.tabId = activeTabId;
+  document.getElementById('content').appendChild(wv);
+  wv.addEventListener('dom-ready', function() {
+    wv.setAudioMuted(true);
+    var tabId = wv.dataset.tabId;
+    window.bridge.getHookCode(tabId, wv.getURL()).then(function(code) {
+      wv.executeJavaScript(code).catch(function() {});
+    });
+  });
+  wv.addEventListener('did-navigate', function() {
+    t.url = wv.getURL() || t.url;
+    renderTabs();
+    var tabId = wv.dataset.tabId;
+    wv.executeJavaScript('window.__hookInstalled = false').catch(function() {});
+    window.bridge.getHookCode(tabId, wv.getURL()).then(function(code) {
+      wv.executeJavaScript(code).catch(function() {});
+    });
+  });
+  t.wv = wv;
+  t.url = url;
+  renderTabs();
+}
 
 function onModeChange(mode) {
-  currentMode = mode;
-  var sel = document.getElementById('modeSelect');
-  sel.disabled = true;
-  window.bridge.setTunnelMode(mode).then(function() {
-    if (wv) {
-      var url = wv.getURL();
-      if (url && url !== 'about:blank') {
-        wv.reload();
-      }
+  if (!activeTabId) return;
+  var t = tabsState[activeTabId];
+  t.mode = mode;
+  window.bridge.setTunnelMode(activeTabId, mode).then(function() {
+    if (t.wv) {
+      t.wv.executeJavaScript('window.__hookInstalled = false').catch(function() {});
+      t.wv.reload();
     }
-    setTimeout(function() { sel.disabled = false; }, 1000);
   });
 }
 
-function copyLog(id) {
-  navigator.clipboard.writeText(document.getElementById(id).textContent);
+function clearLog(type) {
+  document.getElementById(type === 'relay' ? 'relayLog' : 'hookLog').textContent = '';
 }
 
 function saveLogs() {
@@ -86,61 +212,32 @@ function saveLogs() {
   a.click();
 }
 
-function appendHookLog(msg) {
-  var el = document.getElementById('hookLog');
-  if (el.textContent.length > 0) el.textContent += '\n';
-  el.textContent += msg.replace('[HOOK] ', '');
-  el.scrollTop = el.scrollHeight;
-}
-
-function goHome() {
-  if (wv) { wv.remove(); wv = null; }
-  document.getElementById('welcome').style.display = 'flex';
-}
-
-function injectHook() {
-  if (!wv) return;
-  var url = wv.getURL();
-  window.bridge.getHookCode(url).then(function(code) {
-    wv.executeJavaScript(code).catch(function(e) {
-      appendHookLog('Inject error: ' + e.message);
-    });
-  });
-}
-
-function loadURL(url) {
-  document.getElementById('welcome').style.display = 'none';
-  if (wv) wv.remove();
-
-  wv = document.createElement('webview');
-  wv.setAttribute('src', url);
-  wv.setAttribute('partition', 'persist:creator');
-  wv.setAttribute('preload', './call-preload.js');
-  wv.setAttribute('nodeintegration', '');
-  wv.setAttribute('nodeintegrationinsubframes', '');
-  wv.style.width = '100%';
-  wv.style.height = '100%';
-  document.getElementById('content').appendChild(wv);
-  wv.addEventListener('dom-ready', function() { wv.setAudioMuted(true); });
-
-
-}
-
-
-// Poll hook logs from webview
+// Poll hook logs from active tab's webview
 setInterval(function() {
-  if (!wv) return;
-  wv.executeJavaScript('(window.__hookLogs && window.__hookLogs.length) ? window.__hookLogs.splice(0) : []')
+  if (!activeTabId || !tabsState[activeTabId] || !tabsState[activeTabId].wv) return;
+  tabsState[activeTabId].wv.executeJavaScript('(window.__hookLogs && window.__hookLogs.length) ? window.__hookLogs.splice(0) : []')
     .then(function(logs) {
-      logs.forEach(function(msg) { appendHookLog(msg); });
+      if (!logs.length) return;
+      var el = document.getElementById('hookLog');
+      logs.forEach(function(msg) {
+        if (el.textContent.length > 0) el.textContent += '\n';
+        el.textContent += msg.replace('[HOOK] ', '');
+      });
+      el.scrollTop = el.scrollHeight;
     }).catch(function() {});
 }, 500);
 
-window.bridge.onRelayLog(function(msg) {
-  var el = document.getElementById('relayLog');
-  if (el.textContent.length > 0) el.textContent += '\n';
-  el.textContent += msg;
-  el.scrollTop = el.scrollHeight;
+// Relay logs from main process
+window.bridge.onRelayLog(function(tabId, msg) {
+  if (tabsState[tabId]) {
+    tabsState[tabId].relayLogs += (tabsState[tabId].relayLogs ? '\n' : '') + msg;
+  }
+  if (tabId === activeTabId) {
+    var el = document.getElementById('relayLog');
+    if (el.textContent.length > 0) el.textContent += '\n';
+    el.textContent += msg;
+    el.scrollTop = el.scrollHeight;
+  }
 });
 </script>
 </body>

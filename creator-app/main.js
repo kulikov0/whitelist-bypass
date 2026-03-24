@@ -8,90 +8,95 @@ const VkAutoclick = require('./vk-autoclick');
 var hooksDir = app.isPackaged
   ? path.join(process.resourcesPath, 'hooks')
   : path.join(__dirname, '..', 'hooks');
-var logCapture = "window.__hookLogs=window.__hookLogs||[];var _ol=console.log;console.log=function(){_ol.apply(console,arguments);var m=Array.prototype.slice.call(arguments).join(' ');if(m.indexOf('[HOOK]')!==-1)window.__hookLogs.push(m)};";
+var logCapture = "if(!window.__logCaptureInstalled){window.__logCaptureInstalled=true;window.__hookLogs=[];var _ol=console.log.bind(console);console.log=function(){_ol.apply(null,arguments);var m=Array.prototype.slice.call(arguments).join(' ');if(m.indexOf('[HOOK]')!==-1)window.__hookLogs.push(m)}}";
+var relayPath = app.isPackaged
+  ? path.join(process.resourcesPath, process.platform === 'win32' ? 'relay.exe' : 'relay')
+  : path.join(__dirname, '..', 'relay', process.platform === 'win32' ? 'relay.exe' : 'relay');
 
-var tunnelMode = 'dc';
-var currentPlatform = 'vk';
+var tabs = new Map(); // tabId -> { relay, tunnelMode, platform, dcPort, pionPort }
+var nextPortBase = 10000;
+var mainWindow = null;
 
-function loadHook(url) {
+function allocPorts() {
+  var dc = nextPortBase;
+  var pion = nextPortBase + 1;
+  nextPortBase += 2;
+  return { dc: dc, pion: pion };
+}
+
+function getTab(tabId) {
+  if (!tabs.has(tabId)) {
+    var ports = allocPorts();
+    tabs.set(tabId, { relay: null, tunnelMode: 'dc', platform: 'vk', dcPort: ports.dc, pionPort: ports.pion });
+  }
+  return tabs.get(tabId);
+}
+
+function loadHook(url, tab) {
   var isTelemost = url.includes('telemost.yandex');
   var newPlatform = isTelemost ? 'telemost' : 'vk';
-  if (newPlatform !== currentPlatform && tunnelMode.startsWith('pion')) {
-    currentPlatform = newPlatform;
-    killRelay();
-    setTimeout(startRelay, 500);
+  if (newPlatform !== tab.platform && tab.tunnelMode.startsWith('pion')) {
+    tab.platform = newPlatform;
+    killRelay(tab);
+    setTimeout(function() { startRelay(tab); }, 500);
   } else {
-    currentPlatform = newPlatform;
+    tab.platform = newPlatform;
   }
-  if (tunnelMode === 'pion-video' || tunnelMode === 'pion-dc') {
+  if (tab.tunnelMode === 'pion-video') {
     var hookFile = isTelemost ? 'video-telemost.js' : 'video-vk.js';
     var hook = fs.readFileSync(path.join(hooksDir, hookFile), 'utf8');
-    return logCapture + 'window.PION_PORT=9002;window.IS_CREATOR=true;' + hook;
+    return logCapture + 'window.PION_PORT=' + tab.pionPort + ';window.IS_CREATOR=true;' + hook;
   }
-  var hook = isTelemost
-    ? fs.readFileSync(path.join(hooksDir, 'dc-creator-telemost.js'), 'utf8')
-    : fs.readFileSync(path.join(hooksDir, 'dc-creator-vk.js'), 'utf8');
-  return logCapture + hook;
+  var hookFile = isTelemost ? 'dc-creator-telemost.js' : 'dc-creator-vk.js';
+  var hook = fs.readFileSync(path.join(hooksDir, hookFile), 'utf8');
+  return logCapture + 'window.WS_PORT=' + tab.dcPort + ';' + hook;
 }
 
-let mainWindow;
-let relayProcess;
-
-function startRelay() {
-  var port = tunnelMode.startsWith('pion') ? 9002 : 9000;
-  const net = require('net');
-  const sock = new net.Socket();
-  sock.setTimeout(1000);
-  sock.on('connect', () => {
-    sock.destroy();
-    console.log('[relay] already running on :' + port);
-    if (mainWindow) mainWindow.webContents.send('relay-log', 'Using existing relay on :' + port);
-  });
-  sock.on('error', () => {
-    sock.destroy();
-    spawnRelay();
-  });
-  sock.on('timeout', () => {
-    sock.destroy();
-    spawnRelay();
-  });
-  sock.connect(port, '127.0.0.1');
-}
-
-function spawnRelay() {
-  var relayName = process.platform === 'win32' ? 'relay.exe' : 'relay';
-  var relayPath = app.isPackaged
-    ? path.join(process.resourcesPath, relayName)
-    : path.join(__dirname, '..', 'relay', relayName);
+function startRelay(tab) {
+  killRelay(tab);
+  var port = tab.tunnelMode.startsWith('pion') ? tab.pionPort : tab.dcPort;
   var relayMode = 'dc-creator';
-  if (tunnelMode === 'pion-video') relayMode = currentPlatform === 'telemost' ? 'telemost-video-creator' : 'vk-video-creator';
-  var relayArgs = ['--mode', relayMode];
-  if (tunnelMode.startsWith('pion')) relayArgs.push('--ws-port', '9002');
-  relayProcess = spawn(relayPath, relayArgs, {
+  if (tab.tunnelMode === 'pion-video') {
+    relayMode = tab.platform === 'telemost' ? 'telemost-video-creator' : 'vk-video-creator';
+  }
+  var proc = spawn(relayPath, ['--mode', relayMode, '--ws-port', String(port)], {
     stdio: ['ignore', 'pipe', 'pipe']
   });
-  relayProcess.stdout.on('data', (data) => {
-    data.toString().trim().split('\n').forEach((msg) => {
+  tab.relay = proc;
+  var tabId = null;
+  tabs.forEach(function(t, id) { if (t === tab) tabId = id; });
+  var onData = function(data) {
+    data.toString().trim().split('\n').forEach(function(msg) {
       if (!msg) return;
-      console.log('[relay]', msg);
-      if (mainWindow) mainWindow.webContents.send('relay-log', msg);
+      console.log('[relay:' + tabId + ']', msg);
+      if (mainWindow && !mainWindow.isDestroyed()) {
+        mainWindow.webContents.send('relay-log', { tabId: tabId, msg: msg });
+      }
     });
+  };
+  proc.stdout.on('data', onData);
+  proc.stderr.on('data', onData);
+  proc.on('close', function(code) {
+    if (mainWindow && !mainWindow.isDestroyed()) {
+      mainWindow.webContents.send('relay-log', { tabId: tabId, msg: 'Relay exited with code ' + code });
+    }
   });
-  relayProcess.stderr.on('data', (data) => {
-    data.toString().trim().split('\n').forEach((msg) => {
-      if (!msg) return;
-      console.log('[relay]', msg);
-      if (mainWindow) mainWindow.webContents.send('relay-log', msg);
-    });
-  });
-  relayProcess.on('close', (code) => {
-    if (mainWindow) mainWindow.webContents.send('relay-log', 'Relay exited with code ' + code);
-  });
+}
+
+function killRelay(tab) {
+  if (tab.relay) {
+    tab.relay.kill();
+    tab.relay = null;
+  }
+}
+
+function killAllRelays() {
+  tabs.forEach(function(tab) { killRelay(tab); });
 }
 
 function stripCSP(ses) {
-  ses.webRequest.onHeadersReceived((details, callback) => {
-    var headers = { ...details.responseHeaders };
+  ses.webRequest.onHeadersReceived(function(details, callback) {
+    var headers = Object.assign({}, details.responseHeaders);
     delete headers['content-security-policy'];
     delete headers['Content-Security-Policy'];
     delete headers['content-security-policy-report-only'];
@@ -101,12 +106,12 @@ function stripCSP(ses) {
 }
 
 function createWindow() {
-  const ses = session.fromPartition('persist:creator');
+  var ses = session.fromPartition('persist:creator');
   stripCSP(ses);
-  ses.setPermissionRequestHandler((webContents, permission, callback) => {
-    callback(true);
-  });
-  ses.setPermissionCheckHandler(() => true);
+  ses.setPermissionRequestHandler(function(wc, perm, cb) { cb(true); });
+  ses.setPermissionCheckHandler(function() { return true; });
+  ses.setUserAgent('Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36');
+  app.on('session-created', stripCSP);
 
   mainWindow = new BrowserWindow({
     width: 1200,
@@ -120,70 +125,76 @@ function createWindow() {
     }
   });
 
-  ses.setUserAgent('Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36');
-
-  app.on('session-created', stripCSP);
-
   mainWindow.loadFile('index.html');
-  mainWindow.on('closed', () => { mainWindow = null; });
+  mainWindow.on('closed', function() { mainWindow = null; });
 
-  var telemostAutoclick = new TelemostAutoclick();
-  var vkAutoclick = new VkAutoclick();
-  mainWindow.webContents.on('did-attach-webview', (e, wvContents) => {
-    wvContents.on('did-navigate', (e, url) => {
+  var autoclickers = new Map(); // tabId -> { telemost, vk }
+
+  mainWindow.webContents.on('did-attach-webview', function(e, wvContents) {
+    wvContents.on('before-input-event', function(e, input) {
+      if (input.key === 'F12') wvContents.openDevTools();
+    });
+    wvContents.on('did-navigate', function(e, url) {
+      var tabId = wvContents.id;
+      if (!autoclickers.has(tabId)) {
+        autoclickers.set(tabId, { telemost: new TelemostAutoclick(), vk: new VkAutoclick() });
+      }
+      var ac = autoclickers.get(tabId);
       if (url.includes('telemost.yandex')) {
-        vkAutoclick.stop();
-        telemostAutoclick.attach(wvContents);
+        ac.vk.stop();
+        ac.telemost.attach(wvContents);
       } else if (url.includes('vk.com')) {
-        telemostAutoclick.stop();
-        vkAutoclick.attach(wvContents);
+        ac.telemost.stop();
+        ac.vk.attach(wvContents);
       } else {
-        telemostAutoclick.stop();
-        vkAutoclick.stop();
+        ac.telemost.stop();
+        ac.vk.stop();
       }
     });
-    wvContents.on('console-message', (e, level, msg) => {
-      if (msg.indexOf('Connection state: disconnected') !== -1 || msg.indexOf('Connection state: failed') !== -1 || msg.indexOf('Pion connection state: disconnected') !== -1 || msg.indexOf('Pion connection state: failed') !== -1) {
-        vkAutoclick.kickDisconnected();
+    wvContents.on('console-message', function(e, level, msg) {
+      if (msg.indexOf('state: disconnected') !== -1 || msg.indexOf('state: failed') !== -1) {
+        var ac = autoclickers.get(wvContents.id);
+        if (ac) ac.vk.kickDisconnected();
       }
+    });
+    wvContents.on('destroyed', function() {
+      var ac = autoclickers.get(wvContents.id);
+      if (ac) { ac.telemost.stop(); ac.vk.stop(); autoclickers.delete(wvContents.id); }
     });
   });
 }
 
-function killRelay() {
-  if (relayProcess) {
-    relayProcess.kill();
-    relayProcess = null;
+ipcMain.handle('get-hook-code', function(e, tabId, url) {
+  var tab = getTab(tabId);
+  return loadHook(url, tab);
+});
+
+ipcMain.handle('set-tunnel-mode', function(e, tabId, mode) {
+  var tab = tabs.get(tabId);
+  if (!tab) return;
+  if (['dc', 'pion-video'].indexOf(mode) === -1) return;
+  tab.tunnelMode = mode;
+  killRelay(tab);
+  setTimeout(function() { startRelay(tab); }, 500);
+});
+
+ipcMain.handle('start-relay', function(e, tabId) {
+  var tab = getTab(tabId);
+  startRelay(tab);
+});
+
+ipcMain.handle('close-tab', function(e, tabId) {
+  var tab = tabs.get(tabId);
+  if (tab) {
+    killRelay(tab);
+    tabs.delete(tabId);
   }
-}
-
-
-ipcMain.handle('get-hook-code', (e, url) => {
-  return loadHook(url);
 });
 
-ipcMain.handle('set-tunnel-mode', (e, mode) => {
-  if (['dc', 'pion-video'].indexOf(mode) !== -1) {
-    tunnelMode = mode;
-    killRelay();
-    setTimeout(function() {
-      startRelay();
-      console.log('[main] tunnel mode:', tunnelMode);
-    }, 500);
-  }
-});
+app.whenReady().then(createWindow);
 
-app.whenReady().then(() => {
-  startRelay();
-  createWindow();
-});
-
-app.on('window-all-closed', () => {
-  killRelay();
-  app.quit();
-});
-
-app.on('before-quit', killRelay);
-process.on('exit', killRelay);
-process.on('SIGINT', () => { killRelay(); process.exit(); });
-process.on('SIGTERM', () => { killRelay(); process.exit(); });
+app.on('window-all-closed', function() { killAllRelays(); app.quit(); });
+app.on('before-quit', killAllRelays);
+process.on('exit', killAllRelays);
+process.on('SIGINT', function() { killAllRelays(); process.exit(); });
+process.on('SIGTERM', function() { killAllRelays(); process.exit(); });
