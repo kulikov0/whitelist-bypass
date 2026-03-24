@@ -29,6 +29,7 @@ import androidx.core.view.WindowInsetsCompat
 import mobile.LogCallback
 import mobile.Mobile
 import java.io.File
+import androidx.core.content.edit
 
 private val reUrl = Regex("(https?://[^/]+/)(.+)")
 private val reIp4 = Regex("\\d+\\.\\d+\\.\\d+\\.\\d+")
@@ -103,10 +104,9 @@ class MainActivity : AppCompatActivity() {
                 appendLog("Loading: ${maskUrl(url)}")
                 if (previousUrl != url) {
                     previousUrl = url
-                    getPreferences(MODE_PRIVATE)
-                        .edit()
-                        .putString(SharedPrefsKeys.URL, url)
-                        .apply()
+                    getPreferences(MODE_PRIVATE).edit {
+                            putString(SharedPrefsKeys.URL, url)
+                        }
                 }
                 webView.loadUrl(url)
             }
@@ -135,12 +135,11 @@ class MainActivity : AppCompatActivity() {
             true
         )
         connectOnStartSwitch.setOnCheckedChangeListener { _, isChecked ->
-            getPreferences(MODE_PRIVATE)
-                .edit()
-                .putBoolean(SharedPrefsKeys.CONNECT_ON_START, isChecked)
-                .apply()
+            getPreferences(MODE_PRIVATE).edit {
+                    putBoolean(SharedPrefsKeys.CONNECT_ON_START, isChecked)
+                }
         }
-        if (connectOnStartSwitch.isChecked && previousUrl.isNotEmpty()) {
+        if (connectOnStartSwitch.isChecked && previousUrl.isNotEmpty() && CALL_LINK.isEmpty()) {
             goButton.performClick()
         }
         findViewById<View>(R.id.clearButton).setOnClickListener {
@@ -162,13 +161,12 @@ class MainActivity : AppCompatActivity() {
         spinner.setSelection(TunnelMode.entries.indexOf(tunnelMode))
         spinner.onItemSelectedListener = object : AdapterView.OnItemSelectedListener {
             var init = true
-            override fun onItemSelected(parent: AdapterView<*>?, view: android.view.View?, pos: Int, id: Long) {
+            override fun onItemSelected(parent: AdapterView<*>?, view: View?, pos: Int, id: Long) {
                 if (init) { init = false; return }
                 tunnelMode = TunnelMode.entries[pos]
-                getPreferences(MODE_PRIVATE)
-                    .edit()
-                    .putString(SharedPrefsKeys.TUNNEL_MODE, tunnelMode.name)
-                    .apply()
+                getPreferences(MODE_PRIVATE).edit {
+                        putString(SharedPrefsKeys.TUNNEL_MODE, tunnelMode.name)
+                    }
                 appendLog("Mode: ${tunnelMode.label}")
                 stopRelay()
                 startRelay()
@@ -379,12 +377,11 @@ if(oac){var nac=function(){var c=new oac();c.suspend();
             .getString(SharedPrefsKeys.TUNNEL_MODE, TunnelMode.DC.name)!!
         return try {
             TunnelMode.valueOf(tunnelModeString)
-        } catch (e: IllegalArgumentException) {
+        } catch (_: IllegalArgumentException) {
             Log.e("SharedPref", "Unknown tunnel mode: $tunnelModeString. Resetting to ${TunnelMode.DC.name}")
-            preferences
-                .edit()
-                .putString(SharedPrefsKeys.TUNNEL_MODE, TunnelMode.DC.name)
-                .apply()
+            preferences.edit {
+                    putString(SharedPrefsKeys.TUNNEL_MODE, TunnelMode.DC.name)
+                }
             TunnelMode.DC
         }
     }
@@ -422,6 +419,6 @@ if(oac){var nac=function(){var c=new oac();c.suspend();
     }
 
     companion object {
-        private const val CALL_LINK = "" // Open call page on app start
+        private const val CALL_LINK = "" // Open call page on app start (do not delete - I need it for debug)
     }
 }
