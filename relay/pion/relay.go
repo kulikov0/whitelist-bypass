@@ -189,7 +189,7 @@ func (rb *RelayBridge) handleUDP(connID uint32, payload []byte) {
 }
 
 func (rb *RelayBridge) connectTCP(connID uint32, addr string) {
-	rb.logFn("relay: CONNECT %d -> %s", connID, addr)
+	rb.logFn("relay: CONNECT %d -> %s", connID, maskAddr(addr))
 	conn, err := net.DialTimeout("tcp", addr, 10e9)
 	if err != nil {
 		rb.logFn("relay: CONNECT %d failed: %v", connID, err)
@@ -198,7 +198,7 @@ func (rb *RelayBridge) connectTCP(connID uint32, addr string) {
 	}
 	rb.conns.Store(connID, conn)
 	rb.send(connID, msgConnectOK, nil)
-	rb.logFn("relay: CONNECTED %d -> %s", connID, addr)
+	rb.logFn("relay: CONNECTED %d -> %s", connID, maskAddr(addr))
 
 	buf := make([]byte, 900)
 	for {
@@ -299,7 +299,7 @@ func (rb *RelayBridge) handleSOCKS(conn net.Conn) {
 	id := rb.nextID.Add(1)
 	sc := &socksConn{id: id, conn: conn, rb: rb, rdy: make(chan error, 1)}
 	rb.conns.Store(id, sc)
-	rb.logFn("relay: SOCKS CONNECT %d -> %s", id, host)
+	rb.logFn("relay: SOCKS CONNECT %d -> %s", id, maskAddr(host))
 	rb.send(id, msgConnect, []byte(host))
 
 	if err := <-sc.rdy; err != nil {
@@ -310,7 +310,7 @@ func (rb *RelayBridge) handleSOCKS(conn net.Conn) {
 		return
 	}
 	conn.Write([]byte{0x05, 0x00, 0x00, 0x01, 0, 0, 0, 0, 0, 0})
-	rb.logFn("relay: SOCKS CONNECTED %d -> %s", id, host)
+	rb.logFn("relay: SOCKS CONNECTED %d -> %s", id, maskAddr(host))
 
 	go func() {
 		readBuf := make([]byte, 900)

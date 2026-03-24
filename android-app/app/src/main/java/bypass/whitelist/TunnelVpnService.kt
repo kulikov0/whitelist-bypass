@@ -129,7 +129,7 @@ class TunnelVpnService : VpnService() {
     }
 
     private fun buildNotification(text: String): Notification {
-        val openIntent = Intent(this, bypass.whitelist.MainActivity::class.java).apply {
+        val openIntent = Intent(this, MainActivity::class.java).apply {
             flags = Intent.FLAG_ACTIVITY_SINGLE_TOP or Intent.FLAG_ACTIVITY_CLEAR_TOP
         }
         val openPending = PendingIntent.getActivity(

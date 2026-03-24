@@ -16,7 +16,7 @@
   window.WebSocket = function(url, protocols) {
     var ws = protocols ? new OrigWebSocket(url, protocols) : new OrigWebSocket(url);
     if (url && (url.indexOf('strm.yandex') !== -1 || url.indexOf('jvb.telemost') !== -1)) {
-      log('Signaling WS found: ' + url);
+      log('Signaling WS found');
       signalingWS = ws;
       var origSend = ws.send.bind(ws);
       ws.send = function(data) {

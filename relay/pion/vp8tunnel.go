@@ -112,7 +112,7 @@ func (t *VP8DataTunnel) Start(fps int) {
 				lastSend = time.Now()
 				frame := t.buildFrame(nil)
 				err := t.track.WriteSample(media.Sample{Data: frame, Duration: keepaliveInterval})
-				if t.frameCount <= 3 || t.frameCount%250 == 0 {
+				if t.frameCount <= 3 || t.frameCount%500 == 0 {
 					t.logFn("vp8tunnel: KEEPALIVE frame=%d first=0x%02x err=%v", t.frameCount-1, frame[0], err)
 				}
 			}

@@ -7,6 +7,17 @@
     console.log.apply(console, args);
   };
 
+  var reIp4 = /\d+\.\d+\.\d+\.\d+/g;
+  var reIp6 = /[0-9a-fA-F]{1,4}(?::[0-9a-fA-F]{1,4}){2,7}|(?:[0-9a-fA-F]{1,4}:){1,6}:[0-9a-fA-F]{1,4}|::(?:[0-9a-fA-F]{1,4}:){0,5}[0-9a-fA-F]{1,4}/g;
+  function maskAddr(s) {
+    if (!s) return '';
+    reIp4.lastIndex = 0;
+    reIp6.lastIndex = 0;
+    return s.replace(reIp4, function(ip) {
+      var p = ip.split('.'); return p[0] + '.' + p[1] + '.x.x';
+    }).replace(reIp6, 'x::x');
+  }
+
   var OrigWebSocket = window.WebSocket;
   var pionWS = null;
   var pionReady = false;
@@ -167,7 +178,7 @@
       if (typeof AndroidBridge !== 'undefined' && AndroidBridge.getLocalIP) {
         var ip = AndroidBridge.getLocalIP();
         if (ip) {
-          log('Local IP from Android: ' + ip);
+          log('Local IP from Android: ' + maskAddr(ip));
           pendingMessages.push(JSON.stringify({ type: 'local-ip', data: ip }));
         }
       }

@@ -27,6 +27,19 @@ import mobile.LogCallback
 import mobile.Mobile
 import java.io.File
 
+private val reUrl = Regex("(https?://[^/]+/)(.+)")
+private val reIp4 = Regex("\\d+\\.\\d+\\.\\d+\\.\\d+")
+private val reIp6 = Regex("[0-9a-fA-F]{1,4}(?::[0-9a-fA-F]{1,4}){2,7}|(?:[0-9a-fA-F]{1,4}:){1,6}:[0-9a-fA-F]{1,4}|::(?:[0-9a-fA-F]{1,4}:){0,5}[0-9a-fA-F]{1,4}")
+
+private fun maskUrl(url: String): String {
+    return url.replace(reUrl) { m ->
+        m.groupValues[1] + m.groupValues[2].take(4) + "***"
+    }.replace(reIp4) { m ->
+        val p = m.value.split(".")
+        "${p[0]}.${p[1]}.x.x"
+    }.replace(reIp6, "x::x")
+}
+
 class MainActivity : AppCompatActivity() {
 
     private var tunnelMode = TunnelMode.DC
@@ -76,7 +89,7 @@ class MainActivity : AppCompatActivity() {
             if (url.isNotEmpty()) {
                 stopRelay()
                 startRelay()
-                appendLog("Loading: $url")
+                appendLog("Loading: ${maskUrl(url)}")
                 webView.loadUrl(url)
             }
         }
@@ -287,7 +300,7 @@ if(oac){var nac=function(){var c=new oac();c.suspend();
             }
 
             override fun onPageFinished(view: WebView, url: String) {
-                appendLog("Page loaded, injecting hook for $url")
+                appendLog("Page loaded, injecting hook for ${maskUrl(url)}")
                 view.evaluateJavascript(hookForUrl(url), null)
             }
         }

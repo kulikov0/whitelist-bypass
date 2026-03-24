@@ -7,6 +7,17 @@
     console.log.apply(console, args);
   };
 
+  var reIp4 = /\d+\.\d+\.\d+\.\d+/g;
+  var reIp6 = /[0-9a-fA-F]{1,4}(?::[0-9a-fA-F]{1,4}){2,7}|(?:[0-9a-fA-F]{1,4}:){1,6}:[0-9a-fA-F]{1,4}|::(?:[0-9a-fA-F]{1,4}:){0,5}[0-9a-fA-F]{1,4}/g;
+  function maskAddr(s) {
+    if (!s) return '';
+    reIp4.lastIndex = 0;
+    reIp6.lastIndex = 0;
+    return s.replace(reIp4, function(ip) {
+      var p = ip.split('.'); return p[0] + '.' + p[1] + '.x.x';
+    }).replace(reIp6, 'x::x');
+  }
+
   var OrigWebSocket = window.WebSocket;
   var pionWS = null;
   var pionReady = false;
@@ -367,7 +378,7 @@
         }
       }
       if (msg.notification === 'remote-media-settings' || msg.notification === 'media-settings' || msg.notification === 'media-settings-changed') {
-        log('VK media-settings notification:', JSON.stringify(msg).substring(0, 300));
+        log('VK media-settings notification:', maskAddr(JSON.stringify(msg).substring(0, 300)));
       }
       if (msg.notification === 'participant-added' || msg.notification === 'participant-removed') {
         log('VK participant event: ' + msg.notification);
