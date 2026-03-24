@@ -24,9 +24,9 @@ function loadHook(url) {
     currentPlatform = newPlatform;
   }
   if (tunnelMode === 'pion-video' || tunnelMode === 'pion-dc') {
-    var hookFile = isTelemost ? 'video-joiner-telemost.js' : 'video-joiner-vk.js';
+    var hookFile = isTelemost ? 'video-telemost.js' : 'video-vk.js';
     var hook = fs.readFileSync(path.join(hooksDir, hookFile), 'utf8');
-    return logCapture + 'window.PION_PORT=9002;' + hook;
+    return logCapture + 'window.PION_PORT=9002;window.IS_CREATOR=true;' + hook;
   }
   var hook = isTelemost
     ? fs.readFileSync(path.join(hooksDir, 'dc-creator-telemost.js'), 'utf8')
@@ -143,7 +143,7 @@ function createWindow() {
       }
     });
     wvContents.on('console-message', (e, level, msg) => {
-      if (msg.indexOf('Connection state: disconnected') !== -1 || msg.indexOf('Connection state: failed') !== -1) {
+      if (msg.indexOf('Connection state: disconnected') !== -1 || msg.indexOf('Connection state: failed') !== -1 || msg.indexOf('Pion connection state: disconnected') !== -1 || msg.indexOf('Pion connection state: failed') !== -1) {
         vkAutoclick.kickDisconnected();
       }
     });
