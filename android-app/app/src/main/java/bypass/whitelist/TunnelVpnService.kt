@@ -20,6 +20,7 @@ class TunnelVpnService : VpnService() {
         const val ACTION_STOP = "bypass.whitelist.STOP_VPN"
         var isRunning = false
         var instance: TunnelVpnService? = null
+        var onDisconnect: (() -> Unit)? = null
     }
 
     private var vpnFd: ParcelFileDescriptor? = null
@@ -48,16 +49,19 @@ class TunnelVpnService : VpnService() {
         nm.notify(NOTIFICATION_ID, buildNotification(status.label))
     }
 
-    private fun startForegroundNotification() {
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            val channel = NotificationChannel(
-                CHANNEL_ID, "VPN Tunnel", NotificationManager.IMPORTANCE_LOW
-            )
-            val nm = getSystemService(NotificationManager::class.java)
-            nm.createNotificationChannel(channel)
+    fun stop() {
+        if (!isRunning) return
+        isRunning = false
+        try {
+            Mobile.stopTun2Socks()
+        } catch (e: Exception) {
+            Log.e(TAG, "tun2socks stop error: ${e.message}")
         }
-
-        startForeground(NOTIFICATION_ID, buildNotification(VpnStatus.STARTING.label))
+        vpnFd = null
+        @Suppress("DEPRECATION")
+        stopForeground(true)
+        stopSelf()
+        onDisconnect?.invoke()
     }
 
     private fun start() {
@@ -101,17 +105,16 @@ class TunnelVpnService : VpnService() {
         }.start()
     }
 
-    private fun stop() {
-        isRunning = false
-        try {
-            Mobile.stopTun2Socks()
-        } catch (e: Exception) {
-            Log.e(TAG, "tun2socks stop error: ${e.message}")
+    private fun startForegroundNotification() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            val channel = NotificationChannel(
+                CHANNEL_ID, "VPN Tunnel", NotificationManager.IMPORTANCE_LOW
+            )
+            val nm = getSystemService(NotificationManager::class.java)
+            nm.createNotificationChannel(channel)
         }
-        vpnFd = null
-        @Suppress("DEPRECATION")
-        stopForeground(true)
-        stopSelf()
+
+        startForeground(NOTIFICATION_ID, buildNotification(VpnStatus.STARTING.label))
     }
 
     private fun buildNotification(text: String): Notification {

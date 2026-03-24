@@ -72,8 +72,8 @@ class MainActivity : AppCompatActivity() {
 
     private val hookVk by lazy { assets.open("dc-joiner-vk.js").bufferedReader().readText() }
     private val hookTelemost by lazy { assets.open("dc-joiner-telemost.js").bufferedReader().readText() }
-    private val hookPionVk by lazy { assets.open("video-joiner-vk.js").bufferedReader().readText() }
-    private val hookPionTelemost by lazy { assets.open("video-joiner-telemost.js").bufferedReader().readText() }
+    private val hookPionVk by lazy { assets.open("video-vk.js").bufferedReader().readText() }
+    private val hookPionTelemost by lazy { assets.open("video-telemost.js").bufferedReader().readText() }
 
     @SuppressLint("SetJavaScriptEnabled")
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -121,6 +121,8 @@ class MainActivity : AppCompatActivity() {
             Toast.makeText(this, "Logs copied", Toast.LENGTH_SHORT).show()
         }
 
+        TunnelVpnService.onDisconnect = { runOnUiThread { resetState() } }
+
         VpnService.prepare(this)?.let { vpnPrepLauncher.launch(it) }
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
             checkSelfPermission(android.Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) {
@@ -151,8 +153,9 @@ class MainActivity : AppCompatActivity() {
     }
 
     override fun onDestroy() {
+        TunnelVpnService.onDisconnect = null
         stopRelay()
-        TunnelVpnService.instance?.stopSelf()
+        TunnelVpnService.instance?.stop()
         super.onDestroy()
     }
 
@@ -376,6 +379,14 @@ if(oac){var nac=function(){var c=new oac();c.suspend();
             updateVpnStatus(VpnStatus.TUNNEL_ACTIVE)
             runOnUiThread { requestVpn() }
         }
+    }
+
+    private fun resetState() {
+        stopRelay()
+        webView.loadUrl("about:blank")
+        logView.text = ""
+        logView.scrollTo(0, 0)
+        appendLog("Disconnected")
     }
 
     companion object {
