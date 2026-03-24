@@ -24,13 +24,13 @@ function loadHook(url) {
     currentPlatform = newPlatform;
   }
   if (tunnelMode === 'pion-video' || tunnelMode === 'pion-dc') {
-    var hookFile = isTelemost ? 'pion-telemost.js' : 'pion-vk.js';
+    var hookFile = isTelemost ? 'video-joiner-telemost.js' : 'video-joiner-vk.js';
     var hook = fs.readFileSync(path.join(hooksDir, hookFile), 'utf8');
     return logCapture + 'window.PION_PORT=9002;' + hook;
   }
   var hook = isTelemost
-    ? fs.readFileSync(path.join(hooksDir, 'creator-telemost.js'), 'utf8')
-    : fs.readFileSync(path.join(hooksDir, 'creator-vk.js'), 'utf8');
+    ? fs.readFileSync(path.join(hooksDir, 'dc-creator-telemost.js'), 'utf8')
+    : fs.readFileSync(path.join(hooksDir, 'dc-creator-vk.js'), 'utf8');
   return logCapture + hook;
 }
 

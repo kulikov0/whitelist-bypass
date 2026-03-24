@@ -68,10 +68,10 @@ class MainActivity : AppCompatActivity() {
         else appendLog("VPN permission denied")
     }
 
-    private val hookVk by lazy { assets.open("joiner-vk.js").bufferedReader().readText() }
-    private val hookTelemost by lazy { assets.open("joiner-telemost.js").bufferedReader().readText() }
-    private val hookPionVk by lazy { assets.open("pion-vk.js").bufferedReader().readText() }
-    private val hookPionTelemost by lazy { assets.open("pion-telemost.js").bufferedReader().readText() }
+    private val hookVk by lazy { assets.open("dc-joiner-vk.js").bufferedReader().readText() }
+    private val hookTelemost by lazy { assets.open("dc-joiner-telemost.js").bufferedReader().readText() }
+    private val hookPionVk by lazy { assets.open("video-joiner-vk.js").bufferedReader().readText() }
+    private val hookPionTelemost by lazy { assets.open("video-joiner-telemost.js").bufferedReader().readText() }
 
     @SuppressLint("SetJavaScriptEnabled")
     override fun onCreate(savedInstanceState: Bundle?) {

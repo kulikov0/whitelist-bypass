@@ -28,9 +28,9 @@ echo "Pion relay built"
 
 echo "Copying hooks to assets..."
 mkdir -p ../android-app/app/src/main/assets
-cp ../hooks/joiner-vk.js ../android-app/app/src/main/assets/joiner-vk.js
-cp ../hooks/joiner-telemost.js ../android-app/app/src/main/assets/joiner-telemost.js
-cp ../hooks/pion-vk.js ../android-app/app/src/main/assets/pion-vk.js
-cp ../hooks/pion-telemost.js ../android-app/app/src/main/assets/pion-telemost.js
+cp ../hooks/dc-joiner-vk.js ../android-app/app/src/main/assets/dc-joiner-vk.js
+cp ../hooks/dc-joiner-telemost.js ../android-app/app/src/main/assets/dc-joiner-telemost.js
+cp ../hooks/video-joiner-vk.js ../android-app/app/src/main/assets/video-joiner-vk.js
+cp ../hooks/video-joiner-telemost.js ../android-app/app/src/main/assets/video-joiner-telemost.js
 
 echo "Done. .aar size: $(du -h mobile.aar | cut -f1)"
