@@ -1,3 +1,4 @@
 <resources>
     <string name="app_name">WhitelistBypass</string>
+    <string name="connect_on_start_switch">Connect on app start</string>
 </resources>

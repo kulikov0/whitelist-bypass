@@ -4,15 +4,18 @@ import android.annotation.SuppressLint
 import android.content.ClipData
 import android.content.ClipboardManager
 import android.content.Intent
+import android.content.SharedPreferences
 import android.content.pm.PackageManager
 import android.net.VpnService
 import android.os.Build
 import android.os.Bundle
 import android.util.Log
+import android.view.View
 import android.webkit.*
 import android.widget.AdapterView
 import android.widget.ArrayAdapter
 import android.widget.Button
+import android.widget.CompoundButton
 import android.widget.EditText
 import android.widget.ImageButton
 import android.widget.Spinner
@@ -35,6 +38,9 @@ class MainActivity : AppCompatActivity() {
     private lateinit var webView: WebView
     private lateinit var logView: TextView
     private lateinit var urlInput: EditText
+    private lateinit var connectOnStartSwitch: CompoundButton
+
+    private var previousUrl = ""
 
     private val vpnPrepLauncher = registerForActivityResult(
         ActivityResultContracts.StartActivityForResult()
@@ -67,6 +73,11 @@ class MainActivity : AppCompatActivity() {
         urlInput = findViewById(R.id.urlInput)
         webView = findViewById(R.id.webView)
 
+        previousUrl = getPreferences(MODE_PRIVATE).getString(SharedPrefsKeys.URL, "")!!
+        urlInput.setText(previousUrl)
+
+        tunnelMode = getTunnelModeFromPrefs()
+
         setupWebView()
         setupModeSpinner()
 
@@ -77,6 +88,13 @@ class MainActivity : AppCompatActivity() {
                 stopRelay()
                 startRelay()
                 appendLog("Loading: $url")
+                if (previousUrl != url) {
+                    previousUrl = url
+                    getPreferences(MODE_PRIVATE)
+                        .edit()
+                        .putString(SharedPrefsKeys.URL, url)
+                        .apply()
+                }
                 webView.loadUrl(url)
             }
         }
@@ -93,9 +111,22 @@ class MainActivity : AppCompatActivity() {
             requestPermissions(arrayOf(android.Manifest.permission.POST_NOTIFICATIONS), 0)
         }
 
-        if (CALL_LINK.isNotEmpty()) {
-            urlInput.setText(CALL_LINK)
+        connectOnStartSwitch = findViewById(R.id.connectOnAppStartSwitch)
+        connectOnStartSwitch.isChecked = getPreferences(MODE_PRIVATE).getBoolean(
+            SharedPrefsKeys.CONNECT_ON_START,
+            true
+        )
+        connectOnStartSwitch.setOnCheckedChangeListener { _, isChecked ->
+            getPreferences(MODE_PRIVATE)
+                .edit()
+                .putBoolean(SharedPrefsKeys.CONNECT_ON_START, isChecked)
+                .apply()
+        }
+        if (connectOnStartSwitch.isChecked && previousUrl.isNotEmpty()) {
             goButton.performClick()
+        }
+        findViewById<View>(R.id.clearButton).setOnClickListener {
+            urlInput.setText("")
         }
     }
 
@@ -116,6 +147,10 @@ class MainActivity : AppCompatActivity() {
             override fun onItemSelected(parent: AdapterView<*>?, view: android.view.View?, pos: Int, id: Long) {
                 if (init) { init = false; return }
                 tunnelMode = TunnelMode.entries[pos]
+                getPreferences(MODE_PRIVATE)
+                    .edit()
+                    .putString(SharedPrefsKeys.TUNNEL_MODE, tunnelMode.name)
+                    .apply()
                 appendLog("Mode: ${tunnelMode.label}")
                 stopRelay()
                 startRelay()
@@ -320,6 +355,22 @@ if(oac){var nac=function(){var c=new oac();c.suspend();
         return ""
     }
 
+    private fun getTunnelModeFromPrefs(): TunnelMode {
+        val preferences = getPreferences(MODE_PRIVATE)
+        val tunnelModeString = getPreferences(MODE_PRIVATE)
+            .getString(SharedPrefsKeys.TUNNEL_MODE, TunnelMode.DC.name)!!
+        return try {
+            TunnelMode.valueOf(tunnelModeString)
+        } catch (e: IllegalArgumentException) {
+            Log.e("SharedPref", "Unknown tunnel mode: $tunnelModeString. Resetting to ${TunnelMode.DC.name}")
+            preferences
+                .edit()
+                .putString(SharedPrefsKeys.TUNNEL_MODE, TunnelMode.DC.name)
+                .apply()
+            TunnelMode.DC
+        }
+    }
+
     @Suppress("unused")
     inner class JsBridge {
         @JavascriptInterface
@@ -350,9 +401,5 @@ if(oac){var nac=function(){var c=new oac();c.suspend();
             val platform = if (isTelemost) "telemost" else "vk"
             return "$platform-$relayArg-joiner"
         }
-    }
-
-    companion object {
-        private const val CALL_LINK = "" // Open call page on app start
     }
 }
