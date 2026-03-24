@@ -409,7 +409,7 @@ if(oac){var nac=function(){var c=new oac();c.suspend();
 
     private enum class TunnelMode(val label: String, val relayArg: String, val isPion: Boolean) {
         DC("DC", "joiner", false),
-        PION_VIDEO("Pion Video", "video", true);
+        PION_VIDEO("Video", "video", true);
 
         fun relayMode(isTelemost: Boolean): String {
             if (!isPion) return "joiner"

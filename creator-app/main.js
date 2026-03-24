@@ -2,13 +2,13 @@ const { app, BrowserWindow, session, ipcMain } = require('electron');
 const { spawn } = require('child_process');
 const path = require('path');
 const fs = require('fs');
+const TelemostAutoclick = require('./telemost-autoclick');
 
 var hooksDir = app.isPackaged
   ? path.join(process.resourcesPath, 'hooks')
   : path.join(__dirname, '..', 'hooks');
 var logCapture = "window.__hookLogs=window.__hookLogs||[];var _ol=console.log;console.log=function(){_ol.apply(console,arguments);var m=Array.prototype.slice.call(arguments).join(' ');if(m.indexOf('[HOOK]')!==-1)window.__hookLogs.push(m)};";
 
-// Tunnel mode: 'dc' (DataChannel) or 'pion' (VP8 video)
 var tunnelMode = 'dc';
 var currentPlatform = 'vk';
 
@@ -125,6 +125,14 @@ function createWindow() {
 
   mainWindow.loadFile('index.html');
   mainWindow.on('closed', () => { mainWindow = null; });
+
+  var autoclick = new TelemostAutoclick();
+  mainWindow.webContents.on('did-attach-webview', (e, wvContents) => {
+    wvContents.on('did-navigate', (e, url) => {
+      if (url.includes('telemost.yandex')) autoclick.attach(wvContents);
+      else autoclick.stop();
+    });
+  });
 }
 
 function killRelay() {
