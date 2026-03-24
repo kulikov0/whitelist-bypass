@@ -303,6 +303,11 @@
       return dc;
     },
     close: function() {
+      if (window.IS_CREATOR) {
+        sendToPion('close', {});
+        log('MockPC.close (pion reset, state kept for VK)');
+        return;
+      }
       this._connectionState = 'closed';
       this._signalingState = 'closed';
       sendToPion('close', {});

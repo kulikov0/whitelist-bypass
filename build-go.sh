@@ -30,7 +30,7 @@ echo "Copying hooks to assets..."
 mkdir -p ../android-app/app/src/main/assets
 cp ../hooks/dc-joiner-vk.js ../android-app/app/src/main/assets/dc-joiner-vk.js
 cp ../hooks/dc-joiner-telemost.js ../android-app/app/src/main/assets/dc-joiner-telemost.js
-cp ../hooks/video-joiner-vk.js ../android-app/app/src/main/assets/video-joiner-vk.js
-cp ../hooks/video-joiner-telemost.js ../android-app/app/src/main/assets/video-joiner-telemost.js
+cp ../hooks/video-vk.js ../android-app/app/src/main/assets/video-vk.js
+cp ../hooks/video-telemost.js ../android-app/app/src/main/assets/video-telemost.js
 
 echo "Done. .aar size: $(du -h mobile.aar | cut -f1)"
