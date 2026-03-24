@@ -15,8 +15,6 @@ class TunnelVpnService : VpnService() {
 
     companion object {
         const val TAG = "TunnelVPN"
-        const val SOCKS_PORT = 1080
-        const val MTU = 1500
         const val CHANNEL_ID = "vpn_channel"
         const val NOTIFICATION_ID = 1
         const val ACTION_STOP = "bypass.whitelist.STOP_VPN"
@@ -68,12 +66,12 @@ class TunnelVpnService : VpnService() {
         startForegroundNotification()
 
         val builder = Builder()
-            .setSession("WhitelistBypass")
-            .addAddress("10.0.0.2", 32)
-            .addRoute("0.0.0.0", 0)
-            .addDnsServer("8.8.8.8")
-            .addDnsServer("8.8.4.4")
-            .setMtu(MTU)
+            .setSession(Vpn.SESSION_NAME)
+            .addAddress(Vpn.ADDRESS, Vpn.PREFIX_LENGTH)
+            .addRoute(Vpn.ROUTE, 0)
+            .addDnsServer(Vpn.DNS_PRIMARY)
+            .addDnsServer(Vpn.DNS_SECONDARY)
+            .setMtu(Vpn.MTU)
 
         try {
             builder.addDisallowedApplication(packageName)
@@ -95,7 +93,7 @@ class TunnelVpnService : VpnService() {
 
         Thread {
             try {
-                Mobile.startTun2Socks(fd.toLong(), MTU.toLong(), SOCKS_PORT.toLong())
+                Mobile.startTun2Socks(fd.toLong(), Vpn.MTU.toLong(), Ports.SOCKS)
             } catch (e: Exception) {
                 Log.e(TAG, "tun2socks error: ${e.message}")
                 isRunning = false

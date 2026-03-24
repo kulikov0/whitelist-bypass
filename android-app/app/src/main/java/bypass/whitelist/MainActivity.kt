@@ -90,7 +90,7 @@ class MainActivity : AppCompatActivity() {
         urlInput = findViewById(R.id.urlInput)
         webView = findViewById(R.id.webView)
 
-        previousUrl = getPreferences(MODE_PRIVATE).getString(SharedPrefsKeys.URL, "")!!
+        previousUrl = getPreferences(MODE_PRIVATE).getString(PrefsKeys.URL, "")!!
         urlInput.setText(previousUrl)
 
         tunnelMode = getTunnelModeFromPrefs()
@@ -108,7 +108,7 @@ class MainActivity : AppCompatActivity() {
                 if (previousUrl != url) {
                     previousUrl = url
                     getPreferences(MODE_PRIVATE).edit {
-                            putString(SharedPrefsKeys.URL, url)
+                            putString(PrefsKeys.URL, url)
                         }
                 }
                 webView.loadUrl(url)
@@ -134,12 +134,12 @@ class MainActivity : AppCompatActivity() {
 
         connectOnStartSwitch = findViewById(R.id.connectOnAppStartSwitch)
         connectOnStartSwitch.isChecked = getPreferences(MODE_PRIVATE).getBoolean(
-            SharedPrefsKeys.CONNECT_ON_START,
+            PrefsKeys.CONNECT_ON_START,
             true
         )
         connectOnStartSwitch.setOnCheckedChangeListener { _, isChecked ->
             getPreferences(MODE_PRIVATE).edit {
-                    putBoolean(SharedPrefsKeys.CONNECT_ON_START, isChecked)
+                    putBoolean(PrefsKeys.CONNECT_ON_START, isChecked)
                 }
         }
         if (connectOnStartSwitch.isChecked && previousUrl.isNotEmpty() && CALL_LINK.isEmpty()) {
@@ -168,7 +168,7 @@ class MainActivity : AppCompatActivity() {
                 if (init) { init = false; return }
                 tunnelMode = TunnelMode.entries[pos]
                 getPreferences(MODE_PRIVATE).edit {
-                        putString(SharedPrefsKeys.TUNNEL_MODE, tunnelMode.name)
+                        putString(PrefsKeys.TUNNEL_MODE, tunnelMode.name)
                     }
                 appendLog("Mode: ${tunnelMode.label}")
                 stopRelay()
@@ -337,13 +337,13 @@ if(oac){var nac=function(){var c=new oac();c.suspend();
     private fun getTunnelModeFromPrefs(): TunnelMode {
         val preferences = getPreferences(MODE_PRIVATE)
         val tunnelModeString = getPreferences(MODE_PRIVATE)
-            .getString(SharedPrefsKeys.TUNNEL_MODE, TunnelMode.DC.name)!!
+            .getString(PrefsKeys.TUNNEL_MODE, TunnelMode.DC.name)!!
         return try {
             TunnelMode.valueOf(tunnelModeString)
         } catch (_: IllegalArgumentException) {
             Log.e("SharedPref", "Unknown tunnel mode: $tunnelModeString. Resetting to ${TunnelMode.DC.name}")
             preferences.edit {
-                    putString(SharedPrefsKeys.TUNNEL_MODE, TunnelMode.DC.name)
+                    putString(PrefsKeys.TUNNEL_MODE, TunnelMode.DC.name)
                 }
             TunnelMode.DC
         }

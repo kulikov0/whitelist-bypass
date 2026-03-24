@@ -50,12 +50,12 @@ class RelayController(
         }
         dcThread = Thread {
             try {
-                Mobile.startJoiner(9000, 1080, cb)
+                Mobile.startJoiner(Ports.DC_WS, Ports.SOCKS, cb)
             } catch (e: Exception) {
                 if (isRunning) onLog("Relay error: ${e.message}")
             }
         }.also { it.start() }
-        onLog("Relay started DC mode (SOCKS5 :1080, WS :9000)")
+        onLog("Relay started DC mode (SOCKS5 :${Ports.SOCKS}, WS :${Ports.DC_WS})")
     }
 
     private fun startPion(mode: TunnelMode, isTelemost: Boolean) {
@@ -70,13 +70,13 @@ class RelayController(
                 val pb = ProcessBuilder(
                     relayBin.absolutePath,
                     "--mode", relayMode,
-                    "--ws-port", "9001",
-                    "--socks-port", "1080"
+                    "--ws-port", "${Ports.PION_SIGNALING}",
+                    "--socks-port", "${Ports.SOCKS}"
                 )
                 pb.redirectErrorStream(true)
                 val proc = pb.start()
                 synchronized(this) { pionProcess = proc }
-                onLog("Pion relay started mode=$relayMode (signaling :9001, SOCKS5 :1080)")
+                onLog("Pion relay started mode=$relayMode (signaling :${Ports.PION_SIGNALING}, SOCKS5 :${Ports.SOCKS})")
                 proc.inputStream.bufferedReader().forEachLine { line ->
                     Log.d("RELAY", line)
                     onLog(line)
