@@ -9,6 +9,7 @@
     <LinearLayout
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
+        android:gravity="center_vertical"
         android:orientation="horizontal"
         android:padding="4dp">
 
@@ -21,19 +22,43 @@
             android:inputType="textUri"
             android:singleLine="true"
             android:textSize="14sp" />
-
+        <ImageButton
+            android:id="@+id/clearButton"
+            android:layout_width="32dp"
+            android:layout_height="32dp"
+            android:layout_margin="4dp"
+            android:background="?attr/selectableItemBackgroundBorderless"
+            android:contentDescription="Clear"
+            android:padding="4dp"
+            android:scaleType="fitXY"
+            android:src="@android:drawable/ic_menu_close_clear_cancel"
+            app:tint="#888888" />
+    </LinearLayout>
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:gravity="center_vertical"
+        android:orientation="horizontal"
+        android:padding="4dp">
         <Spinner
             android:id="@+id/modeSpinner"
+            android:layout_weight="1"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:minWidth="100dp" />
-
         <Button
             android:id="@+id/goButton"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:text="GO" />
     </LinearLayout>
+
+    <androidx.appcompat.widget.SwitchCompat
+        android:id="@+id/connectOnAppStartSwitch"
+        android:padding="4dp"
+        android:text="@string/connect_on_start_switch"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content" />
 
     <FrameLayout
         android:layout_width="match_parent"
@@ -54,14 +79,14 @@
             android:id="@+id/copyLogsButton"
             android:layout_width="32dp"
             android:layout_height="32dp"
-            android:scaleType="fitXY"
             android:layout_gravity="top|end"
             android:layout_margin="4dp"
             android:background="?attr/selectableItemBackgroundBorderless"
             android:contentDescription="Copy logs"
+            android:padding="4dp"
+            android:scaleType="fitXY"
             android:src="@drawable/ic_copy"
-            app:tint="#888888"
-            android:padding="4dp" />
+            app:tint="#888888" />
     </FrameLayout>
 
     <WebView
