@@ -18,51 +18,59 @@
             android:layout_width="0dp"
             android:layout_height="wrap_content"
             android:layout_weight="1"
-            android:hint="Paste call link"
+            android:hint="@string/hint_call_link"
             android:inputType="textUri"
             android:singleLine="true"
             android:textSize="14sp" />
+
         <ImageButton
             android:id="@+id/clearButton"
-            android:layout_width="32dp"
-            android:layout_height="32dp"
-            android:layout_margin="4dp"
+            android:layout_width="36dp"
+            android:layout_height="36dp"
+            android:layout_margin="2dp"
             android:background="?attr/selectableItemBackgroundBorderless"
-            android:contentDescription="Clear"
-            android:padding="4dp"
+            android:contentDescription="@string/cd_clear"
+            android:padding="6dp"
             android:scaleType="fitXY"
             android:src="@android:drawable/ic_menu_close_clear_cancel"
             app:tint="#888888" />
-    </LinearLayout>
-    <LinearLayout
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:gravity="center_vertical"
-        android:orientation="horizontal"
-        android:padding="4dp">
-        <Spinner
-            android:id="@+id/modeSpinner"
-            android:layout_weight="1"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:minWidth="100dp" />
+
         <Button
             android:id="@+id/goButton"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:text="GO" />
+            android:minWidth="64dp"
+            android:text="@string/btn_go" />
+
+        <ImageButton
+            android:id="@+id/gearButton"
+            android:layout_width="36dp"
+            android:layout_height="36dp"
+            android:layout_margin="2dp"
+            android:background="?attr/selectableItemBackgroundBorderless"
+            android:contentDescription="@string/cd_settings"
+            android:padding="6dp"
+            android:scaleType="fitXY"
+            android:src="@android:drawable/ic_menu_manage"
+            app:tint="#888888" />
     </LinearLayout>
 
-    <androidx.appcompat.widget.SwitchCompat
-        android:id="@+id/connectOnAppStartSwitch"
-        android:padding="4dp"
-        android:text="@string/connect_on_start_switch"
+    <TextView
+        android:id="@+id/statusBar"
         android:layout_width="match_parent"
-        android:layout_height="wrap_content" />
+        android:layout_height="wrap_content"
+        android:background="@color/status_idle"
+        android:gravity="center"
+        android:paddingVertical="4dp"
+        android:text="@string/status_idle"
+        android:textColor="@color/white"
+        android:textSize="12sp" />
 
     <FrameLayout
+        android:id="@+id/logContainer"
         android:layout_width="match_parent"
-        android:layout_height="100dp">
+        android:layout_height="120dp"
+        android:visibility="gone">
 
         <TextView
             android:id="@+id/logView"
@@ -73,19 +81,19 @@
             android:padding="4dp"
             android:scrollbars="vertical"
             android:textColor="#00FF00"
-            android:textSize="10sp" />
+            android:textSize="11sp" />
 
         <ImageButton
-            android:id="@+id/copyLogsButton"
+            android:id="@+id/shareLogsButton"
             android:layout_width="32dp"
             android:layout_height="32dp"
             android:layout_gravity="top|end"
             android:layout_margin="4dp"
             android:background="?attr/selectableItemBackgroundBorderless"
-            android:contentDescription="Copy logs"
+            android:contentDescription="@string/share_logs"
             android:padding="4dp"
             android:scaleType="fitXY"
-            android:src="@drawable/ic_copy"
+            android:src="@android:drawable/ic_menu_share"
             app:tint="#888888" />
     </FrameLayout>
 

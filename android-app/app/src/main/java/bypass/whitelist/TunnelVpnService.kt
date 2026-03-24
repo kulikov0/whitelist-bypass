@@ -24,6 +24,7 @@ class TunnelVpnService : VpnService() {
     }
 
     private var vpnFd: ParcelFileDescriptor? = null
+    private var tun2socksThread: Thread? = null
 
     override fun onCreate() {
         super.onCreate()
@@ -46,7 +47,7 @@ class TunnelVpnService : VpnService() {
 
     fun updateStatus(status: VpnStatus) {
         val nm = getSystemService(NotificationManager::class.java)
-        nm.notify(NOTIFICATION_ID, buildNotification(status.label))
+        nm.notify(NOTIFICATION_ID, buildNotification(getString(status.labelRes)))
     }
 
     fun stop() {
@@ -57,6 +58,8 @@ class TunnelVpnService : VpnService() {
         } catch (e: Exception) {
             Log.e(TAG, "tun2socks stop error: ${e.message}")
         }
+        tun2socksThread?.join(3000)
+        tun2socksThread = null
         vpnFd = null
         @Suppress("DEPRECATION")
         stopForeground(true)
@@ -95,14 +98,14 @@ class TunnelVpnService : VpnService() {
         Log.i(TAG, "VPN established, fd=$fd")
         updateStatus(VpnStatus.TUNNEL_ACTIVE)
 
-        Thread {
+        tun2socksThread = Thread {
             try {
                 Mobile.startTun2Socks(fd.toLong(), Vpn.MTU.toLong(), Ports.SOCKS)
             } catch (e: Exception) {
                 Log.e(TAG, "tun2socks error: ${e.message}")
                 isRunning = false
             }
-        }.start()
+        }.also { it.start() }
     }
 
     private fun startForegroundNotification() {
@@ -114,7 +117,7 @@ class TunnelVpnService : VpnService() {
             nm.createNotificationChannel(channel)
         }
 
-        startForeground(NOTIFICATION_ID, buildNotification(VpnStatus.STARTING.label))
+        startForeground(NOTIFICATION_ID, buildNotification(getString(VpnStatus.STARTING.labelRes)))
     }
 
     private fun buildNotification(text: String): Notification {

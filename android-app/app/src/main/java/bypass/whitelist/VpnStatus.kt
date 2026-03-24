@@ -1,13 +1,15 @@
 package bypass.whitelist
 
-enum class VpnStatus(val label: String) {
-    STARTING("Starting..."),
-    CONNECTING("Connecting..."),
-    CALL_CONNECTED("Call connected"),
-    DATACHANNEL_OPEN("DataChannel open"),
-    DATACHANNEL_LOST("DataChannel lost"),
-    TUNNEL_ACTIVE("Tunnel active"),
-    TUNNEL_LOST("Tunnel lost, reconnecting..."),
-    CALL_DISCONNECTED("Call disconnected"),
-    CALL_FAILED("Call failed")
+import androidx.annotation.StringRes
+
+enum class VpnStatus(@StringRes val labelRes: Int) {
+    STARTING(R.string.vpn_starting),
+    CONNECTING(R.string.vpn_connecting),
+    CALL_CONNECTED(R.string.vpn_call_connected),
+    DATACHANNEL_OPEN(R.string.vpn_datachannel_open),
+    DATACHANNEL_LOST(R.string.vpn_datachannel_lost),
+    TUNNEL_ACTIVE(R.string.vpn_tunnel_active),
+    TUNNEL_LOST(R.string.vpn_tunnel_lost),
+    CALL_DISCONNECTED(R.string.vpn_call_disconnected),
+    CALL_FAILED(R.string.vpn_call_failed)
 }

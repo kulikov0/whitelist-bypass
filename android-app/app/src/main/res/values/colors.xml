@@ -2,4 +2,10 @@
 <resources>
     <color name="black">#FF000000</color>
     <color name="white">#FFFFFFFF</color>
+
+    <color name="status_active">#FF00796B</color>
+    <color name="status_connecting">#FF455A64</color>
+    <color name="status_warning">#FFF57F17</color>
+    <color name="status_error">#FFC62828</color>
+    <color name="status_idle">#FF37474F</color>
 </resources>

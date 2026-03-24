@@ -1,4 +1,25 @@
 <resources>
     <string name="app_name">WhitelistBypass</string>
-    <string name="connect_on_start_switch">Connect on app start</string>
+    <string name="status_idle">Idle</string>
+    <string name="status_format">%1$s | %2$s</string>
+    <string name="btn_go">GO</string>
+    <string name="btn_disconnect">Disconnect</string>
+    <string name="share_logs">Share logs</string>
+    <string name="menu_reconnect_on_start">Reconnect on app start</string>
+    <string name="menu_show_logs">Show logs</string>
+    <string name="menu_share_logs">Share logs</string>
+    <string name="menu_reset">Reset</string>
+    <string name="menu_mode">Mode: %1$s</string>
+    <string name="hint_call_link">Paste call link</string>
+    <string name="cd_clear">Clear</string>
+    <string name="cd_settings">Settings</string>
+    <string name="vpn_starting">Starting…</string>
+    <string name="vpn_connecting">Connecting…</string>
+    <string name="vpn_call_connected">Call connected</string>
+    <string name="vpn_datachannel_open">DataChannel open</string>
+    <string name="vpn_datachannel_lost">DataChannel lost</string>
+    <string name="vpn_tunnel_active">Tunnel active</string>
+    <string name="vpn_tunnel_lost">Tunnel lost, reconnecting…</string>
+    <string name="vpn_call_disconnected">Call disconnected</string>
+    <string name="vpn_call_failed">Call failed</string>
 </resources>

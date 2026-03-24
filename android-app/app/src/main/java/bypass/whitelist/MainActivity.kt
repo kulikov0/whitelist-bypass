@@ -9,52 +9,41 @@ import android.os.Bundle
 import android.util.Log
 import android.view.View
 import android.webkit.*
-import android.widget.AdapterView
-import android.widget.ArrayAdapter
 import android.widget.Button
-import android.widget.CompoundButton
 import android.widget.EditText
 import android.widget.ImageButton
-import android.widget.Spinner
+import android.widget.PopupMenu
 import android.widget.TextView
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AppCompatActivity
+import androidx.core.content.FileProvider
 import androidx.core.view.ViewCompat
 import androidx.core.view.WindowInsetsCompat
-import androidx.core.content.FileProvider
-import androidx.core.content.edit
+import java.net.Inet4Address
 import java.net.InetAddress
-
-private val reUrl = Regex("(https?://[^/]+/)(.+)")
-private val reIp4 = Regex("\\d+\\.\\d+\\.\\d+\\.\\d+")
-private val reIp6 = Regex("[0-9a-fA-F]{1,4}(?::[0-9a-fA-F]{1,4}){2,7}|(?:[0-9a-fA-F]{1,4}:){1,6}:[0-9a-fA-F]{1,4}|::(?:[0-9a-fA-F]{1,4}:){0,5}[0-9a-fA-F]{1,4}")
-
-private fun maskUrl(url: String): String {
-    return url.replace(reUrl) { m ->
-        m.groupValues[1] + m.groupValues[2].take(4) + "***"
-    }.replace(reIp4) { m ->
-        val p = m.value.split(".")
-        "${p[0]}.${p[1]}.x.x"
-    }.replace(reIp6, "x::x")
-}
 
 class MainActivity : AppCompatActivity() {
 
     private var tunnelMode = TunnelMode.DC
+    private var connected = false
+    private var showLogs = false
+
     private val logWriter by lazy { LogWriter(cacheDir) }
     private val relay by lazy {
         RelayController(
             nativeLibDir = applicationInfo.nativeLibraryDir,
             onLog = ::appendLog,
-            onStatus = ::updateVpnStatus,
+            onStatus = ::onVpnStatus,
         )
     }
 
     private lateinit var webView: WebView
     private lateinit var logView: TextView
     private lateinit var urlInput: EditText
-    private lateinit var connectOnStartSwitch: CompoundButton
+    private lateinit var goButton: Button
+    private lateinit var statusBar: TextView
+    private lateinit var logContainer: View
 
     private var previousUrl = ""
 
@@ -88,45 +77,35 @@ class MainActivity : AppCompatActivity() {
         logView = findViewById(R.id.logView)
         urlInput = findViewById(R.id.urlInput)
         webView = findViewById(R.id.webView)
+        goButton = findViewById(R.id.goButton)
+        statusBar = findViewById(R.id.statusBar)
+        logContainer = findViewById(R.id.logContainer)
 
         logWriter.reset()
 
-        previousUrl = getPreferences(MODE_PRIVATE).getString(PrefsKeys.URL, "")!!
+        previousUrl = Prefs.lastUrl
         urlInput.setText(previousUrl)
-
-        tunnelMode = getTunnelModeFromPrefs()
+        tunnelMode = Prefs.tunnelMode
+        statusBar.text = getString(R.string.status_format, tunnelMode.label, getString(R.string.status_idle))
+        showLogs = Prefs.showLogs
+        logContainer.visibility = if (showLogs) View.VISIBLE else View.GONE
 
         setupWebView()
-        setupModeSpinner()
 
-        val goButton = findViewById<Button>(R.id.goButton)
-        goButton.setOnClickListener {
-            val url = urlInput.text.toString().trim()
-            if (url.isNotEmpty()) {
-                logWriter.reset()
-                logView.text = ""
-                stopRelay()
-                startRelay()
-                appendLog("Loading: ${maskUrl(url)}")
-                if (previousUrl != url) {
-                    previousUrl = url
-                    getPreferences(MODE_PRIVATE).edit {
-                            putString(PrefsKeys.URL, url)
-                        }
-                }
-                webView.loadUrl(url)
-            }
-        }
+        goButton.setOnClickListener { onGoPressed() }
 
-        findViewById<ImageButton>(R.id.copyLogsButton).setOnClickListener {
+        findViewById<ImageButton>(R.id.shareLogsButton).setOnClickListener {
             val uri = FileProvider.getUriForFile(this, "$packageName.fileprovider", logWriter.file)
             val share = Intent(Intent.ACTION_SEND).apply {
                 type = "text/plain"
                 putExtra(Intent.EXTRA_STREAM, uri)
                 addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
             }
-            startActivity(Intent.createChooser(share, "Share logs"))
+            startActivity(Intent.createChooser(share, getString(R.string.share_logs)))
         }
+
+        findViewById<ImageButton>(R.id.gearButton).setOnClickListener { showGearMenu(it) }
+        findViewById<View>(R.id.clearButton).setOnClickListener { urlInput.setText("") }
 
         TunnelVpnService.onDisconnect = { runOnUiThread { resetState() } }
 
@@ -138,24 +117,9 @@ class MainActivity : AppCompatActivity() {
 
         if (CALL_LINK.isNotEmpty()) {
             urlInput.setText(CALL_LINK)
-            goButton.performClick()
-        }
-
-        connectOnStartSwitch = findViewById(R.id.connectOnAppStartSwitch)
-        connectOnStartSwitch.isChecked = getPreferences(MODE_PRIVATE).getBoolean(
-            PrefsKeys.CONNECT_ON_START,
-            true
-        )
-        connectOnStartSwitch.setOnCheckedChangeListener { _, isChecked ->
-            getPreferences(MODE_PRIVATE).edit {
-                    putBoolean(PrefsKeys.CONNECT_ON_START, isChecked)
-                }
-        }
-        if (connectOnStartSwitch.isChecked && previousUrl.isNotEmpty() && CALL_LINK.isEmpty()) {
-            goButton.performClick()
-        }
-        findViewById<View>(R.id.clearButton).setOnClickListener {
-            urlInput.setText("")
+            onGoPressed()
+        } else if (Prefs.connectOnStart && previousUrl.isNotEmpty()) {
+            onGoPressed()
         }
     }
 
@@ -167,30 +131,134 @@ class MainActivity : AppCompatActivity() {
         super.onDestroy()
     }
 
-    private fun setupModeSpinner() {
-        val spinner = findViewById<Spinner>(R.id.modeSpinner)
-        val adapter = ArrayAdapter(this, android.R.layout.simple_spinner_item, TunnelMode.entries.map { it.label })
-        adapter.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item)
-        spinner.adapter = adapter
-        spinner.setSelection(TunnelMode.entries.indexOf(tunnelMode))
-        spinner.onItemSelectedListener = object : AdapterView.OnItemSelectedListener {
-            var init = true
-            override fun onItemSelected(parent: AdapterView<*>?, view: View?, pos: Int, id: Long) {
-                if (init) { init = false; return }
-                tunnelMode = TunnelMode.entries[pos]
-                getPreferences(MODE_PRIVATE).edit {
-                        putString(PrefsKeys.TUNNEL_MODE, tunnelMode.name)
-                    }
-                appendLog("Mode: ${tunnelMode.label}")
-                stopRelay()
-                startRelay()
-                val url = webView.url
-                if (!url.isNullOrEmpty()) {
-                    webView.evaluateJavascript("window.__hookInstalled = false", null)
-                    webView.reload()
+    private fun onGoPressed() {
+        val url = urlInput.text.toString().trim()
+        if (url.isEmpty()) return
+        logWriter.reset()
+        logView.text = ""
+        stopRelay()
+        startRelay()
+        hideKeyboard()
+        urlInput.clearFocus()
+        setConnected(false)
+        setStatus(VpnStatus.CONNECTING)
+        appendLog("Loading: ${maskUrl(url)}")
+        if (previousUrl != url) {
+            previousUrl = url
+            Prefs.lastUrl = url
+        }
+        webView.loadUrl(url)
+    }
+
+    private enum class MenuItem(val id: Int, val stringRes: Int) {
+        MODE(99, R.string.menu_mode),
+        RECONNECT_ON_START(100, R.string.menu_reconnect_on_start),
+        SHOW_LOGS(101, R.string.menu_show_logs),
+        SHARE_LOGS(102, R.string.menu_share_logs),
+        RESET(200, R.string.menu_reset),
+    }
+
+    private fun showGearMenu(anchor: View) {
+        val popup = PopupMenu(this, anchor)
+        val menu = popup.menu
+
+        menu.add(0, MenuItem.MODE.id, 0, getString(MenuItem.MODE.stringRes, tunnelMode.label))
+
+        menu.add(0, MenuItem.RECONNECT_ON_START.id, 0, MenuItem.RECONNECT_ON_START.stringRes).apply {
+            isCheckable = true
+            isChecked = Prefs.connectOnStart
+        }
+        menu.add(0, MenuItem.SHOW_LOGS.id, 0, MenuItem.SHOW_LOGS.stringRes).apply {
+            isCheckable = true
+            isChecked = showLogs
+        }
+        menu.add(0, MenuItem.SHARE_LOGS.id, 0, MenuItem.SHARE_LOGS.stringRes)
+        menu.add(0, MenuItem.RESET.id, 0, MenuItem.RESET.stringRes)
+
+        popup.setOnMenuItemClickListener { item ->
+            when (item.itemId) {
+                MenuItem.RECONNECT_ON_START.id -> {
+                    Prefs.connectOnStart = !item.isChecked
+                    true
+                }
+                MenuItem.SHOW_LOGS.id -> {
+                    showLogs = !item.isChecked
+                    Prefs.showLogs = showLogs
+                    logContainer.visibility = if (showLogs) View.VISIBLE else View.GONE
+                    true
+                }
+                MenuItem.SHARE_LOGS.id -> {
+                    findViewById<ImageButton>(R.id.shareLogsButton).performClick()
+                    true
+                }
+                MenuItem.RESET.id -> {
+                    resetState()
+                    TunnelVpnService.instance?.stop()
+                    true
+                }
+                MenuItem.MODE.id -> {
+                    showModeDialog()
+                    true
+                }
+                else -> false
+            }
+        }
+        popup.show()
+    }
+
+    private fun showModeDialog() {
+        val modes = TunnelMode.entries
+        val labels = modes.map { it.label }.toTypedArray()
+        val current = modes.indexOf(tunnelMode)
+        android.app.AlertDialog.Builder(this)
+            .setSingleChoiceItems(labels, current) { dialog, which ->
+                dialog.dismiss()
+                val mode = modes[which]
+                if (mode != tunnelMode) {
+                    tunnelMode = mode
+                    Prefs.tunnelMode = mode
+                    resetState()
+                    TunnelVpnService.instance?.stop()
                 }
             }
-            override fun onNothingSelected(parent: AdapterView<*>?) {}
+            .show()
+    }
+
+    private fun setConnected(value: Boolean) {
+        connected = value
+        goButton.setText(if (value) R.string.btn_disconnect else R.string.btn_go)
+        goButton.setOnClickListener {
+            if (connected) {
+                resetState()
+                TunnelVpnService.instance?.stop()
+            } else {
+                onGoPressed()
+            }
+        }
+    }
+
+    private fun setStatus(status: VpnStatus) {
+        statusBar.text = getString(R.string.status_format, tunnelMode.label, getString(status.labelRes))
+        val colorRes = when (status) {
+            VpnStatus.TUNNEL_ACTIVE -> R.color.status_active
+            VpnStatus.CONNECTING,
+            VpnStatus.CALL_CONNECTED,
+            VpnStatus.DATACHANNEL_OPEN -> R.color.status_connecting
+            VpnStatus.TUNNEL_LOST,
+            VpnStatus.DATACHANNEL_LOST -> R.color.status_warning
+            VpnStatus.CALL_DISCONNECTED,
+            VpnStatus.CALL_FAILED -> R.color.status_error
+            VpnStatus.STARTING -> R.color.status_idle
+        }
+        statusBar.setBackgroundColor(getColor(colorRes))
+    }
+
+    private fun onVpnStatus(status: VpnStatus) {
+        if (!relay.isRunning) return
+        TunnelVpnService.instance?.updateStatus(status)
+        runOnUiThread {
+            setStatus(status)
+            if (status == VpnStatus.TUNNEL_ACTIVE) setConnected(true)
         }
     }
 
@@ -203,10 +271,6 @@ class MainActivity : AppCompatActivity() {
         relay.stop()
     }
 
-    private fun updateVpnStatus(status: VpnStatus) {
-        TunnelVpnService.instance?.updateStatus(status)
-    }
-
     private fun requestVpn() {
         val intent = VpnService.prepare(this)
         if (intent != null) vpnLauncher.launch(intent) else startVpnService()
@@ -215,7 +279,7 @@ class MainActivity : AppCompatActivity() {
     private fun startVpnService() {
         startService(Intent(this, TunnelVpnService::class.java))
         appendLog("VPN started")
-        updateVpnStatus(VpnStatus.TUNNEL_ACTIVE)
+        onVpnStatus(VpnStatus.TUNNEL_ACTIVE)
     }
 
     private fun hookForUrl(url: String): String {
@@ -255,14 +319,15 @@ class MainActivity : AppCompatActivity() {
                 if (text.contains("[HOOK]")) {
                     appendLog(text)
                     when {
-                        text.contains("CALL CONNECTED") -> updateVpnStatus(VpnStatus.CALL_CONNECTED)
-                        text.contains("DataChannel open") -> updateVpnStatus(VpnStatus.DATACHANNEL_OPEN)
-                        text.contains("DataChannel closed") -> updateVpnStatus(VpnStatus.DATACHANNEL_LOST)
-                        text.contains("WebSocket connected") -> updateVpnStatus(VpnStatus.TUNNEL_ACTIVE)
-                        text.contains("WebSocket disconnected") -> updateVpnStatus(VpnStatus.TUNNEL_LOST)
-                        text.contains("Connection state: connecting") -> updateVpnStatus(VpnStatus.CONNECTING)
-                        text.contains("Connection state: disconnected") -> updateVpnStatus(VpnStatus.CALL_DISCONNECTED)
-                        text.contains("Connection state: failed") -> updateVpnStatus(VpnStatus.CALL_FAILED)
+                        //TODO - use js bridge
+                        text.contains("CALL CONNECTED") -> onVpnStatus(VpnStatus.CALL_CONNECTED)
+                        text.contains("DataChannel open") -> onVpnStatus(VpnStatus.DATACHANNEL_OPEN)
+                        text.contains("DataChannel closed") -> onVpnStatus(VpnStatus.DATACHANNEL_LOST)
+                        text.contains("WebSocket connected") -> onVpnStatus(VpnStatus.TUNNEL_ACTIVE)
+                        text.contains("WebSocket disconnected") -> onVpnStatus(VpnStatus.TUNNEL_LOST)
+                        text.contains("Connection state: connecting") -> onVpnStatus(VpnStatus.CONNECTING)
+                        text.contains("Connection state: disconnected") -> onVpnStatus(VpnStatus.CALL_DISCONNECTED)
+                        text.contains("Connection state: failed") -> onVpnStatus(VpnStatus.CALL_FAILED)
                     }
                 }
                 return true
@@ -340,7 +405,7 @@ if(oac){var nac=function(){var c=new oac();c.suspend();
             val props = cm.getLinkProperties(network) ?: return ""
             for (addr in props.linkAddresses) {
                 val ip = addr.address
-                if (!ip.isLoopbackAddress && ip is java.net.Inet4Address) {
+                if (!ip.isLoopbackAddress && ip is Inet4Address) {
                     return ip.hostAddress ?: ""
                 }
             }
@@ -350,19 +415,15 @@ if(oac){var nac=function(){var c=new oac();c.suspend();
         return ""
     }
 
-    private fun getTunnelModeFromPrefs(): TunnelMode {
-        val preferences = getPreferences(MODE_PRIVATE)
-        val tunnelModeString = getPreferences(MODE_PRIVATE)
-            .getString(PrefsKeys.TUNNEL_MODE, TunnelMode.DC.name)!!
-        return try {
-            TunnelMode.valueOf(tunnelModeString)
-        } catch (_: IllegalArgumentException) {
-            Log.e("SharedPref", "Unknown tunnel mode: $tunnelModeString. Resetting to ${TunnelMode.DC.name}")
-            preferences.edit {
-                    putString(PrefsKeys.TUNNEL_MODE, TunnelMode.DC.name)
-                }
-            TunnelMode.DC
-        }
+    private fun resetState() {
+        stopRelay()
+        webView.loadUrl("about:blank")
+        logWriter.reset()
+        logView.text = ""
+        logView.scrollTo(0, 0)
+        setConnected(false)
+        statusBar.text = getString(R.string.status_format, tunnelMode.label, getString(R.string.status_idle))
+        statusBar.setBackgroundColor(getColor(R.color.status_idle))
     }
 
     @Suppress("unused")
@@ -376,7 +437,7 @@ if(oac){var nac=function(){var c=new oac();c.suspend();
         @JavascriptInterface
         fun resolveHost(hostname: String): String = try {
             val all = InetAddress.getAllByName(hostname)
-            val v4 = all.firstOrNull { it is java.net.Inet4Address }
+            val v4 = all.firstOrNull { it is Inet4Address }
             val addr = v4 ?: all.first()
             val ip = addr.hostAddress ?: ""
             Log.d("RELAY", "resolveHost: $hostname -> $ip (${addr.javaClass.simpleName}, ${all.size} addrs)")
@@ -389,18 +450,9 @@ if(oac){var nac=function(){var c=new oac();c.suspend();
         @JavascriptInterface
         fun onTunnelReady() {
             appendLog("Tunnel ready, starting VPN...")
-            updateVpnStatus(VpnStatus.TUNNEL_ACTIVE)
+            onVpnStatus(VpnStatus.TUNNEL_ACTIVE)
             runOnUiThread { requestVpn() }
         }
-    }
-
-    private fun resetState() {
-        stopRelay()
-        webView.loadUrl("about:blank")
-        logWriter.reset()
-        logView.text = ""
-        logView.scrollTo(0, 0)
-        appendLog("Disconnected")
     }
 
     companion object {

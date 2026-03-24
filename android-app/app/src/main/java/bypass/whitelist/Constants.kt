@@ -10,6 +10,7 @@ object PrefsKeys {
     const val CONNECT_ON_START = "connect_on_start"
     const val URL = "url"
     const val TUNNEL_MODE = "tunnel_mode"
+    const val SHOW_LOGS = "show_logs"
 }
 
 object Vpn {
