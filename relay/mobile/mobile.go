@@ -125,13 +125,13 @@ func StartJoiner(wsPort, socksPort int, cb LogCallback) error {
 
 	go func() {
 		addr := fmt.Sprintf("127.0.0.1:%d", wsPort)
-		logMsg("joiner: WebSocket on %s", addr)
+		logMsg("dc-joiner: WebSocket on %s", addr)
 		if err := http.ListenAndServe(addr, mux); err != nil {
-			logMsg("joiner: ws server error: %v", err)
+			logMsg("dc-joiner: ws server error: %v", err)
 		}
 	}()
 	addr := fmt.Sprintf("127.0.0.1:%d", socksPort)
-	logMsg("joiner: SOCKS5 on %s", addr)
+	logMsg("dc-joiner: SOCKS5 on %s", addr)
 	return j.listenSOCKS(addr)
 }
 
@@ -144,7 +144,7 @@ func StartCreator(wsPort int, cb LogCallback) error {
 	mux.HandleFunc("/ws", c.handleWS)
 
 	addr := fmt.Sprintf("127.0.0.1:%d", wsPort)
-	logMsg("creator: WebSocket on %s", addr)
+	logMsg("dc-creator: WebSocket on %s", addr)
 	return http.ListenAndServe(addr, mux)
 }
 
@@ -187,7 +187,7 @@ func (j *joinerRelay) handleUDPAssociate(tcpConn net.Conn) {
 	reply := []byte{0x05, 0x00, 0x00, 0x01, 127, 0, 0, 1, 0, 0}
 	binary.BigEndian.PutUint16(reply[8:10], uint16(localAddr.Port))
 	tcpConn.Write(reply)
-	logMsg("joiner: UDP ASSOCIATE on port %d", localAddr.Port)
+	logMsg("dc-joiner: UDP ASSOCIATE on port %d", localAddr.Port)
 
 	go func() {
 		buf := make([]byte, 1)
@@ -257,16 +257,16 @@ func (j *joinerRelay) handleUDPAssociate(tcpConn net.Conn) {
 func (j *joinerRelay) handleWS(w http.ResponseWriter, r *http.Request) {
 	ws, err := upgrader.Upgrade(w, r, nil)
 	if err != nil {
-		logMsg("joiner: ws upgrade error: %v", err)
+		logMsg("dc-joiner: ws upgrade error: %v", err)
 		return
 	}
 	j.writer = newWSWriter(ws)
 	j.once.Do(func() { close(j.ready) })
-	logMsg("joiner: browser connected via WebSocket")
+	logMsg("dc-joiner: browser connected via WebSocket")
 	for {
 		_, msg, err := ws.ReadMessage()
 		if err != nil {
-			logMsg("joiner: ws read error: %v", err)
+			logMsg("dc-joiner: ws read error: %v", err)
 			return
 		}
 		connID, msgType, payload := decodeFrame(msg)
@@ -326,7 +326,7 @@ func (j *joinerRelay) listenSOCKS(addr string) error {
 	for {
 		conn, err := ln.Accept()
 		if err != nil {
-			logMsg("joiner: accept error: %v", err)
+			logMsg("dc-joiner: accept error: %v", err)
 			continue
 		}
 		go j.handleSOCKS(conn)
@@ -391,17 +391,17 @@ func (j *joinerRelay) handleSOCKS(conn net.Conn) {
 	id := j.nextID.Add(1)
 	sc := &socksConn{id: id, conn: conn, j: j, rdy: make(chan error, 1)}
 	j.conns.Store(id, sc)
-	logMsg("joiner: CONNECT %d -> %s", id, maskAddr(host))
+	logMsg("dc-joiner: CONNECT %d -> %s", id, maskAddr(host))
 	j.send(id, msgConnect, []byte(host))
 	if err := <-sc.rdy; err != nil {
-		logMsg("joiner: CONNECT %d failed: %v", id, err)
+		logMsg("dc-joiner: CONNECT %d failed: %v", id, err)
 		conn.Write([]byte{0x05, 0x05, 0x00, 0x01, 0, 0, 0, 0, 0, 0})
 		conn.Close()
 		j.conns.Delete(id)
 		return
 	}
 	conn.Write([]byte{0x05, 0x00, 0x00, 0x01, 0, 0, 0, 0, 0, 0})
-	logMsg("joiner: CONNECTED %d -> %s", id, maskAddr(host))
+	logMsg("dc-joiner: CONNECTED %d -> %s", id, maskAddr(host))
 	go func() {
 		buf := make([]byte, readBufSize)
 		for {
@@ -426,15 +426,15 @@ type creatorRelay struct {
 func (c *creatorRelay) handleWS(w http.ResponseWriter, r *http.Request) {
 	ws, err := upgrader.Upgrade(w, r, nil)
 	if err != nil {
-		logMsg("creator: ws upgrade error: %v", err)
+		logMsg("dc-creator: ws upgrade error: %v", err)
 		return
 	}
 	c.writer = newWSWriter(ws)
-	logMsg("creator: browser connected via WebSocket")
+	logMsg("dc-creator: browser connected via WebSocket")
 	for {
 		_, msg, err := ws.ReadMessage()
 		if err != nil {
-			logMsg("creator: ws read error: %v", err)
+			logMsg("dc-creator: ws read error: %v", err)
 			return
 		}
 		connID, msgType, payload := decodeFrame(msg)
@@ -486,12 +486,12 @@ func (c *creatorRelay) handleUDP(connID uint32, payload []byte) {
 
 	udpAddr, err := net.ResolveUDPAddr("udp", addr)
 	if err != nil {
-		logMsg("creator: UDP resolve %s failed: %v", maskAddr(addr), err)
+		logMsg("dc-creator: UDP resolve %s failed: %v", maskAddr(addr), err)
 		return
 	}
 	conn, err := net.DialUDP("udp", nil, udpAddr)
 	if err != nil {
-		logMsg("creator: UDP dial %s failed: %v", maskAddr(addr), err)
+		logMsg("dc-creator: UDP dial %s failed: %v", maskAddr(addr), err)
 		return
 	}
 	defer conn.Close()
@@ -509,16 +509,16 @@ func (c *creatorRelay) handleUDP(connID uint32, payload []byte) {
 }
 
 func (c *creatorRelay) connect(connID uint32, addr string) {
-	logMsg("creator: CONNECT %d -> %s", connID, maskAddr(addr))
+	logMsg("dc-creator: CONNECT %d -> %s", connID, maskAddr(addr))
 	conn, err := net.DialTimeout("tcp", addr, 10e9)
 	if err != nil {
-		logMsg("creator: CONNECT %d failed: %v", connID, err)
+		logMsg("dc-creator: CONNECT %d failed: %v", connID, err)
 		c.send(connID, msgConnectErr, []byte(err.Error()))
 		return
 	}
 	c.conns.Store(connID, conn)
 	c.send(connID, msgConnectOK, nil)
-	logMsg("creator: CONNECTED %d -> %s", connID, maskAddr(addr))
+	logMsg("dc-creator: CONNECTED %d -> %s", connID, maskAddr(addr))
 	buf := make([]byte, readBufSize)
 	for {
 		n, err := conn.Read(buf)
@@ -527,7 +527,7 @@ func (c *creatorRelay) connect(connID uint32, addr string) {
 		}
 		if err != nil {
 			if err != io.EOF {
-				logMsg("creator: conn %d read error: %v", connID, err)
+				logMsg("dc-creator: conn %d read error: %v", connID, err)
 			}
 			break
 		}

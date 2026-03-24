@@ -25,16 +25,16 @@ func main() {
 	flag.Parse()
 
 	if *mode == "" {
-		fmt.Fprintf(os.Stderr, "Usage: relay --mode joiner|creator\n")
+		fmt.Fprintf(os.Stderr, "Usage: relay --mode dc-joiner|dc-creator|vk-video-joiner|vk-video-creator|telemost-video-joiner|telemost-video-creator\n")
 		os.Exit(1)
 	}
 
 	cb := stdLogger{}
 
 	switch *mode {
-	case "joiner":
+	case "dc-joiner":
 		log.Fatal(mobile.StartJoiner(*wsPort, *socksPort, cb))
-	case "creator":
+	case "dc-creator":
 		log.Fatal(mobile.StartCreator(*wsPort, cb))
 	case "vk-video-joiner":
 		c := pion.NewVKClient(log.Printf)

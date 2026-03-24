@@ -3,6 +3,7 @@ const { spawn } = require('child_process');
 const path = require('path');
 const fs = require('fs');
 const TelemostAutoclick = require('./telemost-autoclick');
+const VkAutoclick = require('./vk-autoclick');
 
 var hooksDir = app.isPackaged
   ? path.join(process.resourcesPath, 'hooks')
@@ -62,7 +63,7 @@ function spawnRelay() {
   var relayPath = app.isPackaged
     ? path.join(process.resourcesPath, relayName)
     : path.join(__dirname, '..', 'relay', relayName);
-  var relayMode = 'creator';
+  var relayMode = 'dc-creator';
   if (tunnelMode === 'pion-video') relayMode = currentPlatform === 'telemost' ? 'telemost-video-creator' : 'vk-video-creator';
   var relayArgs = ['--mode', relayMode];
   if (tunnelMode.startsWith('pion')) relayArgs.push('--ws-port', '9002');
@@ -126,11 +127,20 @@ function createWindow() {
   mainWindow.loadFile('index.html');
   mainWindow.on('closed', () => { mainWindow = null; });
 
-  var autoclick = new TelemostAutoclick();
+  var telemostAutoclick = new TelemostAutoclick();
+  var vkAutoclick = new VkAutoclick();
   mainWindow.webContents.on('did-attach-webview', (e, wvContents) => {
     wvContents.on('did-navigate', (e, url) => {
-      if (url.includes('telemost.yandex')) autoclick.attach(wvContents);
-      else autoclick.stop();
+      if (url.includes('telemost.yandex')) {
+        vkAutoclick.stop();
+        telemostAutoclick.attach(wvContents);
+      } else if (url.includes('vk.com')) {
+        telemostAutoclick.stop();
+        vkAutoclick.attach(wvContents);
+      } else {
+        telemostAutoclick.stop();
+        vkAutoclick.stop();
+      }
     });
   });
 }
