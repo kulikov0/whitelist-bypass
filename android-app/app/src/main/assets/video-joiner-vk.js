@@ -1,5 +1,7 @@
 (() => {
   'use strict';
+  if (window.__hookInstalled) return;
+  window.__hookInstalled = true;
 
   var PION_WS_URL = 'ws://127.0.0.1:' + (window.PION_PORT || 9001) + '/signaling';
   var log = function() {

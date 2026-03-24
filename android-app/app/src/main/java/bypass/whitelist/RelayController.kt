@@ -1,0 +1,95 @@
+package bypass.whitelist
+
+import android.util.Log
+import mobile.LogCallback
+import mobile.Mobile
+import java.io.File
+
+class RelayController(
+    private val nativeLibDir: String,
+    private val onLog: (String) -> Unit,
+    private val onStatus: (VpnStatus) -> Unit,
+) {
+    private var dcThread: Thread? = null
+    private var pionThread: Thread? = null
+    private var pionProcess: Process? = null
+
+    @Volatile
+    var isRunning = false
+        private set
+
+    @Synchronized
+    fun start(mode: TunnelMode, isTelemost: Boolean) {
+        stop()
+        isRunning = true
+        if (mode.isPion) startPion(mode, isTelemost) else startDc()
+    }
+
+    @Synchronized
+    fun stop() {
+        isRunning = false
+
+        pionProcess?.let {
+            it.destroy()
+            it.waitFor()
+        }
+        pionProcess = null
+        pionThread?.interrupt()
+        pionThread = null
+
+        Mobile.stopJoiner()
+        dcThread?.interrupt()
+        dcThread = null
+    }
+
+    private fun startDc() {
+        val cb = LogCallback { msg ->
+            onLog(msg)
+            if (msg.contains("browser connected")) onStatus(VpnStatus.TUNNEL_ACTIVE)
+            else if (msg.contains("ws read error")) onStatus(VpnStatus.TUNNEL_LOST)
+        }
+        dcThread = Thread {
+            try {
+                Mobile.startJoiner(9000, 1080, cb)
+            } catch (e: Exception) {
+                if (isRunning) onLog("Relay error: ${e.message}")
+            }
+        }.also { it.start() }
+        onLog("Relay started DC mode (SOCKS5 :1080, WS :9000)")
+    }
+
+    private fun startPion(mode: TunnelMode, isTelemost: Boolean) {
+        val relayBin = File(nativeLibDir, "librelay.so")
+        if (!relayBin.exists()) {
+            onLog("Pion relay binary not found")
+            return
+        }
+        val relayMode = mode.relayMode(isTelemost)
+        pionThread = Thread {
+            try {
+                val pb = ProcessBuilder(
+                    relayBin.absolutePath,
+                    "--mode", relayMode,
+                    "--ws-port", "9001",
+                    "--socks-port", "1080"
+                )
+                pb.redirectErrorStream(true)
+                val proc = pb.start()
+                synchronized(this) { pionProcess = proc }
+                onLog("Pion relay started mode=$relayMode (signaling :9001, SOCKS5 :1080)")
+                proc.inputStream.bufferedReader().forEachLine { line ->
+                    Log.d("RELAY", line)
+                    onLog(line)
+                    if (line.contains("CONNECTED")) onStatus(VpnStatus.TUNNEL_ACTIVE)
+                    else if (line.contains("session cleaned up")) onStatus(VpnStatus.TUNNEL_LOST)
+                }
+                onLog("Pion relay exited: ${proc.exitValue()}")
+            } catch (e: Exception) {
+                if (isRunning) {
+                    Log.e("RELAY", "Pion relay error", e)
+                    onLog("Pion relay error: ${e.message}")
+                }
+            }
+        }.also { it.start() }
+    }
+}

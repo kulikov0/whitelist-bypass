@@ -27,10 +27,10 @@ class VkAutoclick {
             var admitBtn = document.querySelector('[data-testid="calls_waiting_hall_promote"]');
             if (!admitBtn) return 'idle';
 
-            // Kick current participant first if present
-            var menuBtn = document.querySelector('[data-testid="calls_participant_list_item_menu_button"]');
-            if (menuBtn) {
-              menuBtn.click();
+            // Kick current participant first if present (skip first = owner)
+            var menuBtns = document.querySelectorAll('[data-testid="calls_participant_list_item_menu_button"]');
+            if (menuBtns.length > 1) {
+              menuBtns[menuBtns.length - 1].click();
               return 'kick-open';
             }
 
@@ -70,6 +70,24 @@ class VkAutoclick {
     `).then((r) => {
       if (r) console.log('[auto-accept] VK kicked previous participant');
     }).catch(function() {});
+  }
+
+  kickDisconnected() {
+    if (!this._wvContents) return;
+    try {
+      this._wvContents.mainFrame.framesInSubtree.forEach((frame) => {
+        frame.executeJavaScript(`
+          (function() {
+            var menuBtns = document.querySelectorAll('[data-testid="calls_participant_list_item_menu_button"]');
+            var menuBtn = menuBtns.length > 1 ? menuBtns[menuBtns.length - 1] : null;
+            if (menuBtn) { menuBtn.click(); return true; }
+            return false;
+          })()
+        `).then((r) => {
+          if (r) setTimeout(() => this._clickKick(frame), 500);
+        }).catch(function() {});
+      });
+    } catch(e) {}
   }
 }
 

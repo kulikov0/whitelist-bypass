@@ -4,7 +4,6 @@ import android.annotation.SuppressLint
 import android.content.ClipData
 import android.content.ClipboardManager
 import android.content.Intent
-import android.content.SharedPreferences
 import android.content.pm.PackageManager
 import android.net.VpnService
 import android.os.Build
@@ -26,9 +25,6 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.view.ViewCompat
 import androidx.core.view.WindowInsetsCompat
-import mobile.LogCallback
-import mobile.Mobile
-import java.io.File
 import androidx.core.content.edit
 import java.net.InetAddress
 
@@ -48,7 +44,13 @@ private fun maskUrl(url: String): String {
 class MainActivity : AppCompatActivity() {
 
     private var tunnelMode = TunnelMode.DC
-    private var pionProcess: Process? = null
+    private val relay by lazy {
+        RelayController(
+            nativeLibDir = applicationInfo.nativeLibraryDir,
+            onLog = ::appendLog,
+            onStatus = ::updateVpnStatus,
+        )
+    }
 
     private lateinit var webView: WebView
     private lateinit var logView: TextView
@@ -171,69 +173,23 @@ class MainActivity : AppCompatActivity() {
                 appendLog("Mode: ${tunnelMode.label}")
                 stopRelay()
                 startRelay()
+                val url = webView.url
+                if (!url.isNullOrEmpty()) {
+                    webView.evaluateJavascript("window.__hookInstalled = false", null)
+                    webView.reload()
+                }
             }
             override fun onNothingSelected(parent: AdapterView<*>?) {}
         }
     }
 
     private fun startRelay() {
-        Log.d("RELAY", "startRelay mode=${tunnelMode.label}")
-        if (tunnelMode.isPion) startPionRelay() else startDcRelay()
+        val isTelemost = urlInput.text.toString().contains("telemost")
+        relay.start(tunnelMode, isTelemost)
     }
 
     private fun stopRelay() {
-        pionProcess?.let {
-            it.destroy()
-            it.waitFor()
-        }
-        pionProcess = null
-    }
-
-    private fun startDcRelay() {
-        val cb = LogCallback { msg ->
-            appendLog(msg)
-            if (msg.contains("browser connected")) updateVpnStatus(VpnStatus.TUNNEL_ACTIVE)
-            else if (msg.contains("ws read error")) updateVpnStatus(VpnStatus.TUNNEL_LOST)
-        }
-        Thread {
-            try {
-                Mobile.startJoiner(9000, 1080, cb)
-            } catch (e: Exception) {
-                appendLog("Relay error: ${e.message}")
-            }
-        }.start()
-        appendLog("Relay started DC mode (SOCKS5 :1080, WS :9000)")
-    }
-
-    private fun startPionRelay() {
-        val relayBin = File(applicationInfo.nativeLibraryDir, "librelay.so")
-        if (!relayBin.exists()) {
-            appendLog("Pion relay binary not found")
-            return
-        }
-        Thread {
-            try {
-                val isTelemost = urlInput.text.toString().contains("telemost")
-                val mode = tunnelMode.relayMode(isTelemost)
-                val pb = ProcessBuilder(
-                    relayBin.absolutePath, "--mode", mode, "--ws-port", "9001", "--socks-port", "1080"
-                )
-                pb.redirectErrorStream(true)
-                val proc = pb.start()
-                pionProcess = proc
-                appendLog("Pion relay started mode=$mode (signaling :9001, SOCKS5 :1080)")
-                proc.inputStream.bufferedReader().forEachLine { line ->
-                    Log.d("RELAY", line)
-                    appendLog(line)
-                    if (line.contains("CONNECTED")) updateVpnStatus(VpnStatus.TUNNEL_ACTIVE)
-                    else if (line.contains("session cleaned up")) updateVpnStatus(VpnStatus.TUNNEL_LOST)
-                }
-                appendLog("Pion relay exited: ${proc.exitValue()}")
-            } catch (e: Exception) {
-                Log.e("RELAY", "Pion relay error", e)
-                appendLog("Pion relay error: ${e.message}")
-            }
-        }.start()
+        relay.stop()
     }
 
     private fun updateVpnStatus(status: VpnStatus) {
@@ -339,8 +295,14 @@ if(oac){var nac=function(){var c=new oac();c.suspend();
             }
 
             override fun onPageFinished(view: WebView, url: String) {
-                appendLog("Page loaded, injecting hook for ${maskUrl(url)}")
-                view.evaluateJavascript(hookForUrl(url), null)
+                view.evaluateJavascript("!!window.__hookInstalled") { result ->
+                    if (result == "true") {
+                        Log.d("HOOK", "Hook already injected, skipping")
+                        return@evaluateJavascript
+                    }
+                    appendLog("Page loaded, injecting hook for ${maskUrl(url)}")
+                    view.evaluateJavascript(hookForUrl(url), null)
+                }
             }
         }
     }
@@ -413,17 +375,6 @@ if(oac){var nac=function(){var c=new oac();c.suspend();
             appendLog("Tunnel ready, starting VPN...")
             updateVpnStatus(VpnStatus.TUNNEL_ACTIVE)
             runOnUiThread { requestVpn() }
-        }
-    }
-
-    private enum class TunnelMode(val label: String, val relayArg: String, val isPion: Boolean) {
-        DC("DC", "dc", false),
-        PION_VIDEO("Video", "video", true);
-
-        fun relayMode(isTelemost: Boolean): String {
-            if (!isPion) return "dc-joiner"
-            val platform = if (isTelemost) "telemost" else "vk"
-            return "$platform-$relayArg-joiner"
         }
     }
 

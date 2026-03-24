@@ -142,6 +142,11 @@ function createWindow() {
         vkAutoclick.stop();
       }
     });
+    wvContents.on('console-message', (e, level, msg) => {
+      if (msg.indexOf('Connection state: disconnected') !== -1 || msg.indexOf('Connection state: failed') !== -1) {
+        vkAutoclick.kickDisconnected();
+      }
+    });
   });
 }
 

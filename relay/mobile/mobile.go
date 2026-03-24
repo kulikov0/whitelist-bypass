@@ -114,7 +114,33 @@ func (w *wsWriter) close() {
 }
 
 
+var activeJoiner struct {
+	sync.Mutex
+	j      *joinerRelay
+	ws     *http.Server
+	socksLn net.Listener
+}
+
+func StopJoiner() {
+	activeJoiner.Lock()
+	defer activeJoiner.Unlock()
+	if activeJoiner.socksLn != nil {
+		activeJoiner.socksLn.Close()
+		activeJoiner.socksLn = nil
+	}
+	if activeJoiner.ws != nil {
+		activeJoiner.ws.Close()
+		activeJoiner.ws = nil
+	}
+	if activeJoiner.j != nil {
+		activeJoiner.j.closeAll()
+		activeJoiner.j = nil
+	}
+	logMsg("dc-joiner: stopped")
+}
+
 func StartJoiner(wsPort, socksPort int, cb LogCallback) error {
+	StopJoiner()
 	logCb = cb
 	j := &joinerRelay{
 		conns: sync.Map{},
@@ -123,16 +149,30 @@ func StartJoiner(wsPort, socksPort int, cb LogCallback) error {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/ws", j.handleWS)
 
+	wsAddr := fmt.Sprintf("127.0.0.1:%d", wsPort)
+	wsSrv := &http.Server{Addr: wsAddr, Handler: mux}
 	go func() {
-		addr := fmt.Sprintf("127.0.0.1:%d", wsPort)
-		logMsg("dc-joiner: WebSocket on %s", addr)
-		if err := http.ListenAndServe(addr, mux); err != nil {
+		logMsg("dc-joiner: WebSocket on %s", wsAddr)
+		if err := wsSrv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
 			logMsg("dc-joiner: ws server error: %v", err)
 		}
 	}()
-	addr := fmt.Sprintf("127.0.0.1:%d", socksPort)
-	logMsg("dc-joiner: SOCKS5 on %s", addr)
-	return j.listenSOCKS(addr)
+
+	socksAddr := fmt.Sprintf("127.0.0.1:%d", socksPort)
+	ln, err := net.Listen("tcp", socksAddr)
+	if err != nil {
+		wsSrv.Close()
+		return err
+	}
+	logMsg("dc-joiner: SOCKS5 on %s", socksAddr)
+
+	activeJoiner.Lock()
+	activeJoiner.j = j
+	activeJoiner.ws = wsSrv
+	activeJoiner.socksLn = ln
+	activeJoiner.Unlock()
+
+	return j.listenSOCKS(ln)
 }
 
 func StartCreator(wsPort int, cb LogCallback) error {
@@ -155,6 +195,17 @@ type joinerRelay struct {
 	nextID     atomic.Uint32
 	ready      chan struct{}
 	once       sync.Once
+}
+
+func (j *joinerRelay) closeAll() {
+	j.conns.Range(func(key, val any) bool {
+		val.(*socksConn).conn.Close()
+		j.conns.Delete(key)
+		return true
+	})
+	if j.writer != nil {
+		j.writer.close()
+	}
 }
 
 type socksConn struct {
@@ -318,16 +369,11 @@ func (j *joinerRelay) send(connID uint32, msgType byte, payload []byte) {
 	framePool.Put(bufp)
 }
 
-func (j *joinerRelay) listenSOCKS(addr string) error {
-	ln, err := net.Listen("tcp", addr)
-	if err != nil {
-		return err
-	}
+func (j *joinerRelay) listenSOCKS(ln net.Listener) error {
 	for {
 		conn, err := ln.Accept()
 		if err != nil {
-			logMsg("dc-joiner: accept error: %v", err)
-			continue
+			return err
 		}
 		go j.handleSOCKS(conn)
 	}
