@@ -67,6 +67,7 @@ func (c *VKClient) handleICEServers(data json.RawMessage) {
 	if c.pc != nil {
 		return
 	}
+	iceLogFn = c.logFn
 	iceServers, err := ParseICEServers(data)
 	if err != nil {
 		return

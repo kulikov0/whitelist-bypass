@@ -30,6 +30,7 @@ import mobile.LogCallback
 import mobile.Mobile
 import java.io.File
 import androidx.core.content.edit
+import java.net.InetAddress
 
 private val reUrl = Regex("(https?://[^/]+/)(.+)")
 private val reIp4 = Regex("\\d+\\.\\d+\\.\\d+\\.\\d+")
@@ -396,8 +397,16 @@ if(oac){var nac=function(){var c=new oac();c.suspend();
 
         @JavascriptInterface
         fun resolveHost(hostname: String): String = try {
-            java.net.InetAddress.getByName(hostname).hostAddress ?: ""
-        } catch (_: Exception) { "" }
+            val all = InetAddress.getAllByName(hostname)
+            val v4 = all.firstOrNull { it is java.net.Inet4Address }
+            val addr = v4 ?: all.first()
+            val ip = addr.hostAddress ?: ""
+            Log.d("RELAY", "resolveHost: $hostname -> $ip (${addr.javaClass.simpleName}, ${all.size} addrs)")
+            ip
+        } catch (e: Exception) {
+            Log.d("RELAY", "resolveHost: $hostname -> FAILED: ${e.message}")
+            ""
+        }
 
         @JavascriptInterface
         fun onTunnelReady() {

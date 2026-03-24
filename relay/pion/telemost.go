@@ -118,6 +118,7 @@ func (c *TelemostClient) handleICEServers(data json.RawMessage, role string) {
 		}
 	}
 
+	iceLogFn = c.logFn
 	iceServers, err := ParseICEServers(data)
 	if err != nil {
 		return

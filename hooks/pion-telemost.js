@@ -159,6 +159,7 @@
             var match = url.match(/^(turn:|stun:)([^:?]+)(.*)/);
             if (match) {
               var resolved = AndroidBridge.resolveHost(match[2]);
+              if (resolved && resolved.indexOf(':') !== -1) resolved = '[' + resolved + ']';
               if (resolved) return match[1] + resolved + match[3];
             }
             return url;
