@@ -14,22 +14,12 @@ android {
         version = release(36)
     }
 
-    buildFeatures {
-        buildConfig = true
-    }
-
     defaultConfig {
         applicationId = "bypass.whitelist"
         minSdk = 23
         targetSdk = 36
         versionCode = 1_000_000 * versionMajor + 1_000 * versionMinor + versionPatch + versionBuild
         versionName = "$versionMajor.$versionMinor.$versionPatch"
-
-        // URL of the link server (returns current call link as JSON: {"link":"..."})
-        // Override at build time: -PlinkServerUrl=http://YOUR_SERVER_IP:8080/link
-        val linkServerUrl = project.findProperty("linkServerUrl") as String?
-            ?: "http://YOUR_SERVER_IP:8080/link"
-        buildConfigField("String", "LINK_SERVER_URL", "\"$linkServerUrl\"")
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }

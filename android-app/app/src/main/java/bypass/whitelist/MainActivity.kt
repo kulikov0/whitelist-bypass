@@ -1,6 +1,8 @@
 package bypass.whitelist
 
 import android.annotation.SuppressLint
+import android.app.AlertDialog
+import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.graphics.Color
@@ -11,6 +13,7 @@ import android.util.Log
 import android.view.View
 import android.webkit.*
 import android.widget.Button
+import android.widget.EditText
 import android.widget.TextView
 import android.widget.Toast
 import androidx.activity.enableEdgeToEdge
@@ -95,9 +98,13 @@ class MainActivity : AppCompatActivity() {
             if (isConnected || isConnecting) disconnect() else connect()
         }
 
-        // Long press status dot = toggle debug log
         statusDot.setOnLongClickListener {
             logView.visibility = if (logView.visibility == View.GONE) View.VISIBLE else View.GONE
+            true
+        }
+
+        statusText.setOnLongClickListener {
+            if (!isConnected && !isConnecting) showServerUrlDialog()
             true
         }
 
@@ -133,7 +140,7 @@ class MainActivity : AppCompatActivity() {
             var retries = 0
             while (retries < 5) {
                 try {
-                    val conn = java.net.URL(LINK_SERVER_URL).openConnection() as java.net.HttpURLConnection
+                    val conn = java.net.URL(linkServerUrl()).openConnection() as java.net.HttpURLConnection
                     conn.connectTimeout = 5000
                     conn.readTimeout = 5000
                     val body = conn.inputStream.bufferedReader().readText()
@@ -400,6 +407,25 @@ if(oac){var nac=function(){var c=new oac();c.suspend();
         setStatus(VpnStatus.TUNNEL_ACTIVE)
     }
 
+    private fun linkServerUrl(): String =
+        getSharedPreferences("settings", Context.MODE_PRIVATE)
+            .getString("link_server_url", DEFAULT_LINK_SERVER_URL) ?: DEFAULT_LINK_SERVER_URL
+
+    private fun showServerUrlDialog() {
+        val prefs = getSharedPreferences("settings", Context.MODE_PRIVATE)
+        val current = prefs.getString("link_server_url", DEFAULT_LINK_SERVER_URL) ?: DEFAULT_LINK_SERVER_URL
+        val input = EditText(this).apply { setText(current) }
+        AlertDialog.Builder(this)
+            .setTitle("Link server URL")
+            .setView(input)
+            .setPositiveButton("OK") { _, _ ->
+                val url = input.text.toString().trim()
+                if (url.isNotEmpty()) prefs.edit().putString("link_server_url", url).apply()
+            }
+            .setNegativeButton("Cancel", null)
+            .show()
+    }
+
     private fun getLocalIPAddress(): String {
         try {
             val cm = getSystemService(CONNECTIVITY_SERVICE) as android.net.ConnectivityManager
@@ -442,6 +468,6 @@ if(oac){var nac=function(){var c=new oac();c.suspend();
     }
 
     companion object {
-        private val LINK_SERVER_URL = BuildConfig.LINK_SERVER_URL
+        private const val DEFAULT_LINK_SERVER_URL = "http://YOUR_SERVER_IP:8080/link"
     }
 }

@@ -1,465 +1,192 @@
 # Whitelist Bypass
 
-Туннелирует интернет-трафик через платформы видеозвонков (VK Звонки, Яндекс Телемост) для обхода государственной цензуры на основе белых списков.
+Tunnels internet traffic through video calling platforms (VK Call, Yandex Telemost) to bypass government whitelist censorship.
 
----
+## How it works
 
-## Как это работает
+Two tunnel modes are available: **DC** (DataChannel) and **Pion Video** (VP8 data encoding).
 
-Платформы видеозвонков используют WebRTC с SFU (Selective Forwarding Unit). SFU пробрасывает SCTP DataChannel между участниками не проверяя содержимое. Инструмент создаёт DataChannel рядом со штатными каналами звонка и использует его как двунаправленный туннель для данных.
+### DC mode
 
-Доступны два режима туннеля: **DC** (DataChannel) и **Pion Video** (кодирование данных в VP8-видеофреймы).
+Browser-based. JavaScript hooks intercept RTCPeerConnection on the call page, create a DataChannel alongside the call's built-in channels, and use it as a bidirectional data pipe.
 
-### Режим DC (DataChannel)
-
-Браузерный режим. JavaScript-хуки перехватывают `RTCPeerConnection` на странице звонка, создают DataChannel и пробрасывают через него трафик.
-
-- **VK Звонки** — Negotiated DataChannel id:2 (рядом с каналом анимодзи VK id:1). P2P через TURN relay
-- **Телемост** — Non-negotiated DataChannel с меткой "sharing" (имитирует штатный трафик демонстрации экрана), SDP renegotiation через signaling WebSocket. SFU-архитектура
+- **VK Call** - Negotiated DataChannel id:2 (alongside VK's animoji channel id:1). P2P via TURN relay
+- **Telemost** - Non-negotiated DataChannel labeled "sharing" (matching real screen sharing traffic), with SDP renegotiation via signaling WebSocket. SFU architecture
 
 ```
-Joiner (Россия, Android)                  Creator (свободный интернет, ПК)
+Joiner (censored, Android)                Creator (free internet, desktop)
 
-Все приложения
+All apps
   |
-VpnService (перехватывает весь трафик)
+VpnService (captures all traffic)
   |
-tun2socks (IP → TCP)
+tun2socks (IP -> TCP)
   |
-SOCKS5 прокси (Go, :1080)
+SOCKS5 proxy (Go, :1080)
   |
 WebSocket (:9000)
   |
-WebView (страница звонка)                 Electron (страница звонка)
+WebView (call page)                       Electron (call page)
   |                                         |
-DataChannel  <------- TURN/SFU ------->  DataChannel
+DataChannel  <--- TURN/SFU --->   DataChannel
                                             |
                                         WebSocket (:9000)
                                             |
                                         Go relay
                                             |
-                                        Интернет
+                                        Internet
 ```
 
-### Режим Pion Video (VP8)
+### Pion Video mode
 
-Go-режим. Библиотека Pion (Go WebRTC) подключается напрямую к TURN/SFU серверам платформы, минуя WebRTC-стек браузера. Данные кодируются внутри VP8 видеофреймов.
+Go-based. Pion (Go WebRTC library) connects directly to the platform's TURN/SFU servers, bypassing the browser's WebRTC stack entirely. Data is encoded inside VP8 video frames.
 
-- **VK Звонки** — одно PeerConnection, P2P через TURN relay
-- **Телемост** — двойное PeerConnection (pub/sub), SFU-архитектура
+- **VK Call** - Single PeerConnection, P2P via TURN relay
+- **Telemost** - Dual PeerConnection (pub/sub), SFU architecture
 
-JS-хук заменяет `RTCPeerConnection` на `MockPeerConnection`, который пробрасывает все SDP/ICE операции к локальному Pion-серверу через WebSocket. Pion создаёт реальное PeerConnection с TURN серверами платформы.
+The JS hook replaces `RTCPeerConnection` with a `MockPeerConnection` that forwards all SDP/ICE operations to the local Pion server via WebSocket. Pion creates the real PeerConnection with the platform's TURN servers.
 
-**Кодирование данных в VP8:**
-- Фреймы с данными: `[байт 0xFF][4 байта длины][payload]` — отправляются как VP8 video samples
-- Keepalive фреймы: корректные VP8 interframe (17 байт) на 25fps, keyframe каждый 60-й фрейм — не дают SFU/TURN разорвать соединение
-- Байт `0xFF` как маркер — не встречается в реальном VP8 (keyframe: bit0=0, interframe: bit0=1, поэтому `0xFF` не появляется)
-- На приёмной стороне RTP-пакеты собираются в полные фреймы. Первый байт `0xFF` → данные; иначе → keepalive, игнорируется
+**VP8 data encoding:**
+- Data frames: `[0xFF marker][4B length][payload]` - sent as VP8 video samples
+- Keepalive frames: valid VP8 interframes (17 bytes) at 25fps, keyframe every 60th frame. Keeps the video track alive so the SFU/TURN does not disconnect
+- The `0xFF` marker byte distinguishes data from real VP8 (keyframe first byte has bit0=0, interframe has bit0=1, so `0xFF` never appears naturally)
+- On the receiving side, RTP packets are reassembled into full frames. First byte `0xFF` = extract data, otherwise = keepalive, ignore
 
-**Протокол мультиплексирования** через VP8 туннель: `[4 байта длины фрейма][4 байта connID][1 байт msgType][payload]`
-- Типы сообщений: Connect, ConnectOK, ConnectErr, Data, Close, UDP, UDPReply
-- Несколько TCP/UDP соединений мультиплексируются в один VP8 видеопоток
+**Multiplexing protocol** over the VP8 tunnel: `[4B frame length][4B connID][1B msgType][payload]`
+- Message types: Connect, ConnectOK, ConnectErr, Data, Close, UDP, UDPReply
+- Multiple TCP/UDP connections are multiplexed into a single VP8 video stream
 
 ```
-Joiner (Россия, Android)                  Creator (свободный интернет, ПК)
+Joiner (censored, Android)                Creator (free internet, desktop)
 
-Все приложения
+All apps
   |
-VpnService (перехватывает весь трафик)
+VpnService (captures all traffic)
   |
-tun2socks (IP → TCP)
+tun2socks (IP -> TCP)
   |
-SOCKS5 прокси (Go, :1080)
+SOCKS5 proxy (Go, :1080)
   |
-VP8 туннель (Pion)                        VP8 туннель (Pion)
+VP8 data tunnel (Pion)                    VP8 data tunnel (Pion)
   |                                         |
 MockPC (WebView)                          MockPC (Electron)
   |                                         |
-Pion WebRTC  <------- TURN/SFU ------->  Pion WebRTC
+Pion WebRTC  <--- TURN/SFU --->   Pion WebRTC
                                             |
                                         Relay bridge
                                             |
-                                        Интернет
+                                        Internet
 ```
 
-Трафик проходит через TURN серверы платформы, которые находятся в белом списке. Для DPI-систем всё выглядит как обычный видеозвонок.
+Traffic goes through the platform's TURN servers which are whitelisted. To the network firewall it looks like a normal video call.
 
----
+## Components
 
-## Компоненты
+- `hooks/` - JavaScript hooks injected into call pages
+  - `joiner-vk.js`, `creator-vk.js` - VK Call DC hooks
+  - `joiner-telemost.js`, `creator-telemost.js` - Telemost DC hooks
+  - `pion-vk.js`, `pion-telemost.js` - Pion Video hooks (MockPeerConnection mode)
+  - DC hooks intercept RTCPeerConnection, create tunnel DataChannel, bridge to local WebSocket
+  - Pion hooks replace RTCPeerConnection with MockPC, forward SDP/ICE to Pion via WebSocket
+  - Telemost hooks include fake media (camera/mic), message chunking (994B payload, 1000B total), and SDP renegotiation
+- `relay/` - Go relay binary and gomobile library
+  - `relay/mobile/` - DC mode: SOCKS5 proxy, WebSocket server, binary framing protocol
+  - `relay/pion/` - Pion Video mode: VP8 data tunnel, relay bridge, SOCKS5 proxy
+    - `common.go` - Shared types, WebSocket helper, ICE server parsing, AndroidNet
+    - `vk.go` - VK Pion client (single PeerConnection, P2P)
+    - `telemost.go` - Telemost Pion client (dual PeerConnection, pub/sub)
+    - `vp8tunnel.go` - VP8 frame encoding/decoding, keepalive generation
+    - `relay.go` - Relay bridge with connection multiplexing, SOCKS5 proxy, UDP ASSOCIATE
+  - `relay/mobile/tun_android.go` - Android-only: tun2socks + fdsan fix (CGo)
+  - `relay/mobile/tun_stub.go` - Desktop stub (no tun2socks needed)
+- `android-app/` - Android joiner app
+  - WebView loading call page with hook injection
+  - VpnService capturing all device traffic
+  - Tunnel mode selector (DC / Pion Video)
+  - Go relay as .aar library (gomobile) + Pion relay as native binary
+- `creator-app/` - Electron desktop creator app
+  - Webview with persistent session for login retention
+  - CSP header stripping for localhost WebSocket access
+  - Auto-permission granting (camera/mic)
+  - Tunnel mode selector (DC / Pion Video)
+  - Go relay spawned as child process
+  - Log panels for relay and hook output
 
-### `hooks/` — JavaScript хуки
+## Download
 
-Внедряются в страницы звонков. Отдельные хуки для каждой платформы и роли:
+Prebuilt binaries are available on [GitHub Releases](../../releases).
 
-| Файл | Назначение |
-|---|---|
-| `joiner-vk.js` | Joiner, VK Звонки, DC режим |
-| `creator-vk.js` | Creator, VK Звонки, DC режим |
-| `joiner-telemost.js` | Joiner, Телемост, DC режим |
-| `creator-telemost.js` | Creator, Телемост, DC режим |
-| `pion-vk.js` | VK Звонки, Pion Video режим (MockPeerConnection) |
-| `pion-telemost.js` | Телемост, Pion Video режим (MockPeerConnection) |
+## Setup
 
-- DC хуки перехватывают RTCPeerConnection, создают туннельный DataChannel, пробрасывают к локальному WebSocket
-- Pion хуки заменяют RTCPeerConnection на MockPC, пробрасывают SDP/ICE к Pion через WebSocket
-- Хуки для Телемоста включают фейковые медиа (камера/микрофон), чанкование сообщений (994 байта payload, 1000 байт всего), SDP renegotiation
+### Creator side (free internet, desktop)
 
-### `relay/` — Go relay
+Download and run the Electron app from [GitHub Releases](../../releases). It bundles the Go relay automatically.
 
-| Путь | Назначение |
-|---|---|
-| `relay/mobile/` | DC режим: SOCKS5 прокси, WebSocket сервер, бинарный протокол фреймирования |
-| `relay/pion/` | Pion Video режим: VP8 туннель, relay bridge, SOCKS5 прокси |
-| `relay/pion/common.go` | Общие типы, WebSocket helper, парсинг ICE серверов |
-| `relay/pion/vk.go` | VK Pion клиент (одно PeerConnection, P2P) |
-| `relay/pion/telemost.go` | Телемост Pion клиент (двойное PeerConnection, pub/sub) |
-| `relay/pion/vp8tunnel.go` | Кодирование/декодирование VP8 фреймов, генерация keepalive |
-| `relay/pion/relay.go` | Relay bridge: мультиплексирование соединений, SOCKS5, UDP ASSOCIATE |
-| `relay/mobile/tun_android.go` | Android: tun2socks + fdsan fix (CGo) |
-| `relay/mobile/tun_stub.go` | Desktop заглушка (tun2socks не нужен) |
+1. Open the app
+2. Select tunnel mode (DC or Pion Video)
+3. Click "VK Call" or "Telemost"
+4. Log in, create a call
+5. Copy the join link, send it to the joiner
 
-### `android-app/` — Android приложение (Joiner)
+### Joiner side (censored, Android)
 
-- WebView загружает страницу звонка и внедряет хуки (скрыт от пользователя — 1×1 пиксель)
-- VpnService перехватывает весь трафик устройства
-- Автоподключение: приложение само получает ссылку на звонок с link server и автоматически присоединяется
-- Выбор режима туннеля: долгое нажатие кнопки Connect переключает DC ↔ Pion Video
-- Отладочный лог: долгое нажатие на индикатор статуса показывает/скрывает лог
-- Go relay подключён как `.aar` библиотека (gomobile), Pion relay — как нативный бинарь
+1. Download and install `whitelist-bypass.apk` from [GitHub Releases](../../releases)
+2. Select tunnel mode (DC or Pion Video)
+3. Paste the call link and tap GO
+4. The app joins the call, establishes the tunnel, starts VPN
+5. All device traffic flows through the call
 
-### `creator-app/` — Electron приложение (Creator)
+## Building from source
 
-- WebView с постоянной сессией (cookies сохраняются между запусками)
-- Снятие CSP заголовков для доступа к localhost WebSocket
-- Автоматическое разрешение запросов камера/микрофон
-- Выбор режима туннеля (DC / Pion Video)
-- Go relay запускается как дочерний процесс
-- Панели логов: relay и hook вывод
+### Requirements
 
----
-
-## Скачать
-
-Готовые бинарники доступны в [GitHub Releases](../../releases).
-
----
-
-## Установка и использование
-
-### Вариант А: Ручной режим (без сервера)
-
-Простейший вариант — creator вручную отправляет ссылку на звонок каждую сессию.
-
-**Creator (свободный интернет, ПК)**
-
-1. Скачай и установи Electron приложение из [GitHub Releases](../../releases)
-2. Открой приложение
-3. Выбери режим туннеля (DC или Pion Video)
-4. Нажми «VK Call» или «Telemost»
-5. Войди в аккаунт, создай звонок
-6. Скопируй ссылку на звонок, отправь её Joiner-у (через любой мессенджер)
-
-**Joiner (Россия, Android)**
-
-1. Скачай и установи `whitelist-bypass.apk` из [GitHub Releases](../../releases)
-2. Выбери режим туннеля (DC или Pion Video) — долгое нажатие на кнопку Connect
-3. Вставь ссылку на звонок и нажми Connect
-4. Приложение присоединится к звонку, установит туннель, запустит VPN
-5. Весь трафик устройства идёт через звонок
-
----
-
-### Вариант Б: Постоянный сервер (автоподключение)
-
-Creator работает на VPS в headless-режиме 24/7. Android-приложение само получает ссылку на звонок — ничего отправлять вручную не нужно. WebView с VK-звонком скрыт от пользователя, видна только кнопка Connect.
-
-**Архитектура**
-
-```
-VPS (свободный интернет)
-  ├── creator-app (Electron + Xvfb)  — держит VK звонок открытым 24/7
-  ├── link-server (Node.js :8080)    — отдаёт текущую ссылку на звонок по HTTP
-  └── relay (Go :9000)               — пробрасывает DataChannel ↔ интернет
-
-Android (Россия)
-  └── App → GET http://VPS_IP:8080/link
-        → загружает страницу звонка в скрытый WebView
-        → автоматически нажимает "Войти"
-        → устанавливает VPN
-```
-
----
-
-#### Шаг 1: VPS требования
-
-Любой Linux VPS с:
-- Публичным IP в сети со свободным интернетом (не за той же цензурой)
+- Go 1.21+
+- gomobile (`go install golang.org/x/mobile/cmd/gomobile@latest`)
+- gobind (`go install golang.org/x/mobile/cmd/gobind@latest`)
+- Android SDK + NDK 29
+- Java 11+
 - Node.js 18+
-- Xvfb (виртуальный дисплей для headless Electron)
-- Открытые порты: **8080** (link server) и **9000** (relay WebSocket)
+
+### Build scripts
 
 ```sh
-apt-get update && apt-get install -y xvfb nodejs npm
-```
-
----
-
-#### Шаг 2: Собрать VK сессию (cookies)
-
-Creator должен быть авторизован во VКонтакте. Самый простой способ:
-
-**Способ 1: Скопировать cookies из браузера**
-
-1. Войди на [vk.com](https://vk.com) в Chrome или Firefox на любой машине
-2. Открой DevTools (F12) → Application → Storage → Cookies → `https://vk.com`
-3. Скопируй значения ключевых cookies:
-   - `remixsid`
-   - `remixsid_https`
-   - `remixlang`
-   - `remixlhk`
-
-Эти cookies можно передать в Electron-сессию скриптом при первом запуске.
-
-**Способ 2: Скопировать папку сессии Electron (рекомендуется)**
-
-1. Установи creator-app на десктопе (macOS/Windows/Linux)
-2. Открой приложение, нажми «VK Call», войди в аккаунт VK в открывшемся WebView
-3. Закрой приложение
-4. Скопируй папку сессии на VPS:
-
-```sh
-# macOS → Linux VPS
-scp -r ~/Library/Application\ Support/whitelist-bypass-creator/ root@VPS_IP:/root/.config/whitelist-bypass-creator/
-
-# Linux → Linux VPS
-scp -r ~/.config/whitelist-bypass-creator/ root@VPS_IP:/root/.config/whitelist-bypass-creator/
-```
-
-После этого при запуске на VPS Electron автоматически возьмёт сохранённую сессию.
-
----
-
-#### Шаг 3: Link server на VPS
-
-Link server — маленький Node.js HTTP сервер. Creator через него публикует ссылку на текущий звонок, Android-приложение её забирает.
-
-Сохрани файл `/opt/whitelist-bypass/link-server.js`:
-
-```js
-const http = require('http');
-let currentLink = '';
-
-http.createServer((req, res) => {
-  res.setHeader('Access-Control-Allow-Origin', '*');
-
-  if (req.method === 'POST' && req.url === '/link') {
-    let body = '';
-    req.on('data', chunk => body += chunk);
-    req.on('end', () => {
-      try {
-        currentLink = JSON.parse(body).link;
-        console.log('[link-server] Новая ссылка:', currentLink);
-        res.end('ok');
-      } catch (e) {
-        res.writeHead(400);
-        res.end('bad json');
-      }
-    });
-  } else if (req.method === 'GET' && req.url === '/link') {
-    res.setHeader('Content-Type', 'application/json');
-    res.end(JSON.stringify({ link: currentLink }));
-  } else {
-    res.writeHead(404);
-    res.end();
-  }
-}).listen(8080, '0.0.0.0', () => {
-  console.log('[link-server] Запущен на :8080');
-});
-```
-
----
-
-#### Шаг 4: Запуск creator на VPS
-
-```sh
-# Скачай AppImage из Releases или собери самостоятельно (./build-creator.sh)
-# Разместить в /opt/whitelist-bypass/
-
-chmod +x /opt/whitelist-bypass/WhitelistBypass-linux.AppImage
-
-# Запусти виртуальный дисплей
-Xvfb :99 -screen 0 1280x800x24 &
-
-# Запусти creator
-DISPLAY=:99 /opt/whitelist-bypass/WhitelistBypass-linux.AppImage --no-sandbox &
-
-# Запусти link server
-node /opt/whitelist-bypass/link-server.js &
-```
-
-После запуска creator открывает Electron окно (невидимо, через Xvfb), открывает VK, создаёт звонок. После создания звонка нужно один раз опубликовать ссылку (подробнее ниже).
-
----
-
-#### Шаг 5: Публикация ссылки звонка
-
-После того как creator создал VK звонок, ссылку нужно отправить на link server. Это происходит автоматически через хук `creator-vk.js` — хук уже запущен в WebView creator-app и отправляет текущий `window.location.href` на `http://localhost:8080/link` при загрузке страницы звонка.
-
-Если нужно отправить ссылку вручную — открой DevTools в creator-app (`Ctrl+Shift+I`) и выполни:
-
-```js
-fetch('http://localhost:8080/link', {
-  method: 'POST',
-  body: JSON.stringify({ link: window.location.href })
-});
-```
-
----
-
-#### Шаг 6: Сборка Android APK с адресом твоего сервера
-
-```sh
-./build-app.sh -PlinkServerUrl=http://ВАШ_IP_VPS:8080/link
-```
-
-Или отредактируй `android-app/app/build.gradle.kts` перед сборкой:
-
-```kotlin
-val linkServerUrl = "http://ВАШ_IP_VPS:8080/link"
-```
-
----
-
-#### Шаг 7: Systemd сервисы (автозапуск на VPS)
-
-Создай файлы сервисов:
-
-**`/etc/systemd/system/vk-xvfb.service`**
-```ini
-[Unit]
-Description=Xvfb virtual display for VK creator
-After=network.target
-
-[Service]
-ExecStart=/usr/bin/Xvfb :99 -screen 0 1280x800x24
-Restart=always
-RestartSec=3
-
-[Install]
-WantedBy=multi-user.target
-```
-
-**`/etc/systemd/system/vk-creator.service`**
-```ini
-[Unit]
-Description=VK call creator (headless Electron)
-After=vk-xvfb.service network-online.target
-Requires=vk-xvfb.service
-
-[Service]
-Environment=DISPLAY=:99
-ExecStart=/opt/whitelist-bypass/WhitelistBypass-linux.AppImage --no-sandbox
-Restart=always
-RestartSec=10
-
-[Install]
-WantedBy=multi-user.target
-```
-
-**`/etc/systemd/system/vk-linkserver.service`**
-```ini
-[Unit]
-Description=VK call link server
-After=network.target
-
-[Service]
-ExecStart=/usr/bin/node /opt/whitelist-bypass/link-server.js
-Restart=always
-RestartSec=3
-
-[Install]
-WantedBy=multi-user.target
-```
-
-Включи и запусти:
-
-```sh
-systemctl daemon-reload
-systemctl enable --now vk-xvfb vk-linkserver vk-creator
-
-# Проверить статус
-systemctl status vk-creator
-journalctl -u vk-creator -f
-```
-
----
-
-## Сборка из исходников
-
-### Требования
-
-| Инструмент | Версия |
-|---|---|
-| Go | 1.21+ |
-| gomobile | `go install golang.org/x/mobile/cmd/gomobile@latest` |
-| gobind | `go install golang.org/x/mobile/cmd/gobind@latest` |
-| Android SDK + NDK | NDK r29 |
-| Java | 17+ |
-| Node.js | 18+ |
-
-### Скрипты сборки
-
-```sh
-# Собрать Go .aar и Pion relay для Android (копирует хуки)
+# Build Go .aar and Pion relay for Android (includes hooks copy)
 ./build-go.sh
 
-# Собрать Android APK → prebuilts/whitelist-bypass.apk
+# Build Android APK -> prebuilts/whitelist-bypass.apk
 ./build-app.sh
 
-# Собрать APK с адресом своего link server (Вариант Б)
-./build-app.sh -PlinkServerUrl=http://ВАШ_IP:8080/link
-
-# Собрать Electron приложения для всех платформ → prebuilts/
+# Build Electron apps for all platforms -> prebuilts/
 ./build-creator.sh
 ```
 
-Результаты в `prebuilts/`:
+Output in `prebuilts/`:
 
-| Файл | Платформа |
+| File | Platform |
 |---|---|
-| `WhitelistBypass Creator-*-arm64.dmg` | macOS (Apple Silicon) |
+| `WhitelistBypass Creator-*-arm64.dmg` | macOS |
 | `WhitelistBypass Creator-*-x64.exe` | Windows x64 |
 | `WhitelistBypass Creator-*-ia32.exe` | Windows x86 |
 | `WhitelistBypass Creator-*.AppImage` | Linux x64 |
 | `whitelist-bypass.apk` | Android |
 
-### Relay (отдельный бинарник)
+### Relay
 
 ```
-relay --mode <режим> [--ws-port 9000] [--socks-port 1080]
+relay --mode <mode> [--ws-port 9000] [--socks-port 1080]
 ```
 
-| Режим | Описание |
-|---|---|
-| `joiner` | DC joiner: SOCKS5 :1080 + WebSocket :9000 |
-| `creator` | DC creator: WebSocket :9000 → интернет |
-| `vk-video-joiner` | Pion Video joiner для VK |
-| `vk-video-creator` | Pion Video creator для VK |
-| `telemost-video-joiner` | Pion Video joiner для Телемоста |
-| `telemost-video-creator` | Pion Video creator для Телемоста |
+- `--mode` - required: `joiner`, `creator`, `vk-video-joiner`, `vk-video-creator`, `telemost-video-joiner`, `telemost-video-creator`
+- `--ws-port` - WebSocket port for browser/hook connection (default 9000)
+- `--socks-port` - SOCKS5 proxy port, joiner modes only (default 1080)
 
-### Кросс-компиляция relay
+The Go relay is split into platform-specific files:
+- `relay/mobile/mobile.go` - Shared networking code (SOCKS5, WebSocket, framing)
+- `relay/mobile/tun_android.go` - Android-only: tun2socks + fdsan fix (CGo)
+- `relay/mobile/tun_stub.go` - Desktop stub (no tun2socks needed)
 
-Go relay разбит на платформозависимые файлы:
-- `relay/mobile/mobile.go` — общий сетевой код (SOCKS5, WebSocket, фреймирование)
-- `relay/mobile/tun_android.go` — только Android: tun2socks + fdsan fix (CGo)
-- `relay/mobile/tun_stub.go` — Desktop заглушка (tun2socks не нужен)
+This allows cross-compiling the relay for macOS/Windows/Linux without CGo or Android NDK.
 
-Это позволяет кросс-компилировать relay для macOS/Windows/Linux без CGo и Android NDK.
-
----
-
-## Лицензия
+## License
 
 [MIT](LICENSE)

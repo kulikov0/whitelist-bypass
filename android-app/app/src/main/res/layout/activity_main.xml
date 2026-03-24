@@ -6,7 +6,6 @@
     android:background="#0A0A0A"
     android:orientation="vertical">
 
-    <!-- Status area -->
     <LinearLayout
         android:layout_width="match_parent"
         android:layout_height="0dp"
@@ -32,7 +31,6 @@
 
     </LinearLayout>
 
-    <!-- Connect/Disconnect button -->
     <Button
         android:id="@+id/connectButton"
         android:layout_width="200dp"
@@ -46,7 +44,6 @@
         android:textSize="16sp"
         android:letterSpacing="0.03" />
 
-    <!-- Debug log (hidden, toggle with long press on status dot) -->
     <TextView
         android:id="@+id/logView"
         android:layout_width="match_parent"
@@ -59,7 +56,6 @@
         android:textSize="9sp"
         android:visibility="gone" />
 
-    <!-- WebView runs hidden in background -->
     <WebView
         android:id="@+id/webView"
         android:layout_width="1dp"

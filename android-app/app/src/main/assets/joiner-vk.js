@@ -8,9 +8,7 @@
   let activeDC = null;
   let dcOpen = false;
   let wsOpen = false;
-  let dcSetupDone = false; // prevent double-DC from multiple PeerConnections
 
-  // Guard against double injection
   if (window.__hookInstalled) { log('Hook already installed, skipping'); return; }
   window.__hookInstalled = true;
 
@@ -22,8 +20,7 @@
 
     pc.addEventListener('connectionstatechange', () => {
       log('Connection state:', pc.connectionState);
-      if (pc.connectionState === 'connected' && !dcSetupDone) {
-        dcSetupDone = true;
+      if (pc.connectionState === 'connected') {
         log('=== CALL CONNECTED ===');
         setupDC(pc);
       }
