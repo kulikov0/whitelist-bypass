@@ -22,12 +22,15 @@ import androidx.core.view.ViewCompat
 import androidx.core.view.WindowInsetsCompat
 import java.net.Inet4Address
 import java.net.InetAddress
+import android.widget.Toast
 
 class MainActivity : AppCompatActivity() {
 
     private var tunnelMode = TunnelMode.DC
     private var connected = false
     private var showLogs = false
+    private var splitTunnelingMode = SplitTunnelingMode.NONE
+    private var splitTunnelingPackages = mutableSetOf<String>()
 
     private val logWriter by lazy { LogWriter(cacheDir) }
     private val relay by lazy {
@@ -86,6 +89,8 @@ class MainActivity : AppCompatActivity() {
         previousUrl = Prefs.lastUrl
         urlInput.setText(previousUrl)
         tunnelMode = Prefs.tunnelMode
+        splitTunnelingMode = Prefs.splitTunnelingMode
+        splitTunnelingPackages = Prefs.splitTunnelingPackages.toMutableSet()
         statusBar.text = getString(R.string.status_format, tunnelMode.label, getString(R.string.status_idle))
         showLogs = Prefs.showLogs
         logContainer.visibility = if (showLogs) View.VISIBLE else View.GONE
@@ -152,6 +157,8 @@ class MainActivity : AppCompatActivity() {
 
     private enum class MenuItem(val id: Int, val stringRes: Int) {
         MODE(99, R.string.menu_mode),
+        SPLIT_TUNNELING(98, R.string.menu_split_tunneling),
+        SPLIT_TUNNELING_APPS(97, R.string.menu_split_tunneling_manage),
         RECONNECT_ON_START(100, R.string.menu_reconnect_on_start),
         SHOW_LOGS(101, R.string.menu_show_logs),
         SHARE_LOGS(102, R.string.menu_share_logs),
@@ -163,6 +170,12 @@ class MainActivity : AppCompatActivity() {
         val menu = popup.menu
 
         menu.add(0, MenuItem.MODE.id, 0, getString(MenuItem.MODE.stringRes, tunnelMode.label))
+
+        menu.add(0, MenuItem.SPLIT_TUNNELING.id, 0, getString(MenuItem.SPLIT_TUNNELING.stringRes, splitTunnelingMode.label))
+
+        menu.add(0, MenuItem.SPLIT_TUNNELING_APPS.id, 0, MenuItem.SPLIT_TUNNELING_APPS.stringRes).apply {
+            isEnabled = splitTunnelingMode != SplitTunnelingMode.NONE
+        }
 
         menu.add(0, MenuItem.RECONNECT_ON_START.id, 0, MenuItem.RECONNECT_ON_START.stringRes).apply {
             isCheckable = true
@@ -179,6 +192,14 @@ class MainActivity : AppCompatActivity() {
             when (item.itemId) {
                 MenuItem.RECONNECT_ON_START.id -> {
                     Prefs.connectOnStart = !item.isChecked
+                    true
+                }
+                MenuItem.SPLIT_TUNNELING.id -> {
+                    showSplitTunnelingDialog()
+                    true
+                }
+                MenuItem.SPLIT_TUNNELING_APPS.id -> {
+                    showSplitTunnelingAppSelection()
                     true
                 }
                 MenuItem.SHOW_LOGS.id -> {
@@ -221,6 +242,120 @@ class MainActivity : AppCompatActivity() {
                     TunnelVpnService.instance?.stop()
                 }
             }
+            .show()
+    }
+
+    private fun showSplitTunnelingDialog() {
+        val modes = SplitTunnelingMode.values()
+        val labels = modes.map { it.label }.toTypedArray()
+        val selectedIndex = modes.indexOf(splitTunnelingMode)
+
+        android.app.AlertDialog.Builder(this)
+            .setTitle(R.string.split_tunneling_mode_prompt)
+            .setSingleChoiceItems(labels, selectedIndex) { dialog, which ->
+                splitTunnelingMode = modes[which]
+                Prefs.splitTunnelingMode = splitTunnelingMode
+                dialog.dismiss()
+                if(TunnelVpnService.instance?.isRunning == true) {
+                    Toast.makeText(this, R.string.split_tunneling_mode_changed, Toast.LENGTH_SHORT).show()
+                }
+            }
+            .setNegativeButton(android.R.string.cancel, null)
+            .show()
+    }
+
+    private data class STAppItem(val packageName: String, val label: String, val icon: android.graphics.drawable.Drawable, var isSelected: Boolean = false, val isSystemApp: Boolean = false)
+
+    private fun showSplitTunnelingAppSelection() {
+        var includeSystemApps = false
+
+        val installedPackages = packageManager.getInstalledApplications(PackageManager.GET_META_DATA)
+            .filter { it.packageName != packageName }  
+        
+        val installedApps = installedPackages.mapNotNull { appInfo ->
+            val packageName = appInfo.packageName
+            if (packageName.isBlank()) return@mapNotNull null
+            val label = appInfo.loadLabel(packageManager).toString().takeIf { it.isNotBlank() } ?: packageName
+            STAppItem(packageName, label, packageManager.getApplicationIcon(packageName), splitTunnelingPackages.contains(packageName), (appInfo.flags and android.content.pm.ApplicationInfo.FLAG_SYSTEM) == 0)
+        }.distinctBy { it.packageName }.sortedWith(compareByDescending<STAppItem> { it.isSelected }.thenBy { it.label.lowercase() })
+        
+        fun buildAppList(): List<STAppItem> {
+            return installedApps.filter { includeSystemApps || it.isSystemApp }
+        }
+
+        var items = buildAppList()
+        if (items.isEmpty()) return
+
+        val listView = android.widget.ListView(this).apply {
+            choiceMode = android.widget.ListView.CHOICE_MODE_MULTIPLE
+        }
+
+        val adapter = object : android.widget.BaseAdapter() {
+            override fun getCount() = items.size
+            override fun getItem(position: Int) = items[position]
+            override fun getItemId(position: Int) = position.toLong()
+
+            override fun getView(position: Int, convertView: android.view.View?, parent: android.view.ViewGroup): android.view.View {
+                val item = getItem(position)
+                val view = convertView ?: layoutInflater.inflate(R.layout.split_tunneling_app_list_item, parent, false)
+                val iconView = view.findViewById<android.widget.ImageView>(R.id.appIcon)
+                val labelView = view.findViewById<android.widget.TextView>(R.id.appLabel)
+                val packageView = view.findViewById<android.widget.TextView>(R.id.appPackage)
+                val checkbox = view.findViewById<android.widget.CheckBox>(R.id.appCheckbox)
+
+                iconView.setImageDrawable(item.icon)
+                labelView.text = item.label
+                val isDarkThemeEnabled = (resources.configuration.uiMode and android.content.res.Configuration.UI_MODE_NIGHT_MASK) == android.content.res.Configuration.UI_MODE_NIGHT_YES
+                labelView.setTextColor(if (isDarkThemeEnabled) android.graphics.Color.WHITE else android.graphics.Color.BLACK)
+                packageView.text = item.packageName
+
+                view.setOnClickListener {
+                    val isChecked = !checkbox.isChecked
+                    checkbox.isChecked = isChecked
+                    if (isChecked && !splitTunnelingPackages.contains(item.packageName)) splitTunnelingPackages.add(item.packageName) else if(!isChecked && splitTunnelingPackages.contains(item.packageName)) splitTunnelingPackages.remove(item.packageName)
+                    item.isSelected = isChecked
+                }
+                checkbox.setOnCheckedChangeListener { _, isChecked ->
+                    if (isChecked && !splitTunnelingPackages.contains(item.packageName)) splitTunnelingPackages.add(item.packageName) else if(!isChecked && splitTunnelingPackages.contains(item.packageName)) splitTunnelingPackages.remove(item.packageName)
+                    item.isSelected = isChecked
+                }
+
+                checkbox.isChecked = item.isSelected // do not place it before listener or else it will break everything
+
+                return view
+            }
+        }
+
+        listView.adapter = adapter
+
+        val systemAppsCheckbox = android.widget.CheckBox(this).apply {
+            text = getString(R.string.split_tunneling_show_system_apps)
+            isChecked = includeSystemApps
+            setOnCheckedChangeListener { _, checked ->
+                includeSystemApps = checked
+                items = buildAppList()
+                adapter.notifyDataSetChanged()
+            }
+        }
+
+        val dialogLayout = android.widget.LinearLayout(this).apply {
+            orientation = android.widget.LinearLayout.VERTICAL
+            setPadding(24, 24, 24, 24)
+            addView(systemAppsCheckbox)
+            addView(listView)
+        }
+
+        android.app.AlertDialog.Builder(this)
+            .setTitle(R.string.split_tunneling_apps_prompt)
+            .setView(dialogLayout)
+            .setPositiveButton(android.R.string.ok) { _, _ ->
+                Prefs.splitTunnelingMode = splitTunnelingMode
+                Prefs.splitTunnelingPackages = splitTunnelingPackages
+                if(TunnelVpnService.instance?.isRunning == true) {
+                    Toast.makeText(this, R.string.split_tunneling_mode_changed, Toast.LENGTH_SHORT).show()
+                }
+            }
+            .setNegativeButton(android.R.string.cancel, null)
             .show()
     }
 
@@ -360,6 +495,7 @@ class MainActivity : AppCompatActivity() {
             }
 
             override fun onPageStarted(view: WebView, url: String, favicon: android.graphics.Bitmap?) {
+                if(url.contains("about:blank")) return
                 view.evaluateJavascript("""(function(){
 var oac=window.AudioContext||window.webkitAudioContext;
 if(oac){var nac=function(){var c=new oac();c.suspend();
@@ -371,6 +507,7 @@ if(oac){var nac=function(){var c=new oac();c.suspend();
             }
 
             override fun onPageFinished(view: WebView, url: String) {
+                if(url.contains("about:blank")) return
                 view.evaluateJavascript("!!window.__hookInstalled") { result ->
                     if (result == "true") {
                         Log.d("HOOK", "Hook already injected, skipping")

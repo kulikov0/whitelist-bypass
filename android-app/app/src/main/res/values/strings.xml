@@ -10,6 +10,12 @@
     <string name="menu_share_logs">Share logs</string>
     <string name="menu_reset">Reset</string>
     <string name="menu_mode">Mode: %1$s</string>
+    <string name="menu_split_tunneling">Split tunneling (%1$s)</string>
+    <string name="menu_split_tunneling_manage">Manage split tunneling apps</string>
+    <string name="split_tunneling_mode_prompt">Split tunneling mode</string>
+    <string name="split_tunneling_apps_prompt">Select apps</string>
+    <string name="split_tunneling_show_system_apps">Show system apps</string>
+    <string name="split_tunneling_mode_changed">Reconnect for changes to take effect</string>
     <string name="hint_call_link">Paste call link</string>
     <string name="cd_clear">Clear</string>
     <string name="cd_settings">Settings</string>

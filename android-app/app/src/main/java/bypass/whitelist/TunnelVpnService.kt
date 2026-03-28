@@ -18,11 +18,11 @@ class TunnelVpnService : VpnService() {
         const val CHANNEL_ID = "vpn_channel"
         const val NOTIFICATION_ID = 1
         const val ACTION_STOP = "bypass.whitelist.STOP_VPN"
-        var isRunning = false
         var instance: TunnelVpnService? = null
         var onDisconnect: (() -> Unit)? = null
     }
 
+    var isRunning: Boolean = false
     private var vpnFd: ParcelFileDescriptor? = null
     private var tun2socksThread: Thread? = null
 
@@ -81,9 +81,30 @@ class TunnelVpnService : VpnService() {
             .setMtu(Vpn.MTU)
 
         try {
-            builder.addDisallowedApplication(packageName)
+            when (Prefs.splitTunnelingMode) {
+                SplitTunnelingMode.NONE -> {
+                    builder.addDisallowedApplication(packageName)
+                }
+                SplitTunnelingMode.BYPASS -> {
+                    builder.addDisallowedApplication(packageName)
+                    Prefs.splitTunnelingPackages.forEach {
+                        try {
+                            builder.addDisallowedApplication(it)
+                        } catch (ignored: Exception) {
+                        }
+                    }
+                }
+                SplitTunnelingMode.ONLY -> {
+                    Prefs.splitTunnelingPackages.forEach {
+                        try {
+                            builder.addAllowedApplication(it)
+                        } catch (ignored: Exception) {
+                        }
+                    }
+                }
+            }
         } catch (e: Exception) {
-            Log.e(TAG, "Cannot exclude self: ${e.message}")
+            Log.e(TAG, "Split tunneling failed: ${e.message}")
         }
 
         vpnFd = builder.establish()

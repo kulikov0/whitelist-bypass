@@ -34,4 +34,19 @@ object Prefs {
     var showLogs: Boolean
         get() = prefs.getBoolean(PrefsKeys.SHOW_LOGS, false)
         set(value) = prefs.edit { putBoolean(PrefsKeys.SHOW_LOGS, value) }
+
+    var splitTunnelingMode: SplitTunnelingMode
+        get() {
+            val title = prefs.getString(PrefsKeys.SPLIT_TUNNELING_MODE, SplitTunnelingMode.NONE.name)!!
+            return try {
+                SplitTunnelingMode.valueOf(title)
+            } catch (_: IllegalArgumentException) {
+                SplitTunnelingMode.NONE
+            }
+        }
+        set(value) = prefs.edit { putString(PrefsKeys.SPLIT_TUNNELING_MODE, value.name) }
+
+    var splitTunnelingPackages: Set<String>
+        get() = prefs.getStringSet(PrefsKeys.SPLIT_TUNNELING_PACKAGES, emptySet()) ?: emptySet()
+        set(value) = prefs.edit { putStringSet(PrefsKeys.SPLIT_TUNNELING_PACKAGES, value) }
 }
