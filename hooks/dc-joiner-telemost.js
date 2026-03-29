@@ -278,31 +278,5 @@
   }
 
   window.__hook = { peers: peers, log: log };
-  window.__hook.runBandwidthTest = function(totalMB) {
-    totalMB = totalMB || 1;
-    if (!tunnelReady || !outboundDC) { log('Tunnel not ready'); return; }
-    var chunkSize = 4096;
-    var totalBytes = totalMB * 1024 * 1024;
-    var sent = 0;
-    var start = performance.now();
-    sendRaw('bw:start');
-    log('Starting bandwidth test: ' + totalMB + ' MB...');
-    var sendBatch = function() {
-      while (sent < totalBytes) {
-        if (outboundDC.bufferedAmount > 512 * 1024) {
-          setTimeout(sendBatch, 5);
-          return;
-        }
-        sendRaw(new ArrayBuffer(chunkSize));
-        sent += chunkSize;
-      }
-      sendRaw('bw:done');
-      var elapsed = (performance.now() - start) / 1000;
-      var kbps = (totalBytes * 8 / 1024 / elapsed).toFixed(1);
-      log('=== SEND COMPLETE: ' + (totalBytes/1024).toFixed(1) + ' KB in ' + elapsed.toFixed(2) + 's = ' + kbps + ' kbps ===');
-    };
-    sendBatch();
-  };
-
   log('Hook installed');
 })();

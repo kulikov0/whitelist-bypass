@@ -60,34 +60,8 @@
       activeDC = null;
     };
 
-    let bwRecvBytes = 0;
-    let bwRecvStart = 0;
-    let bwMode = false;
-
     dc.onmessage = (e) => {
       if (dc !== activeDC) return;
-      if (bwMode) {
-        if (e.data instanceof ArrayBuffer) {
-          if (bwRecvStart === 0) bwRecvStart = performance.now();
-          bwRecvBytes += e.data.byteLength;
-          return;
-        }
-        if (typeof e.data === 'string' && e.data === 'bw:done') {
-          var elapsed = (performance.now() - bwRecvStart) / 1000;
-          var kbps = (bwRecvBytes * 8 / 1024 / elapsed).toFixed(1);
-          log('=== RECV COMPLETE: ' + (bwRecvBytes/1024).toFixed(1) + ' KB in ' + elapsed.toFixed(2) + 's = ' + kbps + ' kbps ===');
-          bwRecvBytes = 0;
-          bwRecvStart = 0;
-          bwMode = false;
-          return;
-        }
-      }
-      if (typeof e.data === 'string' && e.data === 'bw:start') {
-        bwMode = true;
-        bwRecvBytes = 0;
-        bwRecvStart = 0;
-        return;
-      }
       if (activeWS && wsOpen) {
         activeWS.send(e.data);
       }
@@ -132,32 +106,5 @@
   }
 
   window.__hook = { peers: peers, log: log };
-  window.__hook.runBandwidthTest = function(totalMB) {
-    totalMB = totalMB || 1;
-    if (!dcOpen || !activeDC) { log('DC not open'); return; }
-    var chunkSize = 16384;
-    var chunk = new ArrayBuffer(chunkSize);
-    var totalBytes = totalMB * 1024 * 1024;
-    var sent = 0;
-    var start = performance.now();
-    activeDC.send('bw:start');
-    log('Starting bandwidth test: ' + totalMB + ' MB...');
-    var sendBatch = function() {
-      while (sent < totalBytes) {
-        if (activeDC.bufferedAmount > 512 * 1024) {
-          setTimeout(sendBatch, 5);
-          return;
-        }
-        activeDC.send(chunk);
-        sent += chunkSize;
-      }
-      activeDC.send('bw:done');
-      var elapsed = (performance.now() - start) / 1000;
-      var kbps = (totalBytes * 8 / 1024 / elapsed).toFixed(1);
-      log('=== SEND COMPLETE: ' + (totalBytes/1024).toFixed(1) + ' KB in ' + elapsed.toFixed(2) + 's = ' + kbps + ' kbps ===');
-    };
-    sendBatch();
-  };
-
   log('Hook installed');
 })();
