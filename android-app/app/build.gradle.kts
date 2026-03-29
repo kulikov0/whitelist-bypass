@@ -5,7 +5,7 @@ plugins {
 
 val versionMajor = 0
 val versionMinor = 1
-val versionPatch = 7
+val versionPatch = 8
 val versionBuild = System.getenv("BUILD_NUMBER")?.toIntOrNull() ?: 0
 
 android {
