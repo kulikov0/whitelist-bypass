@@ -105,7 +105,32 @@ body { font-family: -apple-system, sans-serif; background: #1a1a1a; color: #e0e0
     </div>
   </div>
 </div>
+<div class="popup-overlay" id="errorPopup" onclick="closeError()">
+  <div class="popup" style="padding:16px" onclick="event.stopPropagation()">
+    <h2 style="color:#dc3545;margin-bottom:12px;font-size:15px">Bot error</h2>
+    <pre id="errorText" style="background:#111;padding:10px;border-radius:6px;font-size:11px;color:#e0e0e0;white-space:pre-wrap;word-break:break-all;max-height:200px;overflow-y:auto;user-select:text;cursor:text;margin:0"></pre>
+    <div class="popup-buttons" style="margin-top:12px">
+      <button class="btn-cancel" onclick="closeError()">Close</button>
+    </div>
+  </div>
+</div>
 <script>
+function showError(msg) {
+  document.getElementById('errorText').textContent = msg;
+  document.getElementById('errorPopup').classList.add('visible');
+}
+function closeError() {
+  document.getElementById('errorPopup').classList.remove('visible');
+}
+
+window.bridge.onBotError(function(msg) {
+  showError(msg);
+  botRunning = false;
+  var btn = document.getElementById('tabBot');
+  btn.textContent = 'Bot: Off';
+  btn.classList.remove('running');
+});
+
 var tabsState = {}; // tabId -> { wv, mode, relayLogs, hookLogs }
 var activeTabId = null;
 var nextTabId = 1;

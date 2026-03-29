@@ -19,7 +19,9 @@ class BotManager {
     const data = await res.json();
 
     if (data.error) {
-      throw new Error(data.error.error_msg || 'VK API error');
+      var errMsg = method + ' code: ' + data.error.error_code + ' msg: ' + (data.error.error_msg || 'VK API error') + ' params: ' + JSON.stringify(data.error.request_params || []);
+      console.error('[BOT] API error:', errMsg);
+      throw new Error(errMsg);
     }
     return data.response;
   }
@@ -42,6 +44,8 @@ class BotManager {
       this.pollLoop();
     } catch (err) {
       console.error('[BOT] Failed to start:', err.message);
+      this.running = false;
+      if (this.onError) this.onError(err.message);
     }
   }
 

@@ -9,5 +9,6 @@ contextBridge.exposeInMainWorld('bridge', {
   startBot: function(settings) { return ipcRenderer.invoke('start-bot', settings); },
   stopBot: function() { return ipcRenderer.invoke('stop-bot'); },
   onCreateBotTab: function(cb) { ipcRenderer.on('create-bot-tab', function(e, data) { cb(data); }); },
-  getCallCreatorCode: function(scriptFile) { return ipcRenderer.invoke('get-call-creator-code', scriptFile); }
+  getCallCreatorCode: function(scriptFile) { return ipcRenderer.invoke('get-call-creator-code', scriptFile); },
+  onBotError: function(cb) { ipcRenderer.on('bot-error', function(e, msg) { cb(msg); }); }
 });

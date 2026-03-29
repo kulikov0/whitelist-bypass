@@ -249,6 +249,11 @@ ipcMain.handle('start-bot', function(e, settings) {
     mainWindow.webContents.send('create-bot-tab', { tabId: tabId, mode: tabConfig.mode, peerId: tabConfig.peerId, platform: tabConfig.platform || 'vk' });
     console.log('[BOT] Created tab:', tabId, 'mode:', tabConfig.mode, 'platform:', tabConfig.platform, 'peerId:', tabConfig.peerId);
   });
+  botManager.onError = function(msg) {
+    if (mainWindow && !mainWindow.isDestroyed()) {
+      mainWindow.webContents.send('bot-error', msg);
+    }
+  };
   botManager.start();
   return { success: true };
 });
