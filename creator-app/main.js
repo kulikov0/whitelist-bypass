@@ -20,16 +20,29 @@ var mainWindow = null;
 var botManager = null;
 var botTabs = new Set();
 
-function allocPorts() {
-  var dc = nextPortBase;
-  var pion = nextPortBase + 1;
-  nextPortBase += 2;
-  return { dc: dc, pion: pion };
+function isPortFree(port) {
+  return new Promise(function(resolve) {
+    var server = require('net').createServer();
+    server.once('error', function() { resolve(false); });
+    server.once('listening', function() { server.close(function() { resolve(true); }); });
+    server.listen(port, '127.0.0.1');
+  });
 }
 
-function getTab(tabId) {
+async function allocPorts() {
+  while (true) {
+    var dc = nextPortBase;
+    var pion = nextPortBase + 1;
+    nextPortBase += 2;
+    var dcFree = await isPortFree(dc);
+    var pionFree = await isPortFree(pion);
+    if (dcFree && pionFree) return { dc: dc, pion: pion };
+  }
+}
+
+async function getTab(tabId) {
   if (!tabs.has(tabId)) {
-    var ports = allocPorts();
+    var ports = await allocPorts();
     tabs.set(tabId, { relay: null, tunnelMode: 'dc', platform: 'vk', dcPort: ports.dc, pionPort: ports.pion });
   }
   return tabs.get(tabId);
@@ -200,8 +213,8 @@ function createWindow() {
   });
 }
 
-ipcMain.handle('get-hook-code', function(e, tabId, url) {
-  var tab = getTab(tabId);
+ipcMain.handle('get-hook-code', async function(e, tabId, url) {
+  var tab = await getTab(tabId);
   return loadHook(url, tab);
 });
 
@@ -219,8 +232,8 @@ ipcMain.handle('set-tunnel-mode', function(e, tabId, mode) {
   setTimeout(function() { startRelay(tab); }, 500);
 });
 
-ipcMain.handle('start-relay', function(e, tabId) {
-  var tab = getTab(tabId);
+ipcMain.handle('start-relay', async function(e, tabId) {
+  var tab = await getTab(tabId);
   startRelay(tab);
 });
 
@@ -238,11 +251,11 @@ ipcMain.handle('start-bot', function(e, settings) {
   if (botManager) {
     botManager.stop();
   }
-  botManager = new BotManager(settings, function(tabConfig) {
+  botManager = new BotManager(settings, async function(tabConfig) {
     if (!mainWindow || mainWindow.isDestroyed()) return;
 
     var tabId = 'bot-tab-' + Date.now();
-    var ports = allocPorts();
+    var ports = await allocPorts();
     tabs.set(tabId, { relay: null, tunnelMode: tabConfig.mode, platform: tabConfig.platform || 'vk', dcPort: ports.dc, pionPort: ports.pion, peerId: tabConfig.peerId });
     botTabs.add(tabId);
 
