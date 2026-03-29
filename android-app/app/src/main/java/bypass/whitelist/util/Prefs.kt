@@ -1,8 +1,10 @@
-package bypass.whitelist
+package bypass.whitelist.util
 
 import android.content.Context
 import android.content.SharedPreferences
 import androidx.core.content.edit
+import bypass.whitelist.tunnel.SplitTunnelingMode
+import bypass.whitelist.tunnel.TunnelMode
 
 object Prefs {
 

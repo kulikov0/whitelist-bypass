@@ -30,7 +30,7 @@
             </intent-filter>
         </activity>
         <service
-            android:name=".TunnelVpnService"
+            android:name=".tunnel.TunnelVpnService"
             android:permission="android.permission.BIND_VPN_SERVICE"
             android:foregroundServiceType="specialUse"
             android:exported="false">

@@ -1,64 +1,53 @@
 package bypass.whitelist
 
-import android.annotation.SuppressLint
 import android.content.Intent
-import android.content.pm.ApplicationInfo
 import android.content.pm.PackageManager
-import android.content.res.Configuration
-import android.graphics.Bitmap
-import android.graphics.Color
-import android.graphics.drawable.Drawable
 import android.net.ConnectivityManager
 import android.net.VpnService
 import android.os.Build
 import android.os.Bundle
 import android.util.Log
 import android.view.View
-import android.view.ViewGroup
-import android.webkit.*
-import android.widget.BaseAdapter
+import android.webkit.JavascriptInterface
 import android.widget.Button
-import android.widget.CheckBox
 import android.widget.EditText
 import android.widget.ImageButton
-import android.widget.ImageView
-import android.widget.LinearLayout
-import android.widget.ListView
-import android.widget.PopupMenu
-import android.widget.TextView
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AppCompatActivity
-import androidx.core.content.FileProvider
 import androidx.core.view.ViewCompat
 import androidx.core.view.WindowInsetsCompat
+import bypass.whitelist.tunnel.CallPlatform
+import bypass.whitelist.tunnel.RelayController
+import bypass.whitelist.tunnel.TunnelVpnService
+import bypass.whitelist.tunnel.VpnStatus
+import bypass.whitelist.ui.LogViewController
+import bypass.whitelist.ui.SettingsMenuController
+import bypass.whitelist.ui.StatusBarController
+import bypass.whitelist.ui.WebViewManager
+import bypass.whitelist.util.LogWriter
+import bypass.whitelist.util.Prefs
+import bypass.whitelist.util.hideKeyboard
+import bypass.whitelist.util.maskUrl
 import java.net.Inet4Address
 import java.net.InetAddress
-import android.widget.Toast
-import androidx.appcompat.app.AlertDialog
 
 class MainActivity : AppCompatActivity() {
-
-    private var tunnelMode = TunnelMode.DC
-    private var connected = false
-    private var showLogs = false
-    private var splitTunnelingMode = SplitTunnelingMode.NONE
-    private var splitTunnelingPackages = mutableSetOf<String>()
 
     private val logWriter by lazy { LogWriter(cacheDir) }
     private val relay by lazy {
         RelayController(
             nativeLibDir = applicationInfo.nativeLibraryDir,
-            onLog = ::appendLog,
+            onLog = { logCtrl.append(it) },
             onStatus = ::onVpnStatus,
         )
     }
 
-    private lateinit var webView: WebView
-    private lateinit var logView: TextView
     private lateinit var urlInput: EditText
-    private lateinit var goButton: Button
-    private lateinit var statusBar: TextView
+    private lateinit var logCtrl: LogViewController
+    private lateinit var statusCtrl: StatusBarController
+    private lateinit var settingsCtrl: SettingsMenuController
+    private lateinit var webViewMgr: WebViewManager
     private lateinit var logContainer: View
 
     private var previousUrl = ""
@@ -71,17 +60,9 @@ class MainActivity : AppCompatActivity() {
         ActivityResultContracts.StartActivityForResult()
     ) { result ->
         if (result.resultCode == RESULT_OK) startVpnService()
-        else appendLog("VPN permission denied")
+        else logCtrl.append("VPN permission denied")
     }
 
-    private val hookVk by lazy { assets.open("dc-joiner-vk.js").bufferedReader().readText() }
-    private val hookTelemost by lazy { assets.open("dc-joiner-telemost.js").bufferedReader().readText() }
-    private val hookPionVk by lazy { assets.open("video-vk.js").bufferedReader().readText() }
-    private val hookPionTelemost by lazy { assets.open("video-telemost.js").bufferedReader().readText() }
-    private val autoclickTelemost by lazy { assets.open("autoclick-telemost.js").bufferedReader().readText() }
-    private val autoclickVk by lazy { assets.open("autoclick-vk.js").bufferedReader().readText() }
-
-    @SuppressLint("SetJavaScriptEnabled")
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
@@ -92,46 +73,60 @@ class MainActivity : AppCompatActivity() {
             insets
         }
 
-        logView = findViewById(R.id.logView)
         urlInput = findViewById(R.id.urlInput)
-        webView = findViewById(R.id.webView)
-        goButton = findViewById(R.id.goButton)
-        statusBar = findViewById(R.id.statusBar)
         logContainer = findViewById(R.id.logContainer)
 
-        logWriter.reset()
+        logCtrl = LogViewController(this, findViewById(R.id.logView), logWriter)
+        logCtrl.reset()
+
+        statusCtrl = StatusBarController(
+            activity = this,
+            statusBar = findViewById(R.id.statusBar),
+            goButton = findViewById(R.id.goButton),
+            onConnect = ::onGoPressed,
+            onDisconnect = ::fullReset,
+        )
+
+        settingsCtrl = SettingsMenuController(
+            activity = this,
+            onModeChanged = { mode ->
+                statusCtrl.tunnelMode = mode
+                webViewMgr.tunnelMode = mode
+                fullReset()
+            },
+            onShareLogs = { logCtrl.shareLogs() },
+            onReset = ::fullReset,
+        )
+        settingsCtrl.onShowLogsChanged = { visible ->
+            logContainer.visibility = if (visible) View.VISIBLE else View.GONE
+        }
+
+        webViewMgr = WebViewManager(
+            activity = this,
+            webView = findViewById(R.id.webView),
+            onLog = { logCtrl.append(it) },
+            onStatus = ::onVpnStatus,
+        )
+        webViewMgr.setup(JsBridge())
 
         previousUrl = Prefs.lastUrl
         urlInput.setText(previousUrl)
-        tunnelMode = Prefs.tunnelMode
-        splitTunnelingMode = Prefs.splitTunnelingMode
-        splitTunnelingPackages = Prefs.splitTunnelingPackages.toMutableSet()
-        statusBar.text = getString(R.string.status_format, tunnelMode.label, getString(R.string.status_idle))
-        showLogs = Prefs.showLogs
-        logContainer.visibility = if (showLogs) View.VISIBLE else View.GONE
+        statusCtrl.tunnelMode = Prefs.tunnelMode
+        webViewMgr.tunnelMode = Prefs.tunnelMode
+        statusCtrl.setIdle()
+        logContainer.visibility = if (Prefs.showLogs) View.VISIBLE else View.GONE
 
-        setupWebView()
-
-        goButton.setOnClickListener { onGoPressed() }
-
-        findViewById<ImageButton>(R.id.shareLogsButton).setOnClickListener {
-            val uri = FileProvider.getUriForFile(this, "$packageName.fileprovider", logWriter.file)
-            val share = Intent(Intent.ACTION_SEND).apply {
-                type = "text/plain"
-                putExtra(Intent.EXTRA_STREAM, uri)
-                addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
-            }
-            startActivity(Intent.createChooser(share, getString(R.string.share_logs)))
-        }
-
-        findViewById<ImageButton>(R.id.gearButton).setOnClickListener { showGearMenu(it) }
+        findViewById<Button>(R.id.goButton).setOnClickListener { onGoPressed() }
+        findViewById<ImageButton>(R.id.shareLogsButton).setOnClickListener { logCtrl.shareLogs() }
+        findViewById<ImageButton>(R.id.gearButton).setOnClickListener { settingsCtrl.show(it) }
         findViewById<View>(R.id.clearButton).setOnClickListener { urlInput.setText("") }
 
         TunnelVpnService.onDisconnect = { runOnUiThread { resetState() } }
 
         VpnService.prepare(this)?.let { vpnPrepLauncher.launch(it) }
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
-            checkSelfPermission(android.Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) {
+            checkSelfPermission(android.Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED
+        ) {
             requestPermissions(arrayOf(android.Manifest.permission.POST_NOTIFICATIONS), 0)
         }
 
@@ -145,280 +140,37 @@ class MainActivity : AppCompatActivity() {
 
     override fun onDestroy() {
         TunnelVpnService.onDisconnect = null
-        stopRelay()
+        relay.stop()
         TunnelVpnService.instance?.stop()
-        logWriter.close()
+        logCtrl.close()
         super.onDestroy()
     }
 
     private fun onGoPressed() {
         val url = urlInput.text.toString().trim()
         if (url.isEmpty()) return
-        logWriter.reset()
-        logView.text = ""
-        stopRelay()
-        startRelay()
+        logCtrl.reset()
+        relay.stop()
+        relay.start(settingsCtrl.tunnelMode, CallPlatform.fromUrl(url))
         hideKeyboard()
         urlInput.clearFocus()
-        setConnected(false)
-        setStatus(VpnStatus.CONNECTING)
-        appendLog("Loading: ${maskUrl(url)}")
+        statusCtrl.setConnected(false)
+        statusCtrl.setStatus(VpnStatus.CONNECTING)
+        logCtrl.append("Loading: ${maskUrl(url)}")
         if (previousUrl != url) {
             previousUrl = url
             Prefs.lastUrl = url
         }
-        webView.loadUrl(url)
-    }
-
-    private enum class MenuItem(val id: Int, val stringRes: Int) {
-        MODE(99, R.string.menu_mode),
-        SPLIT_TUNNELING(98, R.string.menu_split_tunneling),
-        SPLIT_TUNNELING_APPS(97, R.string.menu_split_tunneling_manage),
-        RECONNECT_ON_START(100, R.string.menu_reconnect_on_start),
-        SHOW_LOGS(101, R.string.menu_show_logs),
-        SHARE_LOGS(102, R.string.menu_share_logs),
-        RESET(200, R.string.menu_reset),
-    }
-
-    private fun showGearMenu(anchor: View) {
-        val popup = PopupMenu(this, anchor)
-        val menu = popup.menu
-
-        menu.add(0, MenuItem.MODE.id, 0, getString(MenuItem.MODE.stringRes, tunnelMode.label))
-
-        menu.add(0, MenuItem.SPLIT_TUNNELING.id, 0, getString(MenuItem.SPLIT_TUNNELING.stringRes, splitTunnelingMode.label))
-
-        menu.add(0, MenuItem.SPLIT_TUNNELING_APPS.id, 0, MenuItem.SPLIT_TUNNELING_APPS.stringRes).apply {
-            isEnabled = splitTunnelingMode != SplitTunnelingMode.NONE
-        }
-
-        menu.add(0, MenuItem.RECONNECT_ON_START.id, 0, MenuItem.RECONNECT_ON_START.stringRes).apply {
-            isCheckable = true
-            isChecked = Prefs.connectOnStart
-        }
-        menu.add(0, MenuItem.SHOW_LOGS.id, 0, MenuItem.SHOW_LOGS.stringRes).apply {
-            isCheckable = true
-            isChecked = showLogs
-        }
-        menu.add(0, MenuItem.SHARE_LOGS.id, 0, MenuItem.SHARE_LOGS.stringRes)
-        menu.add(0, MenuItem.RESET.id, 0, MenuItem.RESET.stringRes)
-
-        popup.setOnMenuItemClickListener { item ->
-            when (item.itemId) {
-                MenuItem.RECONNECT_ON_START.id -> {
-                    Prefs.connectOnStart = !item.isChecked
-                    true
-                }
-                MenuItem.SPLIT_TUNNELING.id -> {
-                    showSplitTunnelingDialog()
-                    true
-                }
-                MenuItem.SPLIT_TUNNELING_APPS.id -> {
-                    showSplitTunnelingAppSelection()
-                    true
-                }
-                MenuItem.SHOW_LOGS.id -> {
-                    showLogs = !item.isChecked
-                    Prefs.showLogs = showLogs
-                    logContainer.visibility = if (showLogs) View.VISIBLE else View.GONE
-                    true
-                }
-                MenuItem.SHARE_LOGS.id -> {
-                    findViewById<ImageButton>(R.id.shareLogsButton).performClick()
-                    true
-                }
-                MenuItem.RESET.id -> {
-                    resetState()
-                    TunnelVpnService.instance?.stop()
-                    true
-                }
-                MenuItem.MODE.id -> {
-                    showModeDialog()
-                    true
-                }
-                else -> false
-            }
-        }
-        popup.show()
-    }
-
-    private fun showModeDialog() {
-        val modes = TunnelMode.entries
-        val labels = modes.map { it.label }.toTypedArray()
-        val current = modes.indexOf(tunnelMode)
-        AlertDialog.Builder(this)
-            .setSingleChoiceItems(labels, current) { dialog, which ->
-                dialog.dismiss()
-                val mode = modes[which]
-                if (mode != tunnelMode) {
-                    tunnelMode = mode
-                    Prefs.tunnelMode = mode
-                    resetState()
-                    TunnelVpnService.instance?.stop()
-                }
-            }
-            .show()
-    }
-
-    private fun showSplitTunnelingDialog() {
-        val modes = SplitTunnelingMode.entries.toTypedArray()
-        val labels = modes.map { it.label }.toTypedArray()
-        val selectedIndex = modes.indexOf(splitTunnelingMode)
-
-        AlertDialog.Builder(this)
-            .setTitle(R.string.split_tunneling_mode_prompt)
-            .setSingleChoiceItems(labels, selectedIndex) { dialog, which ->
-                splitTunnelingMode = modes[which]
-                Prefs.splitTunnelingMode = splitTunnelingMode
-                dialog.dismiss()
-                if(TunnelVpnService.instance?.isRunning == true) {
-                    Toast.makeText(this, R.string.split_tunneling_mode_changed, Toast.LENGTH_SHORT).show()
-                }
-            }
-            .setNegativeButton(android.R.string.cancel, null)
-            .show()
-    }
-
-    private data class STAppItem(val packageName: String, val label: String, val icon: Drawable, var isSelected: Boolean = false, val isSystemApp: Boolean = false)
-
-    private fun showSplitTunnelingAppSelection() {
-        var includeSystemApps = false
-
-        val installedPackages = packageManager.getInstalledApplications(PackageManager.GET_META_DATA)
-            .filter { it.packageName != packageName }  
-        
-        val installedApps = installedPackages.mapNotNull { appInfo ->
-            val packageName = appInfo.packageName
-            if (packageName.isBlank()) return@mapNotNull null
-            val label = appInfo.loadLabel(packageManager).toString().takeIf { it.isNotBlank() } ?: packageName
-            STAppItem(packageName, label, packageManager.getApplicationIcon(packageName), splitTunnelingPackages.contains(packageName), (appInfo.flags and ApplicationInfo.FLAG_SYSTEM) == 0)
-        }.distinctBy { it.packageName }.sortedWith(compareByDescending<STAppItem> { it.isSelected }.thenBy { it.label.lowercase() })
-        
-        fun buildAppList(): List<STAppItem> {
-            return installedApps.filter { includeSystemApps || it.isSystemApp }
-        }
-
-        var items = buildAppList()
-        if (items.isEmpty()) return
-
-        val listView = ListView(this).apply {
-            choiceMode = ListView.CHOICE_MODE_MULTIPLE
-        }
-
-        val adapter = object : BaseAdapter() {
-            override fun getCount() = items.size
-            override fun getItem(position: Int) = items[position]
-            override fun getItemId(position: Int) = position.toLong()
-
-            override fun getView(position: Int, convertView: View?, parent: ViewGroup): View {
-                val item = getItem(position)
-                val view = convertView ?: layoutInflater.inflate(R.layout.split_tunneling_app_list_item, parent, false)
-                val iconView = view.findViewById<ImageView>(R.id.appIcon)
-                val labelView = view.findViewById<TextView>(R.id.appLabel)
-                val packageView = view.findViewById<TextView>(R.id.appPackage)
-                val checkbox = view.findViewById<CheckBox>(R.id.appCheckbox)
-
-                iconView.setImageDrawable(item.icon)
-                labelView.text = item.label
-                val isDarkThemeEnabled = (resources.configuration.uiMode and Configuration.UI_MODE_NIGHT_MASK) == Configuration.UI_MODE_NIGHT_YES
-                labelView.setTextColor(if (isDarkThemeEnabled) Color.WHITE else Color.BLACK)
-                packageView.text = item.packageName
-
-                view.setOnClickListener {
-                    val isChecked = !checkbox.isChecked
-                    checkbox.isChecked = isChecked
-                    if (isChecked && !splitTunnelingPackages.contains(item.packageName)) splitTunnelingPackages.add(item.packageName) else if(!isChecked && splitTunnelingPackages.contains(item.packageName)) splitTunnelingPackages.remove(item.packageName)
-                    item.isSelected = isChecked
-                }
-                checkbox.setOnCheckedChangeListener { _, isChecked ->
-                    if (isChecked && !splitTunnelingPackages.contains(item.packageName)) splitTunnelingPackages.add(item.packageName) else if(!isChecked && splitTunnelingPackages.contains(item.packageName)) splitTunnelingPackages.remove(item.packageName)
-                    item.isSelected = isChecked
-                }
-
-                checkbox.isChecked = item.isSelected // do not place it before listener or else it will break everything
-
-                return view
-            }
-        }
-
-        listView.adapter = adapter
-
-        val systemAppsCheckbox = CheckBox(this).apply {
-            text = getString(R.string.split_tunneling_show_system_apps)
-            isChecked = includeSystemApps
-            setOnCheckedChangeListener { _, checked ->
-                includeSystemApps = checked
-                items = buildAppList()
-                adapter.notifyDataSetChanged()
-            }
-        }
-
-        val dialogLayout = LinearLayout(this).apply {
-            orientation = LinearLayout.VERTICAL
-            setPadding(24, 24, 24, 24)
-            addView(systemAppsCheckbox)
-            addView(listView)
-        }
-
-        AlertDialog.Builder(this)
-            .setTitle(R.string.split_tunneling_apps_prompt)
-            .setView(dialogLayout)
-            .setPositiveButton(android.R.string.ok) { _, _ ->
-                Prefs.splitTunnelingMode = splitTunnelingMode
-                Prefs.splitTunnelingPackages = splitTunnelingPackages
-                if(TunnelVpnService.instance?.isRunning == true) {
-                    Toast.makeText(this, R.string.split_tunneling_mode_changed, Toast.LENGTH_SHORT).show()
-                }
-            }
-            .setNegativeButton(android.R.string.cancel, null)
-            .show()
-    }
-
-    private fun setConnected(value: Boolean) {
-        connected = value
-        goButton.setText(if (value) R.string.btn_disconnect else R.string.btn_go)
-        goButton.setOnClickListener {
-            if (connected) {
-                resetState()
-                TunnelVpnService.instance?.stop()
-            } else {
-                onGoPressed()
-            }
-        }
-    }
-
-    private fun setStatus(status: VpnStatus) {
-        statusBar.text = getString(R.string.status_format, tunnelMode.label, getString(status.labelRes))
-        val colorRes = when (status) {
-            VpnStatus.TUNNEL_ACTIVE -> R.color.status_active
-            VpnStatus.CONNECTING,
-            VpnStatus.CALL_CONNECTED,
-            VpnStatus.DATACHANNEL_OPEN -> R.color.status_connecting
-            VpnStatus.TUNNEL_LOST,
-            VpnStatus.DATACHANNEL_LOST -> R.color.status_warning
-            VpnStatus.CALL_DISCONNECTED,
-            VpnStatus.CALL_FAILED -> R.color.status_error
-            VpnStatus.STARTING -> R.color.status_idle
-        }
-        statusBar.setBackgroundColor(getColor(colorRes))
+        webViewMgr.loadUrl(url)
     }
 
     private fun onVpnStatus(status: VpnStatus) {
         if (!relay.isRunning) return
         TunnelVpnService.instance?.updateStatus(status)
         runOnUiThread {
-            setStatus(status)
-            if (status == VpnStatus.TUNNEL_ACTIVE) setConnected(true)
+            statusCtrl.setStatus(status)
+            if (status == VpnStatus.TUNNEL_ACTIVE) statusCtrl.setConnected(true)
         }
-    }
-
-    private fun startRelay() {
-        val isTelemost = urlInput.text.toString().contains("telemost")
-        relay.start(tunnelMode, isTelemost)
-    }
-
-    private fun stopRelay() {
-        relay.stop()
     }
 
     private fun requestVpn() {
@@ -428,133 +180,21 @@ class MainActivity : AppCompatActivity() {
 
     private fun startVpnService() {
         startService(Intent(this, TunnelVpnService::class.java))
-        appendLog("VPN started")
+        logCtrl.append("VPN started")
         onVpnStatus(VpnStatus.TUNNEL_ACTIVE)
     }
 
-    private fun hookForUrl(url: String): String {
-        if (tunnelMode.isPion) {
-            return if (url.contains("telemost.yandex")) hookPionTelemost else hookPionVk
-        }
-        return if (url.contains("telemost.yandex")) hookTelemost else hookVk
+    private fun resetState() {
+        relay.stop()
+        webViewMgr.loadBlank()
+        logCtrl.reset()
+        statusCtrl.setConnected(false)
+        statusCtrl.setIdle()
     }
 
-    @SuppressLint("SetJavaScriptEnabled")
-    private fun setupWebView() {
-        webView.settings.apply {
-            javaScriptEnabled = true
-            domStorageEnabled = true
-            mediaPlaybackRequiresUserGesture = false
-            allowContentAccess = true
-            allowFileAccess = true
-            databaseEnabled = true
-            setSupportMultipleWindows(false)
-            useWideViewPort = true
-            loadWithOverviewMode = true
-            builtInZoomControls = true
-            displayZoomControls = false
-            userAgentString = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
-        }
-
-        webView.addJavascriptInterface(JsBridge(), "AndroidBridge")
-
-        webView.webChromeClient = object : WebChromeClient() {
-            override fun onPermissionRequest(request: PermissionRequest) {
-                runOnUiThread { request.grant(request.resources) }
-            }
-
-            override fun onConsoleMessage(msg: ConsoleMessage): Boolean {
-                val text = msg.message()
-                Log.d("HOOK", text)
-                if (text.contains("[HOOK]")) {
-                    appendLog(text)
-                    when {
-                        //TODO - use js bridge
-                        text.contains("CALL CONNECTED") -> onVpnStatus(VpnStatus.CALL_CONNECTED)
-                        text.contains("DataChannel open") -> onVpnStatus(VpnStatus.DATACHANNEL_OPEN)
-                        text.contains("DataChannel closed") -> onVpnStatus(VpnStatus.DATACHANNEL_LOST)
-                        text.contains("WebSocket connected") -> onVpnStatus(VpnStatus.TUNNEL_ACTIVE)
-                        text.contains("WebSocket disconnected") -> onVpnStatus(VpnStatus.TUNNEL_LOST)
-                        text.contains("Connection state: connecting") -> onVpnStatus(VpnStatus.CONNECTING)
-                        text.contains("Connection state: disconnected") -> onVpnStatus(VpnStatus.CALL_DISCONNECTED)
-                        text.contains("Connection state: failed") -> onVpnStatus(VpnStatus.CALL_FAILED)
-                    }
-                }
-                return true
-            }
-        }
-
-        webView.webViewClient = object : WebViewClient() {
-            override fun shouldInterceptRequest(view: WebView, request: WebResourceRequest): WebResourceResponse? {
-                val url = request.url.toString()
-                if (!url.contains("telemost.yandex.ru/j/") || request.method != "GET") return null
-                return try {
-                    val conn = java.net.URL(url).openConnection() as java.net.HttpURLConnection
-                    conn.requestMethod = "GET"
-                    request.requestHeaders?.forEach { (k, v) -> conn.setRequestProperty(k, v) }
-                    val headers = mutableMapOf<String, String>()
-                    conn.headerFields?.forEach { (k, v) ->
-                        if (k != null
-                            && !k.equals("content-security-policy", ignoreCase = true)
-                            && !k.equals("content-security-policy-report-only", ignoreCase = true)
-                        ) {
-                            headers[k] = v.joinToString(", ")
-                        }
-                    }
-                    WebResourceResponse(
-                        conn.contentType?.split(";")?.firstOrNull() ?: "text/html",
-                        "utf-8", conn.responseCode, conn.responseMessage ?: "OK",
-                        headers, conn.inputStream
-                    )
-                } catch (_: Exception) { null }
-            }
-
-            override fun onPageStarted(view: WebView, url: String, favicon: Bitmap?) {
-                if(url.contains("about:blank")) return
-                view.evaluateJavascript("""(function(){
-var oac=window.AudioContext||window.webkitAudioContext;
-if(oac){var nac=function(){var c=new oac();c.suspend();
-  c.resume=function(){return Promise.resolve()};
-  return c};
-  nac.prototype=oac.prototype;window.AudioContext=nac;
-  if(window.webkitAudioContext)window.webkitAudioContext=nac}
-})()""", null)
-            }
-
-            override fun onPageFinished(view: WebView, url: String) {
-                if(url.contains("about:blank")) return
-                view.evaluateJavascript("!!window.__hookInstalled") { result ->
-                    if (result == "true") {
-                        Log.d("HOOK", "Hook already injected, skipping")
-                        return@evaluateJavascript
-                    }
-                    appendLog("Page loaded, injecting hook for ${maskUrl(url)}")
-                    view.evaluateJavascript(hookForUrl(url), null)
-                    if (url.contains("telemost.yandex")) {
-                        appendLog("Injecting autoclick for ${maskUrl(url)}")
-                        view.evaluateJavascript(autoclickTelemost, null)
-                    } else {
-                        appendLog("Injecting autoclick for ${maskUrl(url)}")
-                        view.evaluateJavascript(autoclickVk, null)
-                    }
-                }
-            }
-        }
-    }
-
-    private fun appendLog(msg: String) {
-        val (line, evicted) = logWriter.append(msg)
-        runOnUiThread {
-            if (evicted) {
-                logView.text = logWriter.displayText()
-            } else {
-                logView.append("$line\n")
-            }
-            val scrollAmount = logView.layout?.let {
-                it.getLineTop(logView.lineCount) - logView.height
-            } ?: 0
-            if (scrollAmount > 0) logView.scrollTo(0, scrollAmount)
-        }
+    private fun fullReset() {
+        resetState()
+        TunnelVpnService.instance?.stop()
     }
 
     private fun getLocalIPAddress(): String {
@@ -574,21 +214,10 @@ if(oac){var nac=function(){var c=new oac();c.suspend();
         return ""
     }
 
-    private fun resetState() {
-        stopRelay()
-        webView.loadUrl("about:blank")
-        logWriter.reset()
-        logView.text = ""
-        logView.scrollTo(0, 0)
-        setConnected(false)
-        statusBar.text = getString(R.string.status_format, tunnelMode.label, getString(R.string.status_idle))
-        statusBar.setBackgroundColor(getColor(R.color.status_idle))
-    }
-
     @Suppress("unused")
     inner class JsBridge {
         @JavascriptInterface
-        fun log(msg: String) = appendLog(msg)
+        fun log(msg: String) = logCtrl.append(msg)
 
         @JavascriptInterface
         fun getLocalIP(): String = getLocalIPAddress()
@@ -608,7 +237,7 @@ if(oac){var nac=function(){var c=new oac();c.suspend();
 
         @JavascriptInterface
         fun onTunnelReady() {
-            appendLog("Tunnel ready, starting VPN...")
+            logCtrl.append("Tunnel ready, starting VPN...")
             onVpnStatus(VpnStatus.TUNNEL_ACTIVE)
             runOnUiThread { requestVpn() }
         }

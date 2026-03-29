@@ -1,4 +1,4 @@
-package bypass.whitelist
+package bypass.whitelist.tunnel
 
 import android.app.Notification
 import android.app.NotificationChannel
@@ -9,6 +9,10 @@ import android.net.VpnService
 import android.os.Build
 import android.os.ParcelFileDescriptor
 import android.util.Log
+import bypass.whitelist.MainActivity
+import bypass.whitelist.util.Ports
+import bypass.whitelist.util.Prefs
+import bypass.whitelist.util.Vpn
 import mobile.Mobile
 
 class TunnelVpnService : VpnService() {

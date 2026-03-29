@@ -1,4 +1,4 @@
-package bypass.whitelist
+package bypass.whitelist.util
 
 import android.app.Activity
 import android.view.inputmethod.InputMethodManager

@@ -1,6 +1,7 @@
-package bypass.whitelist
+package bypass.whitelist.tunnel
 
 import android.util.Log
+import bypass.whitelist.util.Ports
 import mobile.LogCallback
 import mobile.Mobile
 import java.io.File
@@ -19,10 +20,10 @@ class RelayController(
         private set
 
     @Synchronized
-    fun start(mode: TunnelMode, isTelemost: Boolean) {
+    fun start(mode: TunnelMode, platform: CallPlatform) {
         stop()
         isRunning = true
-        if (mode.isPion) startPion(mode, isTelemost) else startDc()
+        if (mode.isPion) startPion(mode, platform) else startDc()
     }
 
     @Synchronized
@@ -58,13 +59,13 @@ class RelayController(
         onLog("Relay started DC mode (SOCKS5 :${Ports.SOCKS}, WS :${Ports.DC_WS})")
     }
 
-    private fun startPion(mode: TunnelMode, isTelemost: Boolean) {
+    private fun startPion(mode: TunnelMode, platform: CallPlatform) {
         val relayBin = File(nativeLibDir, "librelay.so")
         if (!relayBin.exists()) {
             onLog("Pion relay binary not found")
             return
         }
-        val relayMode = mode.relayMode(isTelemost)
+        val relayMode = mode.relayMode(platform)
         pionThread = Thread {
             try {
                 val pb = ProcessBuilder(

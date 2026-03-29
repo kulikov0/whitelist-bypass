@@ -1,4 +1,4 @@
-package bypass.whitelist
+package bypass.whitelist.util
 
 private val reUrl = Regex("(https?://[^/]+/)(.+)")
 private val reIp4 = Regex("\\d+\\.\\d+\\.\\d+\\.\\d+")

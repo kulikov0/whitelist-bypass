@@ -1,4 +1,4 @@
-package bypass.whitelist
+package bypass.whitelist.util
 
 object Ports {
     const val SOCKS = 1080L

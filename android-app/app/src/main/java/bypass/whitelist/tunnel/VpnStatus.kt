@@ -1,6 +1,7 @@
-package bypass.whitelist
+package bypass.whitelist.tunnel
 
 import androidx.annotation.StringRes
+import bypass.whitelist.R
 
 enum class VpnStatus(@StringRes val labelRes: Int) {
     STARTING(R.string.vpn_starting),
