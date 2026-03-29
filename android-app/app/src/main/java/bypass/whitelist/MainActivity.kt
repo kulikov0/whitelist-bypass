@@ -78,6 +78,8 @@ class MainActivity : AppCompatActivity() {
     private val hookTelemost by lazy { assets.open("dc-joiner-telemost.js").bufferedReader().readText() }
     private val hookPionVk by lazy { assets.open("video-vk.js").bufferedReader().readText() }
     private val hookPionTelemost by lazy { assets.open("video-telemost.js").bufferedReader().readText() }
+    private val autoclickTelemost by lazy { assets.open("autoclick-telemost.js").bufferedReader().readText() }
+    private val autoclickVk by lazy { assets.open("autoclick-vk.js").bufferedReader().readText() }
 
     @SuppressLint("SetJavaScriptEnabled")
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -528,6 +530,13 @@ if(oac){var nac=function(){var c=new oac();c.suspend();
                     }
                     appendLog("Page loaded, injecting hook for ${maskUrl(url)}")
                     view.evaluateJavascript(hookForUrl(url), null)
+                    if (url.contains("telemost.yandex")) {
+                        appendLog("Injecting autoclick for ${maskUrl(url)}")
+                        view.evaluateJavascript(autoclickTelemost, null)
+                    } else {
+                        appendLog("Injecting autoclick for ${maskUrl(url)}")
+                        view.evaluateJavascript(autoclickVk, null)
+                    }
                 }
             }
         }
