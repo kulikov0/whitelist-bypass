@@ -1,6 +1,7 @@
 package pion
 
 import (
+	"bytes"
 	"encoding/binary"
 	"fmt"
 	"io"
@@ -164,7 +165,10 @@ func (rb *RelayBridge) handleUDP(connID uint32, payload []byte) {
 		return
 	}
 	addrLen := int(payload[0])
-	if len(payload) < 1+addrLen {
+	if addrLen == 0 || len(payload) < 1+addrLen {
+		return
+	}
+	if bytes.IndexByte(payload[1:1+addrLen], 0) != -1 {
 		return
 	}
 	addr := string(payload[1 : 1+addrLen])
