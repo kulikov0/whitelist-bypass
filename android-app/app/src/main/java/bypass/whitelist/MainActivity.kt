@@ -104,6 +104,9 @@ class MainActivity : AppCompatActivity() {
         webViewMgr = WebViewManager(
             activity = this,
             webView = findViewById(R.id.webView),
+            toggleButton = findViewById(R.id.toggleWebViewButton),
+            toggleArrow = findViewById(R.id.toggleWebViewArrow),
+            toggleLabel = findViewById(R.id.toggleWebViewLabel),
             onLog = { logCtrl.append(it) },
             onStatus = ::onVpnStatus,
         )
@@ -187,6 +190,7 @@ class MainActivity : AppCompatActivity() {
     private fun resetState() {
         relay.stop()
         webViewMgr.loadBlank()
+        webViewMgr.collapse()
         logCtrl.reset()
         statusCtrl.setConnected(false)
         statusCtrl.setIdle()

@@ -11,6 +11,9 @@ body { font-family: -apple-system, sans-serif; background: #1a1a1a; color: #e0e0
 .tab.active { background: #1a1a1a; color: #e0e0e0; }
 .tab .close { font-size: 14px; opacity: 0.5; cursor: pointer; margin-left: 4px; }
 .tab .close:hover { opacity: 1; }
+.tab .edit { width: 12px; height: 12px; opacity: 0; cursor: pointer; filter: invert(1) brightness(2); margin-left: 2px; }
+.tab:hover .edit { opacity: 0.4; }
+.tab .edit:hover { opacity: 1; }
 .tab-add { padding: 0 12px; height: 100%; display: flex; align-items: center; font-size: 16px; cursor: pointer; color: #888; }
 .tab-add:hover { color: #e0e0e0; }
 .tab-settings { padding: 0 12px; height: 100%; display: flex; align-items: center; font-size: 14px; cursor: pointer; color: #888; }
@@ -179,7 +182,7 @@ function toggleBot() {
 
 function addTab() {
   var tabId = 'tab-' + (nextTabId++);
-  tabsState[tabId] = { wv: null, url: '', mode: 'dc', relayLogs: '', hookLogs: '' };
+  tabsState[tabId] = { wv: null, url: '', mode: 'dc', relayLogs: '', hookLogs: '', name: '' };
   window.bridge.startRelay(tabId);
   renderTabs();
   selectTab(tabId);
@@ -209,21 +212,49 @@ function selectTab(tabId) {
   renderContent();
 }
 
+function getTabLabel(t) {
+  if (t.name) return t.name;
+  if (t.url) {
+    if (t.url.includes('vk.com')) return 'VK';
+    if (t.url.includes('telemost')) return 'Telemost';
+  }
+  return 'New';
+}
+
 function renderTabs() {
   var bar = document.getElementById('tabBar');
   var html = '';
   Object.keys(tabsState).forEach(function(id) {
     var t = tabsState[id];
-    var label = 'New';
-    if (t.url) {
-      if (t.url.includes('vk.com')) label = 'VK';
-      else if (t.url.includes('telemost')) label = 'Telemost';
-    }
+    var label = getTabLabel(t);
     var cls = id === activeTabId ? 'tab active' : 'tab';
-    html += '<div class="' + cls + '" onclick="selectTab(\'' + id + '\')">' + label + ' <span class="close" onclick="closeTab(\'' + id + '\', event)">&#x2715;</span></div>';
+    html += '<div class="' + cls + '" onclick="selectTab(\'' + id + '\')"><span class="tab-label">' + label + '</span><img class="edit" src="resources/icons8-pencil-50.png" onclick="renameTab(\'' + id + '\', event)"> <span class="close" onclick="closeTab(\'' + id + '\', event)">&#x2715;</span></div>';
   });
   html += '<div class="tab-add" onclick="addTab()" title="New tab">+</div>';
   bar.innerHTML = html;
+}
+
+function renameTab(tabId, e) {
+  e.stopPropagation();
+  var tab = e.target.closest('.tab');
+  var span = tab.querySelector('.tab-label');
+  var inp = document.createElement('input');
+  inp.type = 'text';
+  inp.value = tabsState[tabId].name || '';
+  inp.placeholder = getTabLabel(tabsState[tabId]);
+  inp.style.cssText = 'width:80px;padding:0 4px;border:1px solid #555;border-radius:4px;font-size:12px;background:#111;color:#e0e0e0;outline:none';
+  span.replaceWith(inp);
+  inp.focus();
+  inp.select();
+  var done = function() {
+    tabsState[tabId].name = inp.value.trim();
+    renderTabs();
+  };
+  inp.addEventListener('blur', done);
+  inp.addEventListener('keydown', function(ev) {
+    if (ev.key === 'Enter') inp.blur();
+    if (ev.key === 'Escape') { inp.value = ''; inp.blur(); }
+  });
 }
 
 function renderContent() {
@@ -370,7 +401,8 @@ window.bridge.onCreateBotTab(function(data) {
   var platform = data.platform || 'vk';
   
   if (!tabsState[tabId]) {
-    tabsState[tabId] = { wv: null, url: '', mode: mode, relayLogs: '', hookLogs: '', isBot: true, peerId: peerId, platform: platform };
+    var botName = platform === 'telemost' ? 'Bot-Telemost' : 'Bot-VK';
+    tabsState[tabId] = { wv: null, url: '', mode: mode, relayLogs: '', hookLogs: '', name: botName, isBot: true, peerId: peerId, platform: platform };
   }
   
   selectTab(tabId);

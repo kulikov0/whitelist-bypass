@@ -32,7 +32,7 @@ class SettingsMenuController(
     var onShowLogsChanged: ParamCallback<Boolean> = {}
 
     private enum class MenuItem(val id: Int, val stringRes: Int) {
-        MODE(99, R.string.menu_mode),
+        MODE(99, R.string.menu_tunnel),
         SPLIT_TUNNELING(98, R.string.menu_split_tunneling),
         SPLIT_TUNNELING_APPS(97, R.string.menu_split_tunneling_manage),
         RECONNECT_ON_START(100, R.string.menu_reconnect_on_start),

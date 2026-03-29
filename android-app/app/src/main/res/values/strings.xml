@@ -9,7 +9,7 @@
     <string name="menu_show_logs">Show logs</string>
     <string name="menu_share_logs">Share logs</string>
     <string name="menu_reset">Reset</string>
-    <string name="menu_mode">Mode: %1$s</string>
+    <string name="menu_tunnel">Tunnel: %1$s</string>
     <string name="menu_split_tunneling">Split tunneling (%1$s)</string>
     <string name="menu_split_tunneling_manage">Manage split tunneling apps</string>
     <string name="split_tunneling_mode_prompt">Split tunneling mode</string>
@@ -19,6 +19,8 @@
     <string name="hint_call_link">Paste call link</string>
     <string name="cd_clear">Clear</string>
     <string name="cd_settings">Settings</string>
+    <string name="expand_webview">Expand WebView</string>
+    <string name="collapse_webview">Collapse WebView</string>
     <string name="vpn_starting">Starting…</string>
     <string name="vpn_connecting">Connecting…</string>
     <string name="vpn_call_connected">Call connected</string>

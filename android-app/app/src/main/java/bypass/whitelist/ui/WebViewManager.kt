@@ -3,8 +3,18 @@ package bypass.whitelist.ui
 import android.annotation.SuppressLint
 import android.graphics.Bitmap
 import android.util.Log
-import android.webkit.*
+import android.view.View
+import android.webkit.ConsoleMessage
+import android.webkit.PermissionRequest
+import android.webkit.WebChromeClient
+import android.webkit.WebResourceRequest
+import android.webkit.WebResourceResponse
+import android.webkit.WebView
+import android.webkit.WebViewClient
+import android.widget.ImageView
+import android.widget.TextView
 import androidx.appcompat.app.AppCompatActivity
+import bypass.whitelist.R
 import bypass.whitelist.tunnel.CallPlatform
 import bypass.whitelist.tunnel.TunnelMode
 import bypass.whitelist.tunnel.VpnStatus
@@ -16,10 +26,15 @@ private data class HookKey(val isPion: Boolean, val platform: CallPlatform)
 class WebViewManager(
     private val activity: AppCompatActivity,
     private val webView: WebView,
+    private val toggleButton: View,
+    private val toggleArrow: ImageView,
+    private val toggleLabel: TextView,
     private val onLog: ParamCallback<String>,
     private val onStatus: ParamCallback<VpnStatus>,
 ) {
     var tunnelMode: TunnelMode = TunnelMode.DC
+    private var expanded = false
+    private var callUrl = ""
 
     private val hooks = mapOf(
         HookKey(false, CallPlatform.VK) to lazy { loadAsset("dc-joiner-vk.js") },
@@ -38,8 +53,20 @@ class WebViewManager(
     private fun loadAsset(name: String): String =
         activity.assets.open(name).bufferedReader().readText()
 
+    private fun setExpanded(value: Boolean) {
+        expanded = value
+        webView.visibility = if (value) View.VISIBLE else View.GONE
+        toggleArrow.rotation = if (value) 180f else 0f
+        toggleLabel.setText(if (value) R.string.collapse_webview else R.string.expand_webview)
+    }
+
+    fun collapse() {
+        setExpanded(false)
+    }
+
     @SuppressLint("SetJavaScriptEnabled")
     fun setup(jsBridge: Any) {
+        toggleButton.setOnClickListener { setExpanded(!expanded) }
         webView.settings.apply {
             javaScriptEnabled = true
             domStorageEnabled = true
@@ -97,6 +124,7 @@ class WebViewManager(
 
             override fun onPageFinished(view: WebView, url: String) {
                 if (url.contains("about:blank")) return
+                if (!expanded && url != callUrl) activity.runOnUiThread { setExpanded(true) }
                 view.evaluateJavascript("!!window.__hookInstalled") { result ->
                     if (result == "true") {
                         Log.d("HOOK", "Hook already injected, skipping")
@@ -113,10 +141,12 @@ class WebViewManager(
     }
 
     fun loadUrl(url: String) {
+        callUrl = url
         webView.loadUrl(url)
     }
 
     fun loadBlank() {
+        callUrl = ""
         webView.loadUrl("about:blank")
     }
 

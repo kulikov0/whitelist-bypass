@@ -118,6 +118,8 @@ Prebuilt binaries are available on [GitHub Releases](../../releases).
 
 ## Setup
 
+Step-by-step setup guide (in Russian): [telegra.ph](https://telegra.ph/Rabota-s-whitelist-bypass-03-29)
+
 ### Creator side (free internet, desktop)
 
 Download and run the Electron app from [GitHub Releases](../../releases). It bundles the Go relay automatically.
