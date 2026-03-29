@@ -3,7 +3,7 @@
   if (window.__hookInstalled) return;
   window.__hookInstalled = true;
 
-  var PION_WS_URL = 'ws://127.0.0.1:' + (window.PION_PORT || 9001) + '/signaling';
+  var PION_WS_URL = 'ws://127.0.0.1:' + (window.PION_PORT || 2903) + '/signaling';
   var log = function() {
     var args = ['[HOOK]'].concat(Array.prototype.slice.call(arguments));
     console.log.apply(console, args);

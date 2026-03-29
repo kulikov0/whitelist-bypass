@@ -3,7 +3,7 @@ package bypass.whitelist
 object Ports {
     const val SOCKS = 1080L
     const val DC_WS = 9000L
-    const val PION_SIGNALING = 9001L
+    const val PION_SIGNALING = 2903L
 }
 
 object PrefsKeys {
