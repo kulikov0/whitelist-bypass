@@ -116,10 +116,15 @@ func (w *wsWriter) close() {
 
 var activeJoiner struct {
 	sync.Mutex
-	j      *joinerRelay
-	ws     *http.Server
-	socksLn net.Listener
+	j         *joinerRelay
+	ws        *http.Server
+	socksLn   net.Listener
+	wsPort    int
+	socksPort int
 }
+
+func ActiveWsPort() int    { return activeJoiner.wsPort }
+func ActiveSocksPort() int { return activeJoiner.socksPort }
 
 func StopJoiner() {
 	activeJoiner.Lock()
@@ -139,6 +144,17 @@ func StopJoiner() {
 	logMsg("dc-joiner: stopped")
 }
 
+func listenWithRetry(port int, maxAttempts int) (net.Listener, int, error) {
+	for i := 0; i < maxAttempts; i++ {
+		addr := fmt.Sprintf("127.0.0.1:%d", port+i)
+		ln, err := net.Listen("tcp", addr)
+		if err == nil {
+			return ln, port + i, nil
+		}
+	}
+	return nil, 0, fmt.Errorf("no free port found starting from %d", port)
+}
+
 func StartJoiner(wsPort, socksPort int, cb LogCallback) error {
 	StopJoiner()
 	logCb = cb
@@ -149,30 +165,34 @@ func StartJoiner(wsPort, socksPort int, cb LogCallback) error {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/ws", j.handleWS)
 
-	wsAddr := fmt.Sprintf("127.0.0.1:%d", wsPort)
-	wsSrv := &http.Server{Addr: wsAddr, Handler: mux}
+	wsLn, actualWsPort, err := listenWithRetry(wsPort, 10)
+	if err != nil {
+		return fmt.Errorf("dc-joiner: %w", err)
+	}
+	wsSrv := &http.Server{Handler: mux}
 	go func() {
-		logMsg("dc-joiner: WebSocket on %s", wsAddr)
-		if err := wsSrv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+		logMsg("dc-joiner: WebSocket on 127.0.0.1:%d", actualWsPort)
+		if err := wsSrv.Serve(wsLn); err != nil && err != http.ErrServerClosed {
 			logMsg("dc-joiner: ws server error: %v", err)
 		}
 	}()
 
-	socksAddr := fmt.Sprintf("127.0.0.1:%d", socksPort)
-	ln, err := net.Listen("tcp", socksAddr)
+	socksLn, actualSocksPort, err := listenWithRetry(socksPort, 10)
 	if err != nil {
 		wsSrv.Close()
-		return err
+		return fmt.Errorf("dc-joiner: %w", err)
 	}
-	logMsg("dc-joiner: SOCKS5 on %s", socksAddr)
+	logMsg("dc-joiner: SOCKS5 on 127.0.0.1:%d", actualSocksPort)
 
 	activeJoiner.Lock()
 	activeJoiner.j = j
 	activeJoiner.ws = wsSrv
-	activeJoiner.socksLn = ln
+	activeJoiner.socksLn = socksLn
+	activeJoiner.wsPort = actualWsPort
+	activeJoiner.socksPort = actualSocksPort
 	activeJoiner.Unlock()
 
-	return j.listenSOCKS(ln)
+	return j.listenSOCKS(socksLn)
 }
 
 func StartCreator(wsPort int, cb LogCallback) error {
@@ -183,9 +203,12 @@ func StartCreator(wsPort int, cb LogCallback) error {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/ws", c.handleWS)
 
-	addr := fmt.Sprintf("127.0.0.1:%d", wsPort)
-	logMsg("dc-creator: WebSocket on %s", addr)
-	return http.ListenAndServe(addr, mux)
+	ln, actualPort, err := listenWithRetry(wsPort, 10)
+	if err != nil {
+		return fmt.Errorf("dc-creator: %w", err)
+	}
+	logMsg("dc-creator: WebSocket on 127.0.0.1:%d", actualPort)
+	return http.Serve(ln, mux)
 }
 
 type joinerRelay struct {

@@ -3,7 +3,7 @@
   if (window.__hookInstalled) return;
   window.__hookInstalled = true;
 
-  const WS_URL = 'ws://127.0.0.1:9000/ws';
+  const WS_URL = 'ws://127.0.0.1:' + (window.WS_PORT || 9000) + '/ws';
   const log = (...args) => console.log('[HOOK]', ...args);
   const peers = [];
   let activeWS = null;

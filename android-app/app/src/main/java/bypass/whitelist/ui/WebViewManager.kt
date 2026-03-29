@@ -132,6 +132,7 @@ class WebViewManager(
                     }
                     val platform = CallPlatform.fromUrl(url)
                     onLog("Page loaded, injecting hook for ${maskUrl(url)}")
+                    view.evaluateJavascript("window.WS_PORT=${mobile.Mobile.activeWsPort()}", null)
                     view.evaluateJavascript(hookForPlatform(platform), null)
                     onLog("Injecting autoclick for ${maskUrl(url)}")
                     view.evaluateJavascript(autoclickers[platform]!!.value, null)
