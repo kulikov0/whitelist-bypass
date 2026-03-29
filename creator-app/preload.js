@@ -5,5 +5,9 @@ contextBridge.exposeInMainWorld('bridge', {
   getHookCode: function(tabId, url) { return ipcRenderer.invoke('get-hook-code', tabId, url); },
   setTunnelMode: function(tabId, mode) { return ipcRenderer.invoke('set-tunnel-mode', tabId, mode); },
   startRelay: function(tabId) { return ipcRenderer.invoke('start-relay', tabId); },
-  closeTab: function(tabId) { return ipcRenderer.invoke('close-tab', tabId); }
+  closeTab: function(tabId) { return ipcRenderer.invoke('close-tab', tabId); },
+  startBot: function(settings) { return ipcRenderer.invoke('start-bot', settings); },
+  stopBot: function() { return ipcRenderer.invoke('stop-bot'); },
+  onCreateBotTab: function(cb) { ipcRenderer.on('create-bot-tab', function(e, data) { cb(data); }); },
+  getCallCreatorCode: function(scriptFile) { return ipcRenderer.invoke('get-call-creator-code', scriptFile); }
 });

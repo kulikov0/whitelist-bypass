@@ -4,6 +4,7 @@ const path = require('path');
 const fs = require('fs');
 const TelemostAutoclick = require('./telemost-autoclick');
 const VkAutoclick = require('./vk-autoclick');
+const BotManager = require('./bot-manager');
 
 var hooksDir = app.isPackaged
   ? path.join(process.resourcesPath, 'hooks')
@@ -16,6 +17,8 @@ var relayPath = app.isPackaged
 var tabs = new Map(); // tabId -> { relay, tunnelMode, platform, dcPort, pionPort }
 var nextPortBase = 10000;
 var mainWindow = null;
+var botManager = null;
+var botTabs = new Set();
 
 function allocPorts() {
   var dc = nextPortBase;
@@ -156,6 +159,39 @@ function createWindow() {
         var ac = autoclickers.get(wvContents.id);
         if (ac) ac.vk.kickDisconnected();
       }
+      if (msg.indexOf('[BOT] VKCalls: call link:') !== -1) {
+        var link = msg.split('[BOT] VKCalls: call link:')[1].trim();
+        console.log('[MAIN] VK call link captured:', link);
+
+        var foundPeerId = null;
+        tabs.forEach(function(t, id) {
+          if (botTabs.has(id) && t.platform === 'vk') {
+            foundPeerId = t.peerId;
+          }
+        });
+
+        if (foundPeerId && botManager) {
+          console.log('[MAIN] Sending VK link to peer:', foundPeerId);
+          botManager.sendMessage(foundPeerId, 'Call created!\n ' + link);
+        }
+      }
+
+      if (msg.indexOf('[BOT] Telemost: call link:') !== -1) {
+        var link = msg.split('[BOT] Telemost: call link:')[1].trim();
+        console.log('[MAIN] Telemost call link captured:', link);
+
+        var foundPeerId = null;
+        tabs.forEach(function(t, id) {
+          if (botTabs.has(id) && t.platform === 'telemost') {
+            foundPeerId = t.peerId;
+          }
+        });
+
+        if (foundPeerId && botManager) {
+          console.log('[MAIN] Sending Telemost link to peer:', foundPeerId);
+          botManager.sendMessage(foundPeerId, 'Call created!\n ' + link);
+        }
+      }
     });
     wvContents.on('destroyed', function() {
       var ac = autoclickers.get(wvContents.id);
@@ -169,12 +205,17 @@ ipcMain.handle('get-hook-code', function(e, tabId, url) {
   return loadHook(url, tab);
 });
 
+ipcMain.handle('get-call-creator-code', function(e, scriptFile) {
+  var filePath = path.join(__dirname, scriptFile || 'vk-call-creator.js');
+  return fs.readFileSync(filePath, 'utf8');
+});
+
 ipcMain.handle('set-tunnel-mode', function(e, tabId, mode) {
   var tab = tabs.get(tabId);
   if (!tab) return;
   if (['dc', 'pion-video'].indexOf(mode) === -1) return;
   tab.tunnelMode = mode;
-  killRelay(tab);
+  if (tab.relay) killRelay(tab);
   setTimeout(function() { startRelay(tab); }, 500);
 });
 
@@ -189,6 +230,35 @@ ipcMain.handle('close-tab', function(e, tabId) {
     killRelay(tab);
     tabs.delete(tabId);
   }
+  botTabs.delete(tabId);
+});
+
+// Bot IPC
+ipcMain.handle('start-bot', function(e, settings) {
+  if (botManager) {
+    botManager.stop();
+  }
+  botManager = new BotManager(settings, function(tabConfig) {
+    if (!mainWindow || mainWindow.isDestroyed()) return;
+
+    var tabId = 'bot-tab-' + Date.now();
+    var ports = allocPorts();
+    tabs.set(tabId, { relay: null, tunnelMode: tabConfig.mode, platform: tabConfig.platform || 'vk', dcPort: ports.dc, pionPort: ports.pion, peerId: tabConfig.peerId });
+    botTabs.add(tabId);
+
+    mainWindow.webContents.send('create-bot-tab', { tabId: tabId, mode: tabConfig.mode, peerId: tabConfig.peerId, platform: tabConfig.platform || 'vk' });
+    console.log('[BOT] Created tab:', tabId, 'mode:', tabConfig.mode, 'platform:', tabConfig.platform, 'peerId:', tabConfig.peerId);
+  });
+  botManager.start();
+  return { success: true };
+});
+
+ipcMain.handle('stop-bot', function() {
+  if (botManager) {
+    botManager.stop();
+    botManager = null;
+  }
+  return { success: true };
 });
 
 app.whenReady().then(createWindow);
