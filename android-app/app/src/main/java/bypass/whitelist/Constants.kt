@@ -11,6 +11,8 @@ object PrefsKeys {
     const val URL = "url"
     const val TUNNEL_MODE = "tunnel_mode"
     const val SHOW_LOGS = "show_logs"
+    const val SPLIT_TUNNELING_MODE = "split_tunneling_mode"
+    const val SPLIT_TUNNELING_PACKAGES = "split_tunneling_packages"
 }
 
 object Vpn {
