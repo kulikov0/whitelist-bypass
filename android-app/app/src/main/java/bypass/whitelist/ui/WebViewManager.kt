@@ -33,6 +33,8 @@ class WebViewManager(
         CallPlatform.TELEMOST to lazy { loadAsset("autoclick-telemost.js") },
     )
 
+    private val muteAudioContext by lazy { loadAsset("mute-audio-context.js") }
+
     private fun loadAsset(name: String): String =
         activity.assets.open(name).bufferedReader().readText()
 
@@ -90,14 +92,7 @@ class WebViewManager(
 
             override fun onPageStarted(view: WebView, url: String, favicon: Bitmap?) {
                 if (url.contains("about:blank")) return
-                view.evaluateJavascript("""(function(){
-var oac=window.AudioContext||window.webkitAudioContext;
-if(oac){var nac=function(){var c=new oac();c.suspend();
-  c.resume=function(){return Promise.resolve()};
-  return c};
-  nac.prototype=oac.prototype;window.AudioContext=nac;
-  if(window.webkitAudioContext)window.webkitAudioContext=nac}
-})()""", null)
+                view.evaluateJavascript(muteAudioContext, null)
             }
 
             override fun onPageFinished(view: WebView, url: String) {
