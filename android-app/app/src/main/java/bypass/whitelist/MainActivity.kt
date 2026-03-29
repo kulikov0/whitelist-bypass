@@ -2,16 +2,28 @@ package bypass.whitelist
 
 import android.annotation.SuppressLint
 import android.content.Intent
+import android.content.pm.ApplicationInfo
 import android.content.pm.PackageManager
+import android.content.res.Configuration
+import android.graphics.Bitmap
+import android.graphics.Color
+import android.graphics.drawable.Drawable
+import android.net.ConnectivityManager
 import android.net.VpnService
 import android.os.Build
 import android.os.Bundle
 import android.util.Log
 import android.view.View
+import android.view.ViewGroup
 import android.webkit.*
+import android.widget.BaseAdapter
 import android.widget.Button
+import android.widget.CheckBox
 import android.widget.EditText
 import android.widget.ImageButton
+import android.widget.ImageView
+import android.widget.LinearLayout
+import android.widget.ListView
 import android.widget.PopupMenu
 import android.widget.TextView
 import androidx.activity.enableEdgeToEdge
@@ -23,6 +35,7 @@ import androidx.core.view.WindowInsetsCompat
 import java.net.Inet4Address
 import java.net.InetAddress
 import android.widget.Toast
+import androidx.appcompat.app.AlertDialog
 
 class MainActivity : AppCompatActivity() {
 
@@ -231,7 +244,7 @@ class MainActivity : AppCompatActivity() {
         val modes = TunnelMode.entries
         val labels = modes.map { it.label }.toTypedArray()
         val current = modes.indexOf(tunnelMode)
-        android.app.AlertDialog.Builder(this)
+        AlertDialog.Builder(this)
             .setSingleChoiceItems(labels, current) { dialog, which ->
                 dialog.dismiss()
                 val mode = modes[which]
@@ -246,11 +259,11 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun showSplitTunnelingDialog() {
-        val modes = SplitTunnelingMode.values()
+        val modes = SplitTunnelingMode.entries.toTypedArray()
         val labels = modes.map { it.label }.toTypedArray()
         val selectedIndex = modes.indexOf(splitTunnelingMode)
 
-        android.app.AlertDialog.Builder(this)
+        AlertDialog.Builder(this)
             .setTitle(R.string.split_tunneling_mode_prompt)
             .setSingleChoiceItems(labels, selectedIndex) { dialog, which ->
                 splitTunnelingMode = modes[which]
@@ -264,7 +277,7 @@ class MainActivity : AppCompatActivity() {
             .show()
     }
 
-    private data class STAppItem(val packageName: String, val label: String, val icon: android.graphics.drawable.Drawable, var isSelected: Boolean = false, val isSystemApp: Boolean = false)
+    private data class STAppItem(val packageName: String, val label: String, val icon: Drawable, var isSelected: Boolean = false, val isSystemApp: Boolean = false)
 
     private fun showSplitTunnelingAppSelection() {
         var includeSystemApps = false
@@ -276,7 +289,7 @@ class MainActivity : AppCompatActivity() {
             val packageName = appInfo.packageName
             if (packageName.isBlank()) return@mapNotNull null
             val label = appInfo.loadLabel(packageManager).toString().takeIf { it.isNotBlank() } ?: packageName
-            STAppItem(packageName, label, packageManager.getApplicationIcon(packageName), splitTunnelingPackages.contains(packageName), (appInfo.flags and android.content.pm.ApplicationInfo.FLAG_SYSTEM) == 0)
+            STAppItem(packageName, label, packageManager.getApplicationIcon(packageName), splitTunnelingPackages.contains(packageName), (appInfo.flags and ApplicationInfo.FLAG_SYSTEM) == 0)
         }.distinctBy { it.packageName }.sortedWith(compareByDescending<STAppItem> { it.isSelected }.thenBy { it.label.lowercase() })
         
         fun buildAppList(): List<STAppItem> {
@@ -286,27 +299,27 @@ class MainActivity : AppCompatActivity() {
         var items = buildAppList()
         if (items.isEmpty()) return
 
-        val listView = android.widget.ListView(this).apply {
-            choiceMode = android.widget.ListView.CHOICE_MODE_MULTIPLE
+        val listView = ListView(this).apply {
+            choiceMode = ListView.CHOICE_MODE_MULTIPLE
         }
 
-        val adapter = object : android.widget.BaseAdapter() {
+        val adapter = object : BaseAdapter() {
             override fun getCount() = items.size
             override fun getItem(position: Int) = items[position]
             override fun getItemId(position: Int) = position.toLong()
 
-            override fun getView(position: Int, convertView: android.view.View?, parent: android.view.ViewGroup): android.view.View {
+            override fun getView(position: Int, convertView: View?, parent: ViewGroup): View {
                 val item = getItem(position)
                 val view = convertView ?: layoutInflater.inflate(R.layout.split_tunneling_app_list_item, parent, false)
-                val iconView = view.findViewById<android.widget.ImageView>(R.id.appIcon)
-                val labelView = view.findViewById<android.widget.TextView>(R.id.appLabel)
-                val packageView = view.findViewById<android.widget.TextView>(R.id.appPackage)
-                val checkbox = view.findViewById<android.widget.CheckBox>(R.id.appCheckbox)
+                val iconView = view.findViewById<ImageView>(R.id.appIcon)
+                val labelView = view.findViewById<TextView>(R.id.appLabel)
+                val packageView = view.findViewById<TextView>(R.id.appPackage)
+                val checkbox = view.findViewById<CheckBox>(R.id.appCheckbox)
 
                 iconView.setImageDrawable(item.icon)
                 labelView.text = item.label
-                val isDarkThemeEnabled = (resources.configuration.uiMode and android.content.res.Configuration.UI_MODE_NIGHT_MASK) == android.content.res.Configuration.UI_MODE_NIGHT_YES
-                labelView.setTextColor(if (isDarkThemeEnabled) android.graphics.Color.WHITE else android.graphics.Color.BLACK)
+                val isDarkThemeEnabled = (resources.configuration.uiMode and Configuration.UI_MODE_NIGHT_MASK) == Configuration.UI_MODE_NIGHT_YES
+                labelView.setTextColor(if (isDarkThemeEnabled) Color.WHITE else Color.BLACK)
                 packageView.text = item.packageName
 
                 view.setOnClickListener {
@@ -328,7 +341,7 @@ class MainActivity : AppCompatActivity() {
 
         listView.adapter = adapter
 
-        val systemAppsCheckbox = android.widget.CheckBox(this).apply {
+        val systemAppsCheckbox = CheckBox(this).apply {
             text = getString(R.string.split_tunneling_show_system_apps)
             isChecked = includeSystemApps
             setOnCheckedChangeListener { _, checked ->
@@ -338,14 +351,14 @@ class MainActivity : AppCompatActivity() {
             }
         }
 
-        val dialogLayout = android.widget.LinearLayout(this).apply {
-            orientation = android.widget.LinearLayout.VERTICAL
+        val dialogLayout = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
             setPadding(24, 24, 24, 24)
             addView(systemAppsCheckbox)
             addView(listView)
         }
 
-        android.app.AlertDialog.Builder(this)
+        AlertDialog.Builder(this)
             .setTitle(R.string.split_tunneling_apps_prompt)
             .setView(dialogLayout)
             .setPositiveButton(android.R.string.ok) { _, _ ->
@@ -494,7 +507,7 @@ class MainActivity : AppCompatActivity() {
                 } catch (_: Exception) { null }
             }
 
-            override fun onPageStarted(view: WebView, url: String, favicon: android.graphics.Bitmap?) {
+            override fun onPageStarted(view: WebView, url: String, favicon: Bitmap?) {
                 if(url.contains("about:blank")) return
                 view.evaluateJavascript("""(function(){
 var oac=window.AudioContext||window.webkitAudioContext;
@@ -537,7 +550,7 @@ if(oac){var nac=function(){var c=new oac();c.suspend();
 
     private fun getLocalIPAddress(): String {
         try {
-            val cm = getSystemService(CONNECTIVITY_SERVICE) as android.net.ConnectivityManager
+            val cm = getSystemService(CONNECTIVITY_SERVICE) as ConnectivityManager
             val network = cm.activeNetwork ?: return ""
             val props = cm.getLinkProperties(network) ?: return ""
             for (addr in props.linkAddresses) {
