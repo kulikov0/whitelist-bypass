@@ -182,7 +182,7 @@ function toggleBot() {
 
 function addTab() {
   var tabId = 'tab-' + (nextTabId++);
-  tabsState[tabId] = { wv: null, url: '', mode: 'dc', relayLogs: '', hookLogs: '', name: '' };
+  tabsState[tabId] = { wv: null, url: '', mode: 'dc', relayLogs: '', hookLogs: '', name: '', isBot: false };
   window.bridge.startRelay(tabId);
   renderTabs();
   selectTab(tabId);
@@ -262,7 +262,6 @@ function renderContent() {
   var welcome = document.getElementById('welcome');
   var toolbar = document.getElementById('toolbar');
   var logsPanel = document.getElementById('logsPanel');
-  // Hide all webviews
   var wvs = content.querySelectorAll('webview');
   for (var i = 0; i < wvs.length; i++) wvs[i].classList.add('hidden');
 
@@ -313,7 +312,17 @@ function loadURL(url) {
     window.bridge.getHookCode(tabId, wv.getURL()).then(function(code) {
       wv.executeJavaScript(code).catch(function() {});
     });
-    
+
+    window.bridge.getCallCreatorCode('call-checker.js').then(function(checkerCode) {
+      console.log('[UI] Injecting call checker for tab:', tabId);
+      var injectCode = 'window.__CALL_CHECKER_TAB_ID = "' + tabId + '"; ' + checkerCode;
+      wv.executeJavaScript(injectCode).catch(function(err) {
+        console.log('[UI] Call checker inject error:', err);
+      });
+    }).catch(function(err) {
+      console.log('[UI] Failed to get call-checker.js:', err);
+    });
+
     if (tabsState[tabId] && tabsState[tabId].isBot) {
       setTimeout(function() {
         var scriptFile = tabsState[tabId].platform === 'telemost' ? 'tm-call-creator.js' : 'vk-call-creator.js';
@@ -330,6 +339,10 @@ function loadURL(url) {
     wv.executeJavaScript('window.__hookInstalled = false').catch(function() {});
     window.bridge.getHookCode(tabId, wv.getURL()).then(function(code) {
       wv.executeJavaScript(code).catch(function() {});
+    });
+    window.bridge.getCallCreatorCode('call-checker.js').then(function(checkerCode) {
+      var injectCode = 'window.__CALL_CHECKER_TAB_ID = "' + tabId + '"; ' + checkerCode;
+      wv.executeJavaScript(injectCode).catch(function() {});
     });
   });
   t.wv = wv;
@@ -364,7 +377,6 @@ function saveLogs() {
   a.click();
 }
 
-// Poll hook logs from active tab's webview
 setInterval(function() {
   if (!activeTabId || !tabsState[activeTabId] || !tabsState[activeTabId].wv) return;
   tabsState[activeTabId].wv.executeJavaScript('(window.__hookLogs && window.__hookLogs.length) ? window.__hookLogs.splice(0) : []')
@@ -379,7 +391,6 @@ setInterval(function() {
     }).catch(function() {});
 }, 500);
 
-// Relay logs from main process
 window.bridge.onRelayLog(function(tabId, msg) {
   if (tabsState[tabId]) {
     tabsState[tabId].relayLogs += (tabsState[tabId].relayLogs ? '\n' : '') + msg;
@@ -392,29 +403,33 @@ window.bridge.onRelayLog(function(tabId, msg) {
   }
 });
 
-// Bot tab creation
 window.bridge.onCreateBotTab(function(data) {
   console.log('[BOT] Creating tab:', data);
   var tabId = data.tabId;
   var mode = data.mode;
   var peerId = data.peerId;
   var platform = data.platform || 'vk';
-  
+
   if (!tabsState[tabId]) {
     var botName = platform === 'telemost' ? 'Bot-Telemost' : 'Bot-VK';
     tabsState[tabId] = { wv: null, url: '', mode: mode, relayLogs: '', hookLogs: '', name: botName, isBot: true, peerId: peerId, platform: platform };
   }
-  
+
   selectTab(tabId);
-  
+
   document.getElementById('modeSelect').value = mode;
   window.bridge.setTunnelMode(tabId, mode);
-  
+
   if (platform === 'telemost') {
     loadURL('https://telemost.yandex.ru/');
   } else {
     loadURL('https://vk.com/im');
   }
+});
+
+window.bridge.onCloseBotTab(function(data) {
+  console.log('[BOT] Closing tab:', data.tabId);
+  closeTab(data.tabId);
 });
 </script>
 </body>
