@@ -36,6 +36,8 @@
             window.fetch = async (...args) => {
               const res = await origFetch(...args);
 
+              if (window.__CALL_LINK_CAPTURED__) return res;
+
               try {
                 const clone = res.clone();
                 const text = await clone.text();
@@ -52,6 +54,9 @@
 
                         console.log("[BOT] VKCalls: call link:", link);
                         window.__CALL_LINK__ = link;
+
+                        window.__CALL_LINK_CAPTURED__ = true;
+                        break;
                       }
                     }
                   }
