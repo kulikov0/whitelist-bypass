@@ -60,6 +60,8 @@ func (c *VKClient) handleMessage(raw []byte) {
 	case "add-ice-candidate", "remote-ice-candidate":
 		c.handleICECandidate(msg.Data)
 	case "add-track", "create-data-channel":
+	case "reset":
+		c.handleReset(msg.ID)
 	case "close":
 		c.cleanup()
 	}
@@ -306,6 +308,32 @@ func (c *VKClient) readTrack(track *webrtc.TrackRemote) {
 				}
 			}
 		}
+	}
+}
+
+func (c *VKClient) handleReset(id int) {
+	c.logFn("vk: reset - closing PC for reconnection")
+	if c.tunnel != nil {
+		c.tunnel.Stop()
+		c.tunnel = nil
+	}
+	if c.pc != nil {
+		// Remove callbacks before Close() to prevent stale state events
+		c.pc.OnConnectionStateChange(nil)
+		c.pc.OnICECandidate(nil)
+		c.pc.OnTrack(nil)
+		oldPC := c.pc
+		c.pc = nil
+		// Close asynchronously - pc.Close() blocks on DTLS shutdown
+		go oldPC.Close()
+	}
+	c.remoteSet = false
+	c.pending = nil
+	c.dcProducerNotif = nil
+	c.dcProducerCmd = nil
+	c.sampleTrack = nil
+	if id > 0 {
+		c.SendResponse(id, "ok")
 	}
 }
 

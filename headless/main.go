@@ -215,6 +215,8 @@ type Bridge struct {
 	pendingOffer      json.RawMessage
 	remotePeerId      *int64
 	pendingCandidates []json.RawMessage
+	iceServers        []map[string]interface{}
+	connected         bool
 }
 
 func (b *Bridge) vkSend(command string, extra map[string]interface{}) {
@@ -278,16 +280,33 @@ func (b *Bridge) pionRequest(msgType string, data interface{}) (json.RawMessage,
 	}
 }
 
-func (b *Bridge) onRegisteredPeer(participantId int64) {
+func (b *Bridge) resetPion() {
+	log.Println("[bridge] Resetting Pion PC for reconnection...")
+	b.pionRequest("reset", map[string]interface{}{})
+
+	// Re-send ICE servers so Pion creates a fresh PC
+	b.pionSend("ice-servers", b.iceServers)
+
+	// Create new offer
+	offerRaw, err := b.pionRequest("create-offer", map[string]interface{}{})
+	if err != nil {
+		log.Printf("[bridge] Reset create-offer failed: %v", err)
+		return
+	}
 	b.mu.Lock()
-	b.remotePeerId = &participantId
+	b.pendingOffer = offerRaw
+	b.pendingCandidates = nil
+	b.mu.Unlock()
+	log.Printf("[bridge] New offer ready after reset, length: %d", len(offerRaw))
+}
+
+func (b *Bridge) sendOfferToPeer(participantId int64) {
+	b.mu.Lock()
 	offer := b.pendingOffer
 	candidates := b.pendingCandidates
 	b.pendingOffer = nil
 	b.pendingCandidates = nil
 	b.mu.Unlock()
-
-	log.Printf("[bridge] Remote peer registered: %d", participantId)
 
 	if offer != nil {
 		log.Printf("[bridge] Sending offer to peer %d", participantId)
@@ -320,6 +339,31 @@ func (b *Bridge) onRegisteredPeer(participantId int64) {
 	if len(candidates) > 0 {
 		log.Printf("[bridge] Flushed %d ICE candidates", len(candidates))
 	}
+}
+
+func (b *Bridge) onRegisteredPeer(participantId int64) {
+	b.mu.Lock()
+	oldPeer := b.remotePeerId
+	isConnected := b.connected
+	b.remotePeerId = &participantId
+	b.mu.Unlock()
+
+	log.Printf("[bridge] Remote peer registered: %d (connected=%v)", participantId, isConnected)
+
+	// Reset Pion if connection is dead or peer changed
+	needsReset := false
+	if oldPeer != nil && *oldPeer != participantId {
+		log.Printf("[bridge] New peer %d replacing old peer %d", participantId, *oldPeer)
+		needsReset = true
+	} else if oldPeer != nil && !isConnected {
+		log.Printf("[bridge] Same peer %d re-registered, connection dead, resetting", participantId)
+		needsReset = true
+	}
+	if needsReset {
+		b.resetPion()
+	}
+
+	b.sendOfferToPeer(participantId)
 }
 
 func (b *Bridge) handleVKMessage(raw []byte) {
@@ -442,8 +486,26 @@ func (b *Bridge) handlePionMessage(raw []byte) {
 		var state string
 		json.Unmarshal(msg.Data, &state)
 		log.Printf("[pion] <- connection-state: %s", state)
-		if state == "connected" {
+		b.mu.Lock()
+		switch state {
+		case "connected":
+			b.connected = true
+			b.mu.Unlock()
 			log.Println("\n  TUNNEL CONNECTED\n")
+		case "disconnected":
+			b.connected = false
+			b.mu.Unlock()
+			log.Println("[bridge] Connection disconnected, waiting for peer to rejoin")
+		case "failed":
+			b.connected = false
+			b.mu.Unlock()
+			log.Println("[bridge] Connection failed, waiting for peer to rejoin")
+		case "closed":
+			b.connected = false
+			b.mu.Unlock()
+			log.Println("[bridge] Connection closed")
+		default:
+			b.mu.Unlock()
 		}
 
 	case "remote-track":
@@ -486,6 +548,7 @@ func (b *Bridge) run(callInfo *CallInfo, cfg VKConfig, pionAddr string) {
 			"urls": urls, "username": callInfo.TurnServer.Username, "credential": callInfo.TurnServer.Credential,
 		})
 	}
+	b.iceServers = iceServers
 	b.pionSend("ice-servers", iceServers)
 
 	// Start reading Pion messages before making requests
