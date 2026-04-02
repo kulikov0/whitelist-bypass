@@ -3,6 +3,7 @@ package main
 import (
 	"encoding/binary"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/pion/webrtc/v4"
@@ -65,12 +66,12 @@ func (t *VP8DataTunnel) buildFrame(data []byte) []byte {
 }
 
 // SendData queues tunnel data to be sent in the next VP8 frame
-var sendCount uint64
+var sendCount atomic.Uint64
 
 func (t *VP8DataTunnel) SendData(data []byte) {
-	sendCount++
-	if sendCount <= 5 || sendCount%100 == 0 {
-		t.logFn("vp8tunnel: SendData #%d len=%d queueLen=%d", sendCount, len(data), len(t.sendQueue))
+	n := sendCount.Add(1)
+	if n <= 5 || n%100 == 0 {
+		t.logFn("vp8tunnel: SendData #%d len=%d queueLen=%d", n, len(data), len(t.sendQueue))
 	}
 	t.sendQueue <- data
 }

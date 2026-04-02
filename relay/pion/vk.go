@@ -8,6 +8,7 @@ import (
 	"github.com/pion/rtp"
 	"github.com/pion/rtp/codecs"
 	"github.com/pion/webrtc/v4"
+	"whitelist-bypass/relay/socks"
 )
 
 type VKClient struct {
@@ -313,7 +314,7 @@ func (c *VKClient) handleICECandidate(data json.RawMessage) {
 
 func (c *VKClient) readTrack(track *webrtc.TrackRemote) {
 	if track.Codec().MimeType != webrtc.MimeTypeVP8 {
-		buf := make([]byte, 4096)
+		buf := make([]byte, socks.UDPBufSize)
 		for {
 			if _, _, err := track.Read(buf); err != nil {
 				return
@@ -325,7 +326,7 @@ func (c *VKClient) readTrack(track *webrtc.TrackRemote) {
 	var frameBuf []byte
 	dataCount := 0
 	recvCount := 0
-	buf := make([]byte, 65536)
+	buf := make([]byte, socks.RTPBufSize)
 	for {
 		n, _, err := track.Read(buf)
 		if err != nil {

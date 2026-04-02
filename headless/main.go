@@ -377,6 +377,46 @@ func buildICEServers(callInfo *CallInfo) []webrtc.ICEServer {
 	return servers
 }
 
+func (b *Bridge) connectVKWs(wsURL string) error {
+	vkHeader := http.Header{}
+	vkHeader.Set("User-Agent", userAgent)
+	vkHeader.Set("Origin", "https://vk.com")
+	vkDialer := websocket.Dialer{WriteBufferSize: rtpBufSize}
+	vkWs, _, err := vkDialer.Dial(wsURL, vkHeader)
+	if err != nil {
+		return err
+	}
+	b.mu.Lock()
+	b.vkWs = vkWs
+	b.vkSeq = 0
+	b.mu.Unlock()
+	return nil
+}
+
+func (b *Bridge) initRelay() {
+	if b.relay != nil {
+		b.relay.Close()
+	}
+	b.topology = TopologyDirect
+	b.relay = b.newRelay()
+	b.p2p = NewP2PHandler(b)
+	b.p2p.Init()
+}
+
+func (b *Bridge) readLoop() error {
+	for {
+		_, msg, err := b.vkWs.ReadMessage()
+		if err != nil {
+			return err
+		}
+		if string(msg) == "ping" {
+			b.vkWs.WriteMessage(websocket.TextMessage, []byte("pong"))
+			continue
+		}
+		b.handleVKMessage(msg)
+	}
+}
+
 func (b *Bridge) run(callInfo *CallInfo, cfg VKConfig) {
 	fmt.Println("")
 	fmt.Println("  CALL CREATED")
@@ -389,40 +429,13 @@ func (b *Bridge) run(callInfo *CallInfo, cfg VKConfig) {
 
 	b.iceServers = buildICEServers(callInfo)
 
-	// Start in P2P mode - creates PC and offer
-	b.topology = TopologyDirect
-	b.relay = b.newRelay()
-	b.p2p = NewP2PHandler(b)
-	b.p2p.Init()
-
-	// Connect to VK signaling WebSocket
 	wsURL := callInfo.WSEndpoint +
 		"&platform=WEB" +
 		"&appVersion=" + cfg.AppVersion +
 		"&version=" + cfg.ProtocolVersion +
 		"&device=browser&capabilities=0&clientType=VK&tgt=join"
 
-	log.Println("[vk-ws] Connecting...")
-	vkHeader := http.Header{}
-	vkHeader.Set("User-Agent", userAgent)
-	vkHeader.Set("Origin", "https://vk.com")
-	vkDialer := websocket.Dialer{WriteBufferSize: 65536}
-	vkWs, _, err := vkDialer.Dial(wsURL, vkHeader)
-	if err != nil {
-		log.Fatalf("[vk-ws] Connect failed: %v", err)
-	}
-	b.vkWs = vkWs
-	log.Println("[vk-ws] Connected")
-
-	b.vkSend("change-media-settings", map[string]interface{}{
-		"mediaSettings": map[string]interface{}{
-			"isAudioEnabled": false, "isVideoEnabled": true,
-			"isScreenSharingEnabled": false, "isFastScreenSharingEnabled": false,
-			"isAudioSharingEnabled": false, "isAnimojiEnabled": false,
-		},
-	})
-
-	// VK keepalive
+	// Keepalive goroutine
 	go func() {
 		for {
 			time.Sleep(15 * time.Second)
@@ -435,18 +448,34 @@ func (b *Bridge) run(callInfo *CallInfo, cfg VKConfig) {
 		}
 	}()
 
-	// Read VK messages (blocks main goroutine)
 	for {
-		_, msg, err := vkWs.ReadMessage()
-		if err != nil {
-			log.Printf("[vk-ws] Closed: %v", err)
-			return
-		}
-		if string(msg) == "ping" {
-			vkWs.WriteMessage(websocket.TextMessage, []byte("pong"))
+		b.initRelay()
+
+		log.Println("[vk-ws] Connecting...")
+		if err := b.connectVKWs(wsURL); err != nil {
+			log.Printf("[vk-ws] Connect failed: %v, retrying in 5s...", err)
+			time.Sleep(5 * time.Second)
 			continue
 		}
-		b.handleVKMessage(msg)
+		log.Println("[vk-ws] Connected")
+
+		b.vkSend("change-media-settings", map[string]interface{}{
+			"mediaSettings": map[string]interface{}{
+				"isAudioEnabled": false, "isVideoEnabled": true,
+				"isScreenSharingEnabled": false, "isFastScreenSharingEnabled": false,
+				"isAudioSharingEnabled": false, "isAnimojiEnabled": false,
+			},
+		})
+
+		err := b.readLoop()
+		log.Printf("[vk-ws] Closed: %v", err)
+
+		b.mu.Lock()
+		b.vkWs = nil
+		b.mu.Unlock()
+
+		log.Println("[vk-ws] Reconnecting in 3s...")
+		time.Sleep(3 * time.Second)
 	}
 }
 

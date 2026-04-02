@@ -316,7 +316,7 @@ func (u *TunnelRelay) handleUDP(connID uint32, payload []byte) {
 	defer conn.Close()
 	conn.SetDeadline(time.Now().Add(5 * time.Second))
 	conn.Write(data)
-	resp := make([]byte, 4096)
+	resp := make([]byte, udpBufSize)
 	n, err := conn.Read(resp)
 	if err != nil {
 		return
@@ -334,7 +334,7 @@ func (u *TunnelRelay) closeAllConns() {
 
 func (u *TunnelRelay) readTrack(track *webrtc.TrackRemote) {
 	if track.Codec().MimeType != webrtc.MimeTypeVP8 {
-		buf := make([]byte, 4096)
+		buf := make([]byte, udpBufSize)
 		for {
 			if _, _, err := track.Read(buf); err != nil {
 				return
@@ -345,7 +345,7 @@ func (u *TunnelRelay) readTrack(track *webrtc.TrackRemote) {
 	var vp8Pkt codecs.VP8Packet
 	var frameBuf []byte
 	var dataCount, recvCount int
-	buf := make([]byte, 65536)
+	buf := make([]byte, rtpBufSize)
 	for {
 		n, _, err := track.Read(buf)
 		if err != nil {

@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/gorilla/websocket"
+	"whitelist-bypass/relay/socks"
 )
 
 const (
@@ -247,18 +248,18 @@ type udpClient struct {
 func (j *joinerRelay) handleUDPAssociate(tcpConn net.Conn) {
 	udpAddr, err := net.ResolveUDPAddr("udp", "127.0.0.1:0")
 	if err != nil {
-		tcpConn.Write([]byte{0x05, 0x01, 0x00, 0x01, 0, 0, 0, 0, 0, 0})
+		tcpConn.Write(socks.GenFail)
 		tcpConn.Close()
 		return
 	}
 	udpConn, err := net.ListenUDP("udp", udpAddr)
 	if err != nil {
-		tcpConn.Write([]byte{0x05, 0x01, 0x00, 0x01, 0, 0, 0, 0, 0, 0})
+		tcpConn.Write(socks.GenFail)
 		tcpConn.Close()
 		return
 	}
 	localAddr := udpConn.LocalAddr().(*net.UDPAddr)
-	reply := []byte{0x05, 0x00, 0x00, 0x01, 127, 0, 0, 1, 0, 0}
+	reply := []byte{socks.Ver, 0x00, 0x00, socks.AtypIPv4, 127, 0, 0, 1, 0, 0}
 	binary.BigEndian.PutUint16(reply[8:10], uint16(localAddr.Port))
 	tcpConn.Write(reply)
 	logMsg("dc-joiner: UDP ASSOCIATE on port %d", localAddr.Port)
@@ -291,14 +292,14 @@ func (j *joinerRelay) handleUDPAssociate(tcpConn net.Conn) {
 			var dstAddr string
 			var headerLen int
 			switch atyp {
-			case 0x01:
+			case socks.AtypIPv4:
 				if n < 10 {
 					continue
 				}
 				dstAddr = fmt.Sprintf("%d.%d.%d.%d:%d", buf[4], buf[5], buf[6], buf[7],
 					binary.BigEndian.Uint16(buf[8:10]))
 				headerLen = 10
-			case 0x03:
+			case socks.AtypDomain:
 				dlen := int(buf[4])
 				if n < 5+dlen+2 {
 					continue
@@ -306,7 +307,7 @@ func (j *joinerRelay) handleUDPAssociate(tcpConn net.Conn) {
 				dstAddr = fmt.Sprintf("%s:%d", string(buf[5:5+dlen]),
 					binary.BigEndian.Uint16(buf[5+dlen:7+dlen]))
 				headerLen = 5 + dlen + 2
-			case 0x04:
+			case socks.AtypIPv6:
 				if n < 22 {
 					continue
 				}
@@ -404,39 +405,39 @@ func (j *joinerRelay) listenSOCKS(ln net.Listener) error {
 
 func (j *joinerRelay) handleSOCKS(conn net.Conn) {
 	<-j.ready
-	buf := make([]byte, 258)
+	buf := make([]byte, socks.HandshakeBuf)
 	n, err := conn.Read(buf)
-	if err != nil || n < 2 || buf[0] != 0x05 {
+	if err != nil || n < 2 || buf[0] != socks.Ver {
 		conn.Close()
 		return
 	}
-	conn.Write([]byte{0x05, 0x00})
+	conn.Write(socks.NoAuth)
 	n, err = conn.Read(buf)
-	if err != nil || n < 7 || buf[0] != 0x05 {
-		conn.Write([]byte{0x05, 0x01, 0x00, 0x01, 0, 0, 0, 0, 0, 0})
+	if err != nil || n < 7 || buf[0] != socks.Ver {
+		conn.Write(socks.GenFail)
 		conn.Close()
 		return
 	}
 	cmd := buf[1]
-	if cmd == 0x03 {
+	if cmd == socks.CmdUDP {
 		j.handleUDPAssociate(conn)
 		return
 	}
-	if cmd != 0x01 {
-		conn.Write([]byte{0x05, 0x07, 0x00, 0x01, 0, 0, 0, 0, 0, 0})
+	if cmd != socks.CmdTCP {
+		conn.Write(socks.CmdErr)
 		conn.Close()
 		return
 	}
 	var host string
 	switch buf[3] {
-	case 0x01:
+	case socks.AtypIPv4:
 		if n < 10 {
 			conn.Close()
 			return
 		}
 		host = fmt.Sprintf("%d.%d.%d.%d:%d", buf[4], buf[5], buf[6], buf[7],
 			binary.BigEndian.Uint16(buf[8:10]))
-	case 0x03:
+	case socks.AtypDomain:
 		dlen := int(buf[4])
 		if n < 5+dlen+2 {
 			conn.Close()
@@ -444,7 +445,7 @@ func (j *joinerRelay) handleSOCKS(conn net.Conn) {
 		}
 		host = fmt.Sprintf("%s:%d", string(buf[5:5+dlen]),
 			binary.BigEndian.Uint16(buf[5+dlen:7+dlen]))
-	case 0x04:
+	case socks.AtypIPv6:
 		if n < 22 {
 			conn.Close()
 			return
@@ -453,7 +454,7 @@ func (j *joinerRelay) handleSOCKS(conn net.Conn) {
 		host = fmt.Sprintf("[%s]:%d", ip.String(),
 			binary.BigEndian.Uint16(buf[20:22]))
 	default:
-		conn.Write([]byte{0x05, 0x08, 0x00, 0x01, 0, 0, 0, 0, 0, 0})
+		conn.Write(socks.AddrErr)
 		conn.Close()
 		return
 	}
@@ -464,12 +465,12 @@ func (j *joinerRelay) handleSOCKS(conn net.Conn) {
 	j.send(id, msgConnect, []byte(host))
 	if err := <-sc.rdy; err != nil {
 		logMsg("dc-joiner: CONNECT %d failed: %v", id, err)
-		conn.Write([]byte{0x05, 0x05, 0x00, 0x01, 0, 0, 0, 0, 0, 0})
+		conn.Write(socks.ConnFail)
 		conn.Close()
 		j.conns.Delete(id)
 		return
 	}
-	conn.Write([]byte{0x05, 0x00, 0x00, 0x01, 0, 0, 0, 0, 0, 0})
+	conn.Write(socks.OK)
 	logMsg("dc-joiner: CONNECTED %d -> %s", id, maskAddr(host))
 	go func() {
 		buf := make([]byte, readBufSize)
@@ -518,14 +519,16 @@ func (c *creatorRelay) handleMessage(connID uint32, msgType byte, payload []byte
 	case msgUDP:
 		go c.handleUDP(connID, payload)
 	case msgData:
-		val, ok := c.conns.Load(connID)
-		if ok {
-			val.(net.Conn).Write(payload)
+		if val, ok := c.conns.Load(connID); ok {
+			if conn, ok := val.(net.Conn); ok {
+				conn.Write(payload)
+			}
 		}
 	case msgClose:
-		val, ok := c.conns.LoadAndDelete(connID)
-		if ok {
-			val.(net.Conn).Close()
+		if val, ok := c.conns.LoadAndDelete(connID); ok {
+			if conn, ok := val.(net.Conn); ok {
+				conn.Close()
+			}
 		}
 	}
 }
@@ -569,7 +572,7 @@ func (c *creatorRelay) handleUDP(connID uint32, payload []byte) {
 	if err != nil {
 		return
 	}
-	buf := make([]byte, 4096)
+	buf := make([]byte, socks.UDPBufSize)
 	n, err := conn.Read(buf)
 	if err != nil {
 		return

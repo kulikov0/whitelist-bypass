@@ -12,6 +12,27 @@ const (
 	msgClose      byte = 0x05
 	msgUDP        byte = 0x06
 	msgUDPReply   byte = 0x07
+
+	socksVer        = 0x05
+	socksCmdTCP     = 0x01
+	socksCmdUDP     = 0x03
+	socksAtypIPv4   = 0x01
+	socksAtypDomain = 0x03
+	socksAtypIPv6   = 0x04
+
+	socksHandshakeBuf = 258
+	udpBufSize        = 4096
+	rtpBufSize        = 65536
+	vp8RelayBufSize   = 900
+)
+
+var (
+	socksNoAuth   = []byte{socksVer, 0x00}
+	socksOK       = []byte{socksVer, 0x00, 0x00, socksAtypIPv4, 0, 0, 0, 0, 0, 0}
+	socksConnFail = []byte{socksVer, 0x05, 0x00, socksAtypIPv4, 0, 0, 0, 0, 0, 0}
+	socksCmdErr   = []byte{socksVer, 0x07, 0x00, socksAtypIPv4, 0, 0, 0, 0, 0, 0}
+	socksAddrErr  = []byte{socksVer, 0x08, 0x00, socksAtypIPv4, 0, 0, 0, 0, 0, 0}
+	socksGenFail  = []byte{socksVer, 0x01, 0x00, socksAtypIPv4, 0, 0, 0, 0, 0, 0}
 )
 
 // Relay is the common interface for DCRelay and VideoRelay.

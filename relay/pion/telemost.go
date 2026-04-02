@@ -10,6 +10,7 @@ import (
 	"github.com/pion/rtp"
 	"github.com/pion/rtp/codecs"
 	"github.com/pion/webrtc/v4"
+	"whitelist-bypass/relay/socks"
 )
 
 type tmPCState struct {
@@ -283,7 +284,7 @@ func (c *TelemostClient) handleICECandidate(data json.RawMessage, role string) {
 
 func (c *TelemostClient) readTrack(track *webrtc.TrackRemote) {
 	if track.Codec().MimeType != webrtc.MimeTypeVP8 {
-		buf := make([]byte, 4096)
+		buf := make([]byte, socks.UDPBufSize)
 		for {
 			if _, _, err := track.Read(buf); err != nil {
 				c.logFn("telemost: readTrack (%s) error: %v", track.Codec().MimeType, err)
@@ -296,7 +297,7 @@ func (c *TelemostClient) readTrack(track *webrtc.TrackRemote) {
 	var frameBuf []byte
 	dataCount := 0
 	recvCount := 0
-	buf := make([]byte, 65536)
+	buf := make([]byte, socks.RTPBufSize)
 	for {
 		n, _, err := track.Read(buf)
 		if err != nil {
