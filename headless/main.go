@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"github.com/gorilla/websocket"
+	"github.com/pion/webrtc/v4"
 )
 
 const userAgent = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
@@ -251,15 +252,14 @@ func createAndJoinCall(cookieStr, peerId string, cfg VKConfig) (*CallInfo, error
 }
 
 type Bridge struct {
-	mu          sync.Mutex
-	vkWs        *websocket.Conn
-	pionWs      *websocket.Conn
-	vkSeq       int
-	pionReqID   int
-	pionPending map[int]chan json.RawMessage
-	iceServers  []map[string]interface{}
-	topology    string
-	p2p         *P2PHandler
+	mu         sync.Mutex
+	vkWs       *websocket.Conn
+	vkSeq      int
+	iceServers []webrtc.ICEServer
+	topology   string
+	relay      Relay
+	newRelay   func() Relay
+	p2p        *P2PHandler
 }
 
 func (b *Bridge) vkSend(command string, extra map[string]interface{}) {
@@ -284,43 +284,6 @@ func (b *Bridge) vkSend(command string, extra map[string]interface{}) {
 	}
 	b.vkWs.WriteMessage(websocket.TextMessage, out)
 	log.Printf("[vk-ws] -> %s", command)
-}
-
-func (b *Bridge) pionSend(msgType string, data interface{}) {
-	b.mu.Lock()
-	defer b.mu.Unlock()
-	if b.pionWs == nil {
-		return
-	}
-	msg := map[string]interface{}{"type": msgType, "data": data}
-	raw, _ := json.Marshal(msg)
-	b.pionWs.WriteMessage(websocket.TextMessage, raw)
-	log.Printf("[pion] -> %s", msgType)
-}
-
-func (b *Bridge) pionRequest(msgType string, data interface{}) (json.RawMessage, error) {
-	b.mu.Lock()
-	b.pionReqID++
-	id := b.pionReqID
-	ch := make(chan json.RawMessage, 1)
-	b.pionPending[id] = ch
-	msg := map[string]interface{}{"type": msgType, "data": data, "id": id}
-	raw, _ := json.Marshal(msg)
-	if b.pionWs != nil {
-		b.pionWs.WriteMessage(websocket.TextMessage, raw)
-	}
-	b.mu.Unlock()
-	log.Printf("[pion] -> request %s id=%d", msgType, id)
-
-	select {
-	case resp := <-ch:
-		return resp, nil
-	case <-time.After(10 * time.Second):
-		b.mu.Lock()
-		delete(b.pionPending, id)
-		b.mu.Unlock()
-		return nil, fmt.Errorf("timeout: %s", msgType)
-	}
 }
 
 func (b *Bridge) handleVKMessage(raw []byte) {
@@ -399,52 +362,22 @@ func (b *Bridge) handleVKMessage(raw []byte) {
 	}
 }
 
-func (b *Bridge) handlePionMessage(raw []byte) {
-	var msg struct {
-		Type string          `json:"type"`
-		Data json.RawMessage `json:"data"`
-		ID   int             `json:"id,omitempty"`
+func buildICEServers(callInfo *CallInfo) []webrtc.ICEServer {
+	var servers []webrtc.ICEServer
+	if len(callInfo.StunServer.URLs) > 0 {
+		servers = append(servers, webrtc.ICEServer{URLs: callInfo.StunServer.URLs})
 	}
-	if err := json.Unmarshal(raw, &msg); err != nil {
-		return
+	if len(callInfo.TurnServer.URLs) > 0 {
+		urls := append([]string{}, callInfo.TurnServer.URLs...)
+		urls = append(urls, urls[len(urls)-1]+"?transport=tcp")
+		servers = append(servers, webrtc.ICEServer{
+			URLs: urls, Username: callInfo.TurnServer.Username, Credential: callInfo.TurnServer.Credential,
+		})
 	}
-
-	if msg.ID > 0 {
-		b.mu.Lock()
-		ch, ok := b.pionPending[msg.ID]
-		if ok {
-			delete(b.pionPending, msg.ID)
-		}
-		b.mu.Unlock()
-		if ok {
-			ch <- msg.Data
-			return
-		}
-	}
-
-	switch msg.Type {
-	case "ice-candidate":
-		log.Println("[pion] <- ice-candidate")
-		if b.p2p != nil {
-			b.p2p.OnPionICECandidate(msg.Data)
-		}
-
-	case "connection-state":
-		var state string
-		json.Unmarshal(msg.Data, &state)
-		log.Printf("[pion] <- connection-state: %s", state)
-		if b.p2p != nil {
-			b.p2p.OnConnectionState(state)
-		}
-
-	case "remote-track":
-		log.Printf("[pion] <- remote-track: %s", string(msg.Data))
-	}
+	return servers
 }
 
-func (b *Bridge) run(callInfo *CallInfo, cfg VKConfig, pionAddr string) {
-	b.pionPending = make(map[int]chan json.RawMessage)
-
+func (b *Bridge) run(callInfo *CallInfo, cfg VKConfig) {
 	fmt.Println("")
 	fmt.Println("  CALL CREATED")
 	fmt.Println("  join_link:", callInfo.JoinLink)
@@ -454,45 +387,11 @@ func (b *Bridge) run(callInfo *CallInfo, cfg VKConfig, pionAddr string) {
 	fmt.Println("  TURN:     ", strings.Join(callInfo.TurnServer.URLs, ", "))
 	fmt.Printf("  protocol:  v%s sdk %s\n\n", cfg.ProtocolVersion, cfg.SDKVersion)
 
-	// Connect to Pion relay
-	log.Printf("[pion] Connecting to %s ...", pionAddr)
-	pionWs, _, err := websocket.DefaultDialer.Dial(pionAddr, nil)
-	if err != nil {
-		log.Fatalf("[pion] Connect failed: %v", err)
-	}
-	b.pionWs = pionWs
-	log.Println("[pion] Connected")
-
-	// Send ICE servers to Pion
-	iceServers := []map[string]interface{}{}
-	if len(callInfo.StunServer.URLs) > 0 {
-		iceServers = append(iceServers, map[string]interface{}{
-			"urls": callInfo.StunServer.URLs, "username": "", "credential": "",
-		})
-	}
-	if len(callInfo.TurnServer.URLs) > 0 {
-		urls := append([]string{}, callInfo.TurnServer.URLs...)
-		urls = append(urls, urls[len(urls)-1]+"?transport=tcp")
-		iceServers = append(iceServers, map[string]interface{}{
-			"urls": urls, "username": callInfo.TurnServer.Username, "credential": callInfo.TurnServer.Credential,
-		})
-	}
-	b.iceServers = iceServers
-
-	// Start reading Pion messages before making requests
-	go func() {
-		for {
-			_, msg, err := pionWs.ReadMessage()
-			if err != nil {
-				log.Println("[pion] Disconnected")
-				return
-			}
-			b.handlePionMessage(msg)
-		}
-	}()
+	b.iceServers = buildICEServers(callInfo)
 
 	// Start in P2P mode - creates PC and offer
 	b.topology = TopologyDirect
+	b.relay = b.newRelay()
 	b.p2p = NewP2PHandler(b)
 	b.p2p.Init()
 
@@ -554,7 +453,6 @@ func (b *Bridge) run(callInfo *CallInfo, cfg VKConfig, pionAddr string) {
 func main() {
 	cookiesPath := flag.String("cookies", "cookies.json", "path to cookies.json")
 	peerId := flag.String("peer-id", "", "VK peer_id for the call")
-	pionPort := flag.Int("pion-port", 9001, "Pion relay WebSocket port")
 	flag.Parse()
 
 	cookieStr := loadCookies(*cookiesPath)
@@ -571,5 +469,12 @@ func main() {
 	}
 
 	bridge := &Bridge{}
-	bridge.run(callInfo, cfg, fmt.Sprintf("ws://127.0.0.1:%d/signaling", *pionPort))
+	bridge.newRelay = func() Relay {
+		ur := NewTunnelRelay()
+		ur.OnConnected = func(tunnel *VP8DataTunnel) {
+			NewRelayBridge(tunnel, "creator", log.Printf)
+		}
+		return ur
+	}
+	bridge.run(callInfo, cfg)
 }

@@ -6,13 +6,14 @@ import (
 	"log"
 
 	"github.com/gorilla/websocket"
+	"github.com/pion/webrtc/v4"
 )
 
 type P2PHandler struct {
 	bridge            *Bridge
 	remotePeerId      *int64
-	pendingOffer      json.RawMessage
-	pendingCandidates []json.RawMessage
+	pendingOffer      *webrtc.SessionDescription
+	pendingCandidates []webrtc.ICECandidateInit
 	connected         bool
 }
 
@@ -20,32 +21,61 @@ func NewP2PHandler(bridge *Bridge) *P2PHandler {
 	return &P2PHandler{bridge: bridge}
 }
 
+func (p *P2PHandler) setupCallbacks() {
+	p.bridge.relay.OnICECandidate(func(cand *webrtc.ICECandidate) {
+		if cand == nil {
+			return
+		}
+		log.Printf("[p2p] ICE candidate: type=%s proto=%s", cand.Typ.String(), cand.Protocol.String())
+		candJSON := cand.ToJSON()
+		raw, _ := json.Marshal(candJSON)
+		p.OnPionICECandidate(raw)
+	})
+
+	p.bridge.relay.OnConnectionStateChange(func(state webrtc.PeerConnectionState) {
+		p.OnConnectionState(state.String())
+	})
+}
+
 // Init creates the initial Pion PC and offer.
 func (p *P2PHandler) Init() {
-	p.bridge.pionSend("ice-servers", p.bridge.iceServers)
-	offerRaw, err := p.bridge.pionRequest("create-offer", map[string]interface{}{})
+	relay := p.bridge.relay
+	if err := relay.Init(p.bridge.iceServers); err != nil {
+		log.Fatalf("[p2p] Init relay failed: %v", err)
+	}
+	p.setupCallbacks()
+
+	offer, err := relay.CreateOffer()
 	if err != nil {
 		log.Fatalf("[p2p] Create offer failed: %v", err)
 	}
-	p.pendingOffer = offerRaw
-	log.Printf("[p2p] Offer ready, length: %d", len(offerRaw))
+	p.pendingOffer = &offer
+	log.Printf("[p2p] Offer ready, SDP length: %d", len(offer.SDP))
 }
 
 // Reset tears down the current Pion PC and creates a fresh one with a new offer.
 func (p *P2PHandler) Reset() {
 	log.Println("[p2p] Resetting Pion PC...")
 	p.connected = false
-	p.bridge.pionRequest("reset", map[string]interface{}{})
-	p.bridge.pionSend("ice-servers", p.bridge.iceServers)
 
-	offerRaw, err := p.bridge.pionRequest("create-offer", map[string]interface{}{})
+	p.bridge.relay.Close()
+	p.bridge.relay = p.bridge.newRelay()
+
+	relay := p.bridge.relay
+	if err := relay.Init(p.bridge.iceServers); err != nil {
+		log.Printf("[p2p] Reset init failed: %v", err)
+		return
+	}
+	p.setupCallbacks()
+
+	offer, err := relay.CreateOffer()
 	if err != nil {
 		log.Printf("[p2p] Reset create-offer failed: %v", err)
 		return
 	}
-	p.pendingOffer = offerRaw
+	p.pendingOffer = &offer
 	p.pendingCandidates = nil
-	log.Printf("[p2p] New offer ready after reset, length: %d", len(offerRaw))
+	log.Printf("[p2p] New offer ready after reset, SDP length: %d", len(offer.SDP))
 }
 
 // OnRegisteredPeer handles the registered-peer notification.
@@ -72,23 +102,25 @@ func (p *P2PHandler) OnTransmittedData(data map[string]interface{}) {
 	if cand, ok := data["candidate"]; ok {
 		log.Println("[p2p] Remote ICE candidate")
 		candJSON, _ := json.Marshal(cand)
-		p.bridge.pionSend("remote-ice-candidate", json.RawMessage(candJSON))
+		var candInit webrtc.ICECandidateInit
+		json.Unmarshal(candJSON, &candInit)
+		p.bridge.relay.AddICECandidate(candInit)
 	}
 	if sdp, ok := data["sdp"].(map[string]interface{}); ok {
 		sdpType, _ := sdp["type"].(string)
+		sdpStr, _ := sdp["sdp"].(string)
 		log.Printf("[p2p] Remote SDP: %s", sdpType)
-		sdpJSON, _ := json.Marshal(sdp)
 		if sdpType == "answer" {
-			p.bridge.pionRequest("set-remote-description", json.RawMessage(sdpJSON))
+			p.bridge.relay.SetRemoteDescription(webrtc.SDPTypeAnswer, sdpStr)
 		} else if sdpType == "offer" {
-			p.bridge.pionRequest("set-remote-description", json.RawMessage(sdpJSON))
-			answerRaw, err := p.bridge.pionRequest("create-answer", map[string]interface{}{})
+			p.bridge.relay.SetRemoteDescription(webrtc.SDPTypeOffer, sdpStr)
+			answer, err := p.bridge.relay.CreateAnswer()
 			if err == nil && p.remotePeerId != nil {
-				var answer interface{}
-				json.Unmarshal(answerRaw, &answer)
 				p.bridge.vkSend("transmit-data", map[string]interface{}{
 					"participantId": *p.remotePeerId,
-					"data":          map[string]interface{}{"sdp": answer},
+					"data": map[string]interface{}{"sdp": map[string]interface{}{
+						"type": answer.Type.String(), "sdp": answer.SDP,
+					}},
 				})
 			}
 		}
@@ -105,7 +137,9 @@ func (p *P2PHandler) OnPionICECandidate(data json.RawMessage) {
 			"data":          map[string]interface{}{"candidate": cand},
 		})
 	} else {
-		p.pendingCandidates = append(p.pendingCandidates, data)
+		var candInit webrtc.ICECandidateInit
+		json.Unmarshal(data, &candInit)
+		p.pendingCandidates = append(p.pendingCandidates, candInit)
 	}
 }
 
@@ -141,17 +175,12 @@ func (p *P2PHandler) sendOfferToPeer(participantId int64) {
 
 	if offer != nil {
 		log.Printf("[p2p] Sending offer to peer %d", participantId)
-		var offerObj struct {
-			Type string `json:"type"`
-			SDP  string `json:"sdp"`
-		}
-		json.Unmarshal(offer, &offerObj)
-		sdpStr, _ := json.Marshal(offerObj.SDP)
+		sdpStr, _ := json.Marshal(offer.SDP)
 		p.bridge.mu.Lock()
 		p.bridge.vkSeq++
 		seq := p.bridge.vkSeq
 		raw := fmt.Sprintf(`{"command":"transmit-data","sequence":%d,"participantId":%d,"data":{"sdp":{"type":%q,"sdp":%s}}}`,
-			seq, participantId, offerObj.Type, sdpStr)
+			seq, participantId, offer.Type.String(), sdpStr)
 		if p.bridge.vkWs != nil {
 			p.bridge.vkWs.WriteMessage(websocket.TextMessage, []byte(raw))
 		}
@@ -160,8 +189,9 @@ func (p *P2PHandler) sendOfferToPeer(participantId int64) {
 	}
 
 	for _, cand := range candidates {
+		candJSON, _ := json.Marshal(cand)
 		var c interface{}
-		json.Unmarshal(cand, &c)
+		json.Unmarshal(candJSON, &c)
 		p.bridge.vkSend("transmit-data", map[string]interface{}{
 			"participantId": participantId,
 			"data":          map[string]interface{}{"candidate": c},
