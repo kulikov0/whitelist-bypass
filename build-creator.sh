@@ -88,9 +88,11 @@ mkdir -p "$ROOT/prebuilts"
 cp "$HEADLESS_DIR/headless-linux-x64" "$ROOT/prebuilts/headless-creator-linux-x64"
 cp "$HEADLESS_DIR/headless-linux-ia32" "$ROOT/prebuilts/headless-creator-linux-ia32"
 
-# Cleanup
-rm -f "$RELAY_DIR/relay-bundle" "$RELAY_DIR/relay-bundle.exe"
-rm -f "$HEADLESS_DIR/headless-bundle" "$HEADLESS_DIR/headless-bundle.exe"
+# Cleanup build artifacts
+rm -f "$RELAY_DIR"/relay-darwin "$RELAY_DIR"/relay-windows-*.exe "$RELAY_DIR"/relay-linux-*
+rm -f "$RELAY_DIR"/relay-bundle "$RELAY_DIR"/relay-bundle.exe
+rm -f "$HEADLESS_DIR"/headless-darwin "$HEADLESS_DIR"/headless-windows-*.exe "$HEADLESS_DIR"/headless-linux-*
+rm -f "$HEADLESS_DIR"/headless-bundle "$HEADLESS_DIR"/headless-bundle.exe
 
 echo ""
 echo "=== Done ==="
