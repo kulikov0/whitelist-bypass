@@ -189,6 +189,34 @@ The Go relay is split into platform-specific files:
 
 This allows cross-compiling the relay for macOS/Windows/Linux without CGo or Android NDK.
 
+### Headless creator
+
+Pure Go creator that creates VK calls via API without a browser. No Electron, no JS hooks - Go Pion PeerConnection handles the DataChannel tunnel directly.
+
+```sh
+# Build
+cd headless && go build -o headless-creator .
+
+# Run
+./headless-creator --cookies cookies.json [--peer-id <vk_peer_id>] [--resources <mode>]
+```
+
+- `--cookies` - path to VK cookies exported as JSON (`[{"name":"..","value":".."},...]`). Use the "Export Cookies" button in the Creator app to get this file
+- `--peer-id` - VK peer_id for the call (optional)
+- `--resources` - resource mode (see below)
+
+**Resource modes:**
+
+| Mode | read-buf | max-dc-buf | mem-limit | Use case |
+|---|---|---|---|---|
+| `moderate` | 16KB | 1MB | 64MB | Low memory environments, VPS |
+| `default` | 32KB | 4MB | 128MB | General use |
+| `unlimited` | 64KB | 8MB | 256MB | Maximum throughput |
+
+- `read-buf` - TCP read buffer size. Smaller = more frequent backpressure checks, less bursty memory
+- `max-dc-buf` - pauses TCP reads when DataChannel buffered amount exceeds this. Prevents SCTP pending queue from growing unbounded
+- `mem-limit` - Go runtime soft memory limit (`debug.SetMemoryLimit`), makes GC more aggressive near the cap
+
 ## License
 
 [MIT](LICENSE)

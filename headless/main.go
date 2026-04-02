@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"net/url"
 	"os"
+	"runtime/debug"
 	"strings"
 	"sync"
 	"time"
@@ -482,7 +483,32 @@ func (b *Bridge) run(callInfo *CallInfo, cfg VKConfig) {
 func main() {
 	cookiesPath := flag.String("cookies", "cookies.json", "path to cookies.json")
 	peerId := flag.String("peer-id", "", "VK peer_id for the call")
+	resources := flag.String("resources", "default", "resource mode: default, moderate, unlimited")
 	flag.Parse()
+
+	var readBuf int
+	var maxDCBuf uint64
+	var memLimit int64
+	switch *resources {
+	case "moderate":
+		readBuf = 16384
+		maxDCBuf = 1 * 1024 * 1024
+		memLimit = 64 * 1024 * 1024
+	case "default":
+		readBuf = 32768
+		maxDCBuf = 4 * 1024 * 1024
+		memLimit = 128 * 1024 * 1024
+	case "unlimited":
+		readBuf = rtpBufSize
+		maxDCBuf = 8 * 1024 * 1024
+		memLimit = 256 * 1024 * 1024
+	default:
+		log.Fatalf("[config] unknown resources mode: %s (use moderate, default, unlimited)", *resources)
+	}
+	if memLimit > 0 {
+		debug.SetMemoryLimit(memLimit)
+	}
+	log.Printf("[config] resources=%s read-buf=%d max-dc-buf=%d mem-limit=%d", *resources, readBuf, maxDCBuf, memLimit)
 
 	cookieStr := loadCookies(*cookiesPath)
 
@@ -500,6 +526,8 @@ func main() {
 	bridge := &Bridge{}
 	bridge.newRelay = func() Relay {
 		ur := NewTunnelRelay()
+		ur.readBufSize = readBuf
+		ur.maxDCBuf = maxDCBuf
 		ur.OnConnected = func(tunnel *VP8DataTunnel) {
 			NewRelayBridge(tunnel, "creator", log.Printf)
 		}

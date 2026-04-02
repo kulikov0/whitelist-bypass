@@ -12,7 +12,8 @@ command -v gomobile >/dev/null || { echo "gomobile not found, run: go install go
 command -v gobind >/dev/null || { echo "gobind not found, run: go install golang.org/x/mobile/cmd/gobind@latest"; exit 1; }
 [ -d "$ANDROID_NDK_HOME" ] || { echo "NDK not found at $ANDROID_NDK_HOME"; exit 1; }
 
-cd "$(dirname "$0")/relay"
+ROOT="$(cd "$(dirname "$0")" && pwd)"
+cd "$ROOT/relay"
 
 echo "Building gomobile .aar..."
 gomobile bind -v -target=android -androidapi 23 -o mobile.aar ./mobile/ 2>&1
@@ -37,11 +38,10 @@ echo "Done. .aar size: $(du -h mobile.aar | cut -f1)"
 
 echo ""
 echo "Building desktop relay..."
-go build -o relay .
+go -C "$ROOT/relay" build -o relay .
 
 echo "Building headless-creator..."
-cd "$(dirname "$0")/headless"
-go build -o headless-creator .
+go -C "$ROOT/headless" build -o headless-creator .
 
 echo "Done."
-ls -lh "$(dirname "$0")/relay/relay" "$(dirname "$0")/headless/headless-creator"
+ls -lh "$ROOT/relay/relay" "$ROOT/headless/headless-creator"

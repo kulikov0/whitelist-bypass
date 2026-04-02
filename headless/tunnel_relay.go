@@ -13,18 +13,10 @@ import (
 	"github.com/pion/webrtc/v4"
 )
 
-const (
-	dcBufSize = 16384
-	dcMaxBufs = 8
-)
-
-var dcBufPool = func() chan []byte {
-	ch := make(chan []byte, dcMaxBufs)
-	for i := 0; i < dcMaxBufs; i++ {
-		ch <- make([]byte, 5+dcBufSize)
-	}
-	return ch
-}()
+type dcConn struct {
+	conn net.Conn
+	ch   chan []byte
+}
 
 type TunnelRelay struct {
 	pc          *webrtc.PeerConnection
@@ -40,6 +32,9 @@ type TunnelRelay struct {
 	sampleTrack *webrtc.TrackLocalStaticSample
 	tunnel      *VP8DataTunnel
 	OnConnected func(*VP8DataTunnel)
+
+	readBufSize int
+	maxDCBuf    uint64
 
 	mode     string
 	modeOnce sync.Once
@@ -67,7 +62,7 @@ func (u *TunnelRelay) Init(iceServers []webrtc.ICEServer) error {
 	} else {
 		u.dc = dc
 		dc.OnOpen(func() {
-			log.Println("[relay] tunnel DC open")
+			log.Printf("[relay] tunnel DC open (readyState=%v)", dc.ReadyState())
 		})
 		dc.OnClose(func() {
 			log.Println("[relay] tunnel DC closed")
@@ -125,7 +120,7 @@ func (u *TunnelRelay) Init(iceServers []webrtc.ICEServer) error {
 	})
 
 	pc.OnConnectionStateChange(func(state webrtc.PeerConnectionState) {
-		log.Printf("[relay] connection state: %s", state.String())
+		log.Printf("[relay] connection state: %s (mode=%s)", state.String(), u.mode)
 		if u.externalCSC != nil {
 			u.externalCSC(state)
 		}
@@ -234,12 +229,20 @@ func (u *TunnelRelay) handleDCMessage(data []byte) {
 	case msgData:
 		val, ok := u.conns.Load(connID)
 		if ok {
-			val.(net.Conn).Write(payload)
+			dc := val.(*dcConn)
+			cp := make([]byte, len(payload))
+			copy(cp, payload)
+			select {
+			case dc.ch <- cp:
+			default:
+				log.Printf("[dc] conn %d write queue full, dropping %d bytes", connID, len(payload))
+			}
 		}
 	case msgClose:
 		val, ok := u.conns.LoadAndDelete(connID)
 		if ok {
-			val.(net.Conn).Close()
+			dc := val.(*dcConn)
+			close(dc.ch)
 		}
 	}
 }
@@ -265,24 +268,39 @@ func (u *TunnelRelay) connectTCP(connID uint32, addr string) {
 		u.sendDCFrame(connID, msgConnectErr, []byte(err.Error()))
 		return
 	}
-	u.conns.Store(connID, conn)
+	dc := &dcConn{conn: conn, ch: make(chan []byte, 256)}
+	u.conns.Store(connID, dc)
 	u.sendDCFrame(connID, msgConnectOK, nil)
 	log.Printf("[dc] CONNECTED %d -> %s", connID, maskAddr(addr))
 
-	buf := <-dcBufPool
-	defer func() { dcBufPool <- buf }()
+	go func() {
+		for data := range dc.ch {
+			conn.Write(data)
+		}
+		conn.Close()
+	}()
 
-	readBuf := buf[5:]
+	bufSz := u.readBufSize
+	if bufSz <= 0 {
+		bufSz = rtpBufSize
+	}
+	buf := make([]byte, bufSz)
+	sent := 0
 	for {
-		n, err := conn.Read(readBuf)
-		if n > 0 {
-			binary.BigEndian.PutUint32(buf[0:4], connID)
-			buf[4] = msgData
+		if u.maxDCBuf > 0 {
 			u.dcMu.Lock()
-			if u.dc != nil {
-				u.dc.Send(buf[:5+n])
-			}
+			dc := u.dc
 			u.dcMu.Unlock()
+			if dc != nil {
+				for dc.BufferedAmount() > u.maxDCBuf {
+					time.Sleep(5 * time.Millisecond)
+				}
+			}
+		}
+		n, err := conn.Read(buf)
+		if n > 0 {
+			u.sendDCFrame(connID, msgData, buf[:n])
+			sent += n
 		}
 		if err != nil {
 			if err != io.EOF {
@@ -291,6 +309,7 @@ func (u *TunnelRelay) connectTCP(connID uint32, addr string) {
 			break
 		}
 	}
+	log.Printf("[dc] conn %d closed, sent %d bytes", connID, sent)
 	u.sendDCFrame(connID, msgClose, nil)
 	u.conns.Delete(connID)
 }
@@ -326,7 +345,8 @@ func (u *TunnelRelay) handleUDP(connID uint32, payload []byte) {
 
 func (u *TunnelRelay) closeAllConns() {
 	u.conns.Range(func(key, val any) bool {
-		val.(net.Conn).Close()
+		dc := val.(*dcConn)
+		dc.conn.Close()
 		u.conns.Delete(key)
 		return true
 	})
