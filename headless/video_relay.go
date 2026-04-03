@@ -1,7 +1,6 @@
 package main
 
 import (
-	"context"
 	"encoding/binary"
 	"io"
 	"net"
@@ -39,15 +38,11 @@ type RelayBridge struct {
 	udps   sync.Map
 	nextID atomic.Uint32
 	logFn  func(string, ...any)
-
-	ctx    context.Context
-	cancel context.CancelFunc
 }
 
 type videoUDPConn struct {
-	conn       net.Conn
-	mu         sync.Mutex
-	lastActive atomic.Int64
+	conn net.Conn
+	mu   sync.Mutex
 }
 
 func NewRelayBridge(tunnel *VP8DataTunnel, mode string, logFn func(string, ...any)) *RelayBridge {
@@ -55,8 +50,6 @@ func NewRelayBridge(tunnel *VP8DataTunnel, mode string, logFn func(string, ...an
 		tunnel: tunnel,
 		logFn:  logFn,
 	}
-	rb.ctx, rb.cancel = context.WithCancel(context.Background())
-	go rb.udpSweeper()
 	tunnel.onData = rb.handleTunnelData
 	tunnel.onClose = rb.closeAll
 	return rb
@@ -78,31 +71,6 @@ func (rb *RelayBridge) closeAll() {
 		rb.udps.Delete(key)
 		return true
 	})
-	if rb.cancel != nil {
-		rb.cancel()
-	}
-}
-
-func (rb *RelayBridge) udpSweeper() {
-	t := time.NewTicker(30 * time.Second)
-	defer t.Stop()
-
-	for {
-		select {
-		case <-rb.ctx.Done():
-			return
-		case <-t.C:
-		}
-		now := time.Now().UnixNano()
-		rb.udps.Range(func(key, val any) bool {
-			s := val.(*videoUDPConn)
-			if now-s.lastActive.Load() > int64(2*udpIdleTimeout) {
-				s.conn.Close()
-				rb.udps.Delete(key)
-			}
-			return true
-		})
-	}
 }
 
 func (rb *RelayBridge) send(connID uint32, msgType byte, payload []byte) {
@@ -122,14 +90,11 @@ func (rb *RelayBridge) handleCreatorMessage(connID uint32, msgType byte, payload
 	case msgConnect:
 		go rb.connectTCP(connID, string(payload))
 	case msgUDP:
-		go rb.handleUDP(connID, payload)
+		rb.handleUDP(connID, payload)
 	case msgData:
 		val, ok := rb.conns.Load(connID)
 		if ok {
-			c := val.(net.Conn)
-			_ = c.SetWriteDeadline(time.Now().Add(5 * time.Second))
-			_, err := c.Write(payload)
-			if err != nil {
+			if _, err := val.(net.Conn).Write(payload); err != nil {
 				rb.logFn("relay: conn %d downstream write error: %v", connID, err)
 			}
 		} else {
@@ -167,10 +132,7 @@ func (rb *RelayBridge) handleUDP(connID uint32, payload []byte) {
 			rb.logFn("relay: UDP dial failed conn=%d addr=%s: %v", connID, maskAddr(addr), err)
 			return
 		}
-		sess := &videoUDPConn{
-			conn: udpConn,
-		}
-		sess.lastActive.Store(time.Now().UnixNano())
+		sess := &videoUDPConn{conn: udpConn}
 		actual, loaded := rb.udps.LoadOrStore(connID, sess)
 		if loaded {
 			udpConn.Close()
@@ -179,39 +141,32 @@ func (rb *RelayBridge) handleUDP(connID uint32, payload []byte) {
 			val = sess
 			go func() {
 				buf := make([]byte, udpBufSize)
-				defer func() {
-					rb.udps.Delete(connID)
-					_ = udpConn.Close()
-				}()
-
 				for {
+					_ = udpConn.SetReadDeadline(time.Now().Add(udpIdleTimeout))
 					n, err := udpConn.Read(buf)
-
 					if n > 0 {
-						sess.lastActive.Store(time.Now().UnixNano())
-
 						resp := make([]byte, n)
 						copy(resp, buf[:n])
-
 						rb.logFn("relay: UDP conn=%d reply=%d bytes", connID, n)
 						rb.send(connID, msgUDPReply, resp)
 					}
-
 					if err != nil {
-						if !isClosedConnError(err) {
-							rb.logFn("UDP read failed conn=%d: %v", connID, err)
+						if ne, ok := err.(net.Error); ok && ne.Timeout() {
+							rb.logFn("relay: UDP conn %d idle timeout", connID)
+						} else if !isClosedConnError(err) {
+							rb.logFn("relay: UDP conn %d read error: %v", connID, err)
 						}
-						return
+						break
 					}
 				}
+				rb.udps.Delete(connID)
+				_ = udpConn.Close()
 			}()
 		}
 	}
 	sess := val.(*videoUDPConn)
 	sess.mu.Lock()
-	_ = sess.conn.SetWriteDeadline(time.Now().Add(5 * time.Second))
 	_, err := sess.conn.Write(data)
-	sess.lastActive.Store(time.Now().UnixNano())
 	sess.mu.Unlock()
 	if err != nil {
 		if !isClosedConnError(err) {

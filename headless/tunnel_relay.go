@@ -1,14 +1,12 @@
 package main
 
 import (
-	"context"
 	"encoding/binary"
 	"errors"
 	"io"
 	"log"
 	"net"
 	"sync"
-	"sync/atomic"
 	"time"
 
 	"github.com/pion/rtp"
@@ -23,9 +21,8 @@ type dcConn struct {
 }
 
 type dcUDPConn struct {
-	conn       net.Conn
-	mu         sync.Mutex
-	lastActive atomic.Int64
+	conn net.Conn
+	mu   sync.Mutex
 }
 
 const udpIdleTimeout = 30 * time.Second
@@ -69,9 +66,6 @@ type TunnelRelay struct {
 
 	mode     string
 	modeOnce sync.Once
-
-	ctx    context.Context
-	cancel context.CancelFunc
 }
 
 func NewTunnelRelay() *TunnelRelay {
@@ -83,7 +77,6 @@ func (u *TunnelRelay) Init(iceServers []webrtc.ICEServer) error {
 	if err != nil {
 		return err
 	}
-	u.ctx, u.cancel = context.WithCancel(context.Background())
 	u.pc = pc
 
 	negotiated := true
@@ -176,7 +169,6 @@ func (u *TunnelRelay) Init(iceServers []webrtc.ICEServer) error {
 	})
 
 	log.Printf("[relay] PC created (%d ICE servers)", len(iceServers))
-	go u.udpSweeper()
 	return nil
 }
 
@@ -196,28 +188,6 @@ func (u *TunnelRelay) CreateAnswer() (webrtc.SessionDescription, error) {
 	}
 	u.pc.SetLocalDescription(answer)
 	return answer, nil
-}
-
-func (u *TunnelRelay) udpSweeper() {
-	t := time.NewTicker(30 * time.Second)
-	defer t.Stop()
-
-	for {
-		select {
-		case <-u.ctx.Done():
-			return
-		case <-t.C:
-		}
-		now := time.Now().UnixNano()
-		u.udps.Range(func(key, val any) bool {
-			s := val.(*dcUDPConn)
-			if now-s.lastActive.Load() > int64(2*udpIdleTimeout) {
-				s.conn.Close()
-				u.udps.Delete(key)
-			}
-			return true
-		})
-	}
 }
 
 func (u *TunnelRelay) SetRemoteDescription(sdpType webrtc.SDPType, sdp string) error {
@@ -251,9 +221,6 @@ func (u *TunnelRelay) OnConnectionStateChange(fn func(webrtc.PeerConnectionState
 
 func (u *TunnelRelay) Close() {
 	u.closeAllConns()
-	if u.cancel != nil {
-		u.cancel()
-	}
 	if u.tunnel != nil {
 		u.tunnel.Stop()
 		u.tunnel = nil
@@ -290,7 +257,7 @@ func (u *TunnelRelay) handleDCMessage(data []byte) {
 	case msgConnect:
 		go u.connectTCP(connID, string(payload))
 	case msgUDP:
-		go u.handleUDP(connID, payload)
+		u.handleUDP(connID, payload)
 	case msgData:
 		val, ok := u.conns.Load(connID)
 		if ok {
@@ -351,9 +318,7 @@ func (u *TunnelRelay) connectTCP(connID uint32, addr string) {
 
 	go func() {
 		for data := range dc.ch {
-			_ = conn.SetWriteDeadline(time.Now().Add(5 * time.Second))
-			_, err := conn.Write(data)
-			if err != nil {
+			if _, err := conn.Write(data); err != nil {
 				if !isClosedConnError(err) {
 					log.Printf("[dc] conn %d write error: %v", connID, err)
 				}
@@ -425,10 +390,7 @@ func (u *TunnelRelay) handleUDP(connID uint32, payload []byte) {
 			log.Printf("[dc] UDP dial failed conn=%d addr=%s: %v", connID, maskAddr(addr), err)
 			return
 		}
-		sess := &dcUDPConn{
-			conn: udpConn,
-		}
-		sess.lastActive.Store(time.Now().UnixNano())
+		sess := &dcUDPConn{conn: udpConn}
 		actual, loaded := u.udps.LoadOrStore(connID, sess)
 		if loaded {
 			udpConn.Close()
@@ -437,36 +399,33 @@ func (u *TunnelRelay) handleUDP(connID uint32, payload []byte) {
 			val = sess
 			go func() {
 				buf := make([]byte, udpBufSize)
-				defer func() {
-					u.udps.Delete(connID)
-					_ = udpConn.Close()
-				}()
 				for {
+					_ = udpConn.SetReadDeadline(time.Now().Add(udpIdleTimeout))
 					n, err := udpConn.Read(buf)
-
 					if n > 0 {
-						sess.lastActive.Store(time.Now().UnixNano())
-
 						resp := make([]byte, n)
 						copy(resp, buf[:n])
+						log.Printf("[dc] UDP reply conn=%d bytes=%d", connID, n)
 						u.sendDCFrame(connID, msgUDPReply, resp)
 					}
-
 					if err != nil {
-						if !isClosedConnError(err) {
+						if ne, ok := err.(net.Error); ok && ne.Timeout() {
+							log.Printf("[dc] UDP conn %d idle timeout", connID)
+						} else if !isClosedConnError(err) {
 							log.Printf("[dc] UDP read failed conn=%d: %v", connID, err)
 						}
 						break
 					}
 				}
+				u.udps.Delete(connID)
+				_ = udpConn.Close()
+				log.Printf("[dc] UDP conn %d closed", connID)
 			}()
 		}
 	}
 	sess := val.(*dcUDPConn)
 	sess.mu.Lock()
-	_ = sess.conn.SetWriteDeadline(time.Now().Add(5 * time.Second))
 	_, err := sess.conn.Write(data)
-	sess.lastActive.Store(time.Now().UnixNano())
 	sess.mu.Unlock()
 	if err != nil {
 		if !isClosedConnError(err) {
