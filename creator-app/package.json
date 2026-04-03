@@ -7,11 +7,12 @@
     "build": "electron-builder"
   },
   "dependencies": {
+    "bluebird": "^3.7.2",
     "node-fetch": "^2.7.0"
   },
   "devDependencies": {
-    "electron": "^33.0.0",
-    "electron-builder": "^25.0.0"
+    "electron": "^41.1.1",
+    "electron-builder": "^26.8.1"
   },
   "build": {
     "appId": "whitelist.bypass.creator",
@@ -20,17 +21,35 @@
       "output": "../prebuilts"
     },
     "extraResources": [
-      { "from": "../hooks/dc-creator-vk.js", "to": "hooks/dc-creator-vk.js" },
-      { "from": "../hooks/dc-creator-telemost.js", "to": "hooks/dc-creator-telemost.js" },
-      { "from": "../hooks/video-vk.js", "to": "hooks/video-vk.js" },
-      { "from": "../hooks/video-telemost.js", "to": "hooks/video-telemost.js" }
+      {
+        "from": "../hooks/dc-creator-vk.js",
+        "to": "hooks/dc-creator-vk.js"
+      },
+      {
+        "from": "../hooks/dc-creator-telemost.js",
+        "to": "hooks/dc-creator-telemost.js"
+      },
+      {
+        "from": "../hooks/video-vk.js",
+        "to": "hooks/video-vk.js"
+      },
+      {
+        "from": "../hooks/video-telemost.js",
+        "to": "hooks/video-telemost.js"
+      }
     ],
     "mac": {
       "target": "dmg",
       "icon": "resources/icon.icns",
       "extraResources": [
-        { "from": "../relay/relay-darwin", "to": "relay" },
-        { "from": "../headless/headless-darwin", "to": "headless-creator" }
+        {
+          "from": "../relay/relay-darwin",
+          "to": "relay"
+        },
+        {
+          "from": "../headless/headless-darwin",
+          "to": "headless-creator"
+        }
       ]
     },
     "win": {
@@ -38,16 +57,28 @@
       "artifactName": "${productName}-${version}-${arch}.${ext}",
       "icon": "resources/icon.ico",
       "extraResources": [
-        { "from": "../relay/relay-bundle.exe", "to": "relay.exe" },
-        { "from": "../headless/headless-bundle.exe", "to": "headless-creator.exe" }
+        {
+          "from": "../relay/relay-bundle.exe",
+          "to": "relay.exe"
+        },
+        {
+          "from": "../headless/headless-bundle.exe",
+          "to": "headless-creator.exe"
+        }
       ]
     },
     "linux": {
       "target": "AppImage",
       "icon": "resources/icon.png",
       "extraResources": [
-        { "from": "../relay/relay-bundle", "to": "relay" },
-        { "from": "../headless/headless-bundle", "to": "headless-creator" }
+        {
+          "from": "../relay/relay-bundle",
+          "to": "relay"
+        },
+        {
+          "from": "../headless/headless-bundle",
+          "to": "headless-creator"
+        }
       ]
     }
   }
