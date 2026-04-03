@@ -3,6 +3,7 @@ package pion
 import (
 	"bytes"
 	"encoding/binary"
+	"errors"
 	"fmt"
 	"io"
 	"net"
@@ -50,12 +51,36 @@ type udpClient struct {
 	udpConn    *net.UDPConn
 	clientAddr *net.UDPAddr
 	socksHdr   []byte
+	id         uint32
+	dstAddr    string
+	lastSeen   atomic.Int64
+}
+
+type udpSession struct {
+	conn net.Conn
+	mu   sync.Mutex
+}
+
+const udpIdleTimeout = 30 * time.Second
+
+func isClosedConnError(err error) bool {
+	return errors.Is(err, net.ErrClosed)
+}
+
+func closeWriteConn(conn net.Conn) {
+	if tcp, ok := conn.(*net.TCPConn); ok {
+		_ = tcp.CloseWrite()
+		return
+	}
+	_ = conn.Close()
 }
 
 type RelayBridge struct {
 	tunnel     *VP8DataTunnel
 	conns      sync.Map
 	udpClients sync.Map
+	udpFlows   sync.Map
+	udpConns   sync.Map
 	nextID     atomic.Uint32
 	logFn      func(string, ...any)
 	mode       string
@@ -87,6 +112,13 @@ func (rb *RelayBridge) closeAll() {
 		rb.conns.Delete(key)
 		return true
 	})
+	rb.udpConns.Range(func(key, value any) bool {
+		if s, ok := value.(*udpSession); ok {
+			_ = s.conn.Close()
+		}
+		rb.udpConns.Delete(key)
+		return true
+	})
 }
 
 func (rb *RelayBridge) MarkReady() {
@@ -111,6 +143,9 @@ func (rb *RelayBridge) handleTunnelData(data []byte) {
 
 // Joiner: receives ConnectOK/Data/Close from creator
 func (rb *RelayBridge) handleJoinerMessage(connID uint32, msgType byte, payload []byte) {
+	if msgType != msgData {
+		rb.logFn("relay: joiner RX frame conn=%d type=%d payload=%d", connID, msgType, len(payload))
+	}
 	if msgType == msgUDPReply {
 		uval, ok := rb.udpClients.Load(connID)
 		if !ok {
@@ -121,7 +156,8 @@ func (rb *RelayBridge) handleJoinerMessage(connID uint32, msgType byte, payload 
 		copy(reply, uc.socksHdr)
 		copy(reply[len(uc.socksHdr):], payload)
 		uc.udpConn.WriteToUDP(reply, uc.clientAddr)
-		rb.udpClients.Delete(connID)
+		rb.logFn("relay: UDP reply delivered conn=%d bytes=%d", connID, len(payload))
+		uc.lastSeen.Store(time.Now().UnixNano())
 		return
 	}
 	val, ok := rb.conns.Load(connID)
@@ -135,30 +171,39 @@ func (rb *RelayBridge) handleJoinerMessage(connID uint32, msgType byte, payload 
 	case msgConnectErr:
 		sc.rdy <- fmt.Errorf("%s", payload)
 	case msgData:
-		sc.conn.Write(payload)
+		if _, err := sc.conn.Write(payload); err != nil {
+			rb.logFn("relay: joiner conn %d local write error: %v", connID, err)
+		}
 	case msgClose:
-		sc.conn.Close()
+		closeWriteConn(sc.conn)
 		rb.conns.Delete(connID)
 	}
 }
 
 // Creator: receives Connect/Data/Close from joiner
 func (rb *RelayBridge) handleCreatorMessage(connID uint32, msgType byte, payload []byte) {
+	if msgType != msgData {
+		rb.logFn("relay: creator RX frame conn=%d type=%d payload=%d", connID, msgType, len(payload))
+	}
 	switch msgType {
 	case msgConnect:
 		go rb.connectTCP(connID, string(payload))
 	case msgUDP:
-		go rb.handleUDP(connID, payload)
+		rb.handleUDP(connID, payload)
 	case msgData:
 		if val, ok := rb.conns.Load(connID); ok {
 			if c, ok := val.(net.Conn); ok {
-				c.Write(payload)
+				if _, err := c.Write(payload); err != nil {
+					rb.logFn("relay: creator conn %d downstream write error: %v", connID, err)
+				}
 			}
+		} else {
+			rb.logFn("relay: creator DATA for unknown conn %d (%d bytes)", connID, len(payload))
 		}
 	case msgClose:
 		if val, ok := rb.conns.LoadAndDelete(connID); ok {
 			if c, ok := val.(net.Conn); ok {
-				c.Close()
+				closeWriteConn(c)
 			}
 		}
 	}
@@ -166,6 +211,7 @@ func (rb *RelayBridge) handleCreatorMessage(connID uint32, msgType byte, payload
 
 func (rb *RelayBridge) handleUDP(connID uint32, payload []byte) {
 	if len(payload) < 2 {
+		rb.logFn("relay: UDP short frame conn=%d len=%d", connID, len(payload))
 		return
 	}
 	addrLen := int(payload[0])
@@ -177,23 +223,62 @@ func (rb *RelayBridge) handleUDP(connID uint32, payload []byte) {
 	}
 	addr := string(payload[1 : 1+addrLen])
 	data := payload[1+addrLen:]
-	udpAddr, err := net.ResolveUDPAddr("udp", addr)
-	if err != nil {
-		return
+	rb.logFn("relay: UDP conn=%d -> %s payload=%d", connID, maskAddr(addr), len(data))
+	val, ok := rb.udpConns.Load(connID)
+	if !ok {
+		udpAddr, err := net.ResolveUDPAddr("udp", addr)
+		if err != nil {
+			rb.logFn("relay: UDP resolve failed conn=%d addr=%s: %v", connID, maskAddr(addr), err)
+			return
+		}
+		udpConn, err := net.DialUDP("udp", nil, udpAddr)
+		if err != nil {
+			rb.logFn("relay: UDP dial failed conn=%d addr=%s: %v", connID, maskAddr(addr), err)
+			return
+		}
+		sess := &udpSession{conn: udpConn}
+		actual, loaded := rb.udpConns.LoadOrStore(connID, sess)
+		if loaded {
+			udpConn.Close()
+			val = actual
+		} else {
+			val = sess
+			go func() {
+				buf := make([]byte, socks.UDPBufSize)
+				for {
+					_ = udpConn.SetReadDeadline(time.Now().Add(udpIdleTimeout))
+					n, err := udpConn.Read(buf)
+					if n > 0 {
+						resp := make([]byte, n)
+						copy(resp, buf[:n])
+						rb.logFn("relay: UDP conn=%d reply=%d bytes", connID, n)
+						rb.send(connID, msgUDPReply, resp)
+					}
+					if err != nil {
+						if ne, ok := err.(net.Error); ok && ne.Timeout() {
+							rb.logFn("relay: UDP conn %d idle timeout", connID)
+						} else if !isClosedConnError(err) {
+							rb.logFn("relay: UDP conn %d read error: %v", connID, err)
+						}
+						break
+					}
+				}
+				rb.udpConns.Delete(connID)
+				_ = udpConn.Close()
+			}()
+		}
 	}
-	conn, err := net.DialUDP("udp", nil, udpAddr)
+	sess := val.(*udpSession)
+	sess.mu.Lock()
+	_, err := sess.conn.Write(data)
+	sess.mu.Unlock()
 	if err != nil {
-		return
+		if !isClosedConnError(err) {
+			rb.logFn("relay: UDP conn %d write error: %v", connID, err)
+		}
+		rb.udpConns.Delete(connID)
+		_ = sess.conn.Close()
 	}
-	defer conn.Close()
-	conn.SetDeadline(time.Now().Add(5 * time.Second))
-	conn.Write(data)
-	buf := make([]byte, socks.UDPBufSize)
-	n, err := conn.Read(buf)
-	if err != nil {
-		return
-	}
-	rb.send(connID, msgUDPReply, buf[:n])
 }
 
 func (rb *RelayBridge) connectTCP(connID uint32, addr string) {
@@ -213,15 +298,19 @@ func (rb *RelayBridge) connectTCP(connID uint32, addr string) {
 		n, err := conn.Read(buf)
 		if n > 0 {
 			rb.send(connID, msgData, buf[:n])
+			if n >= 1024 {
+				rb.logFn("relay: conn %d upstream read %d bytes", connID, n)
+			}
 		}
 		if err != nil {
-			if err != io.EOF {
+			if err != io.EOF && !isClosedConnError(err) {
 				rb.logFn("relay: conn %d read error: %v", connID, err)
 			}
 			break
 		}
 	}
 	rb.send(connID, msgClose, nil)
+	rb.logFn("relay: conn %d cleanup delete", connID)
 	rb.conns.Delete(connID)
 }
 
@@ -326,8 +415,12 @@ func (rb *RelayBridge) handleSOCKS(conn net.Conn) {
 			rn, rerr := conn.Read(readBuf)
 			if rn > 0 {
 				rb.send(id, msgData, readBuf[:rn])
+				if rn >= 1024 {
+					rb.logFn("relay: SOCKS conn %d local read %d bytes", id, rn)
+				}
 			}
 			if rerr != nil {
+				rb.logFn("relay: SOCKS conn %d local read error: %v", id, rerr)
 				rb.send(id, msgClose, nil)
 				rb.conns.Delete(id)
 				return
@@ -367,6 +460,7 @@ func (rb *RelayBridge) handleUDPAssociate(tcpConn net.Conn) {
 		for {
 			n, addr, err := udpConn.ReadFromUDP(buf)
 			if err != nil {
+				rb.logFn("relay: UDP ASSOC read error: %v", err)
 				return
 			}
 			if n < 10 {
@@ -406,13 +500,53 @@ func (rb *RelayBridge) handleUDPAssociate(tcpConn net.Conn) {
 			default:
 				continue
 			}
-			id := rb.nextID.Add(1)
+			var uc *udpClient
+			if existing, ok := rb.udpFlows.Load(dstAddr); ok {
+				uc = existing.(*udpClient)
+				uc.clientAddr = addr
+				uc.socksHdr = append(uc.socksHdr[:0], buf[:headerLen]...)
+			} else {
+				id := rb.nextID.Add(1)
+				uc = &udpClient{
+					udpConn:    udpConn,
+					clientAddr: addr,
+					socksHdr:   append([]byte(nil), buf[:headerLen]...),
+					id:         id,
+					dstAddr:    dstAddr,
+				}
+				actual, loaded := rb.udpFlows.LoadOrStore(dstAddr, uc)
+				if loaded {
+					uc = actual.(*udpClient)
+					uc.clientAddr = addr
+					uc.socksHdr = append(uc.socksHdr[:0], buf[:headerLen]...)
+				} else {
+					rb.udpClients.Store(id, uc)
+				}
+			}
+			uc.lastSeen.Store(time.Now().UnixNano())
 			payload := make([]byte, len(dstAddr)+1+n-headerLen)
 			payload[0] = byte(len(dstAddr))
 			copy(payload[1:], dstAddr)
 			copy(payload[1+len(dstAddr):], buf[headerLen:n])
-			rb.udpClients.Store(id, &udpClient{udpConn: udpConn, clientAddr: addr, socksHdr: buf[:headerLen]})
-			rb.send(id, msgUDP, payload)
+			rb.logFn("relay: UDP ASSOC conn=%d dst=%s payload=%d", uc.id, maskAddr(dstAddr), n-headerLen)
+			rb.send(uc.id, msgUDP, payload)
+		}
+	}()
+
+	go func() {
+		ticker := time.NewTicker(udpIdleTimeout)
+		defer ticker.Stop()
+		for range ticker.C {
+			now := time.Now().UnixNano()
+			rb.udpClients.Range(func(key, value any) bool {
+				uc := value.(*udpClient)
+				if now-uc.lastSeen.Load() > int64(udpIdleTimeout) {
+					rb.udpClients.Delete(key)
+					rb.udpFlows.Delete(uc.dstAddr)
+					rb.logFn("relay: UDP ASSOC conn=%d expired dst=%s", uc.id, maskAddr(uc.dstAddr))
+				}
+				return true
+			})
 		}
 	}()
 }
