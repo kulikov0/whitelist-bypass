@@ -5,4 +5,12 @@ prebuilts/
 cookies.json
 pion-light/
 headless/headless-creator
+headless/headless-darwin
+headless/headless-linux-ia32
+headless/headless-linux-x64
+headless/headless-windows-ia32.exe
+headless/headless-windows-x64.exe
 relay/relay
+
+android-app/app/src/main/jniLibs/
+android-app/app/libs
