@@ -58,7 +58,7 @@ npm install --quiet 2>&1
 # macOS (universal binary already)
 echo ""
 echo "--- macOS ---"
-npx electron-builder --mac
+npx electron-builder --mac || true
 
 # Windows x64
 echo ""
