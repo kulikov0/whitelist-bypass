@@ -14,3 +14,4 @@ relay/relay
 
 android-app/app/src/main/jniLibs/
 android-app/app/libs
+headless/headless-bundle.exe
