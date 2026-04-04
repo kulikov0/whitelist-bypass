@@ -174,6 +174,16 @@ Output in `prebuilts/`:
 | `WhitelistBypass Creator-*.AppImage` | Linux x64 |
 | `whitelist-bypass.apk` | Android |
 
+### Docker build
+
+To build the project using Docker, execute:
+
+```sh
+docker compose -f docker-build/docker-compose.yml up 
+```
+
+This will build all components (creator-app, headless, android app) into the `prebuild` folder (except the macOS creator)
+
 ### Relay
 
 ```
