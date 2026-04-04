@@ -2,6 +2,7 @@ package main
 
 import (
 	"encoding/binary"
+	"errors"
 	"io"
 	"log"
 	"net"
@@ -16,6 +17,30 @@ import (
 type dcConn struct {
 	conn net.Conn
 	ch   chan []byte
+	once sync.Once
+}
+
+func (c *dcConn) closeWriter() {
+	c.once.Do(func() { close(c.ch) })
+}
+
+type dcUDPConn struct {
+	conn net.Conn
+	mu   sync.Mutex
+}
+
+const udpIdleTimeout = 30 * time.Second
+
+func isClosedConnError(err error) bool {
+	return errors.Is(err, net.ErrClosed)
+}
+
+func closeWriteConn(conn net.Conn) {
+	if tcp, ok := conn.(*net.TCPConn); ok {
+		_ = tcp.CloseWrite()
+		return
+	}
+	_ = conn.Close()
 }
 
 type TunnelRelay struct {
@@ -28,6 +53,7 @@ type TunnelRelay struct {
 	dc    *webrtc.DataChannel
 	dcMu  sync.Mutex
 	conns sync.Map
+	udps  sync.Map
 
 	sampleTrack *webrtc.TrackLocalStaticSample
 	tunnel      *VP8DataTunnel
@@ -215,6 +241,7 @@ func (u *TunnelRelay) Close() {
 
 func (u *TunnelRelay) handleDCMessage(data []byte) {
 	if len(data) < 5 {
+		log.Printf("[dc] short frame: %d bytes", len(data))
 		return
 	}
 	connID := binary.BigEndian.Uint32(data[0:4])
@@ -224,25 +251,30 @@ func (u *TunnelRelay) handleDCMessage(data []byte) {
 	switch mt {
 	case msgConnect:
 		go u.connectTCP(connID, string(payload))
+
 	case msgUDP:
-		go u.handleUDP(connID, payload)
+		u.handleUDP(connID, payload)
+
 	case msgData:
 		val, ok := u.conns.Load(connID)
-		if ok {
-			dc := val.(*dcConn)
-			cp := make([]byte, len(payload))
-			copy(cp, payload)
-			select {
-			case dc.ch <- cp:
-			default:
-				log.Printf("[dc] conn %d write queue full, dropping %d bytes", connID, len(payload))
-			}
+		if !ok {
+			log.Printf("[dc] DATA for unknown conn %d (%d bytes)", connID, len(payload))
+			return
 		}
+		dc := val.(*dcConn)
+		cp := make([]byte, len(payload))
+		copy(cp, payload)
+		select {
+		case dc.ch <- cp:
+		default:
+			log.Printf("[dc] conn %d write queue full, dropping %d bytes", connID, len(payload))
+		}
+
 	case msgClose:
 		val, ok := u.conns.LoadAndDelete(connID)
 		if ok {
 			dc := val.(*dcConn)
-			close(dc.ch)
+			dc.closeWriter()
 		}
 	}
 }
@@ -257,7 +289,14 @@ func (u *TunnelRelay) sendDCFrame(connID uint32, mt byte, payload []byte) {
 	binary.BigEndian.PutUint32(buf[0:4], connID)
 	buf[4] = mt
 	copy(buf[5:], payload)
-	u.dc.Send(buf)
+	if err := u.dc.Send(buf); err != nil {
+		log.Printf("[dc] send frame conn=%d type=%d failed: %v", connID, mt, err)
+	}
+}
+
+func safeBufferedAmount(dc *webrtc.DataChannel) (n uint64) {
+	defer func() { recover() }()
+	return dc.BufferedAmount()
 }
 
 func (u *TunnelRelay) connectTCP(connID uint32, addr string) {
@@ -275,9 +314,14 @@ func (u *TunnelRelay) connectTCP(connID uint32, addr string) {
 
 	go func() {
 		for data := range dc.ch {
-			conn.Write(data)
+			if _, err := conn.Write(data); err != nil {
+				if !isClosedConnError(err) {
+					log.Printf("[dc] conn %d write error: %v", connID, err)
+				}
+				break
+			}
 		}
-		conn.Close()
+		closeWriteConn(conn)
 	}()
 
 	bufSz := u.readBufSize
@@ -289,21 +333,22 @@ func (u *TunnelRelay) connectTCP(connID uint32, addr string) {
 	for {
 		if u.maxDCBuf > 0 {
 			u.dcMu.Lock()
-			dc := u.dc
+			localDC := u.dc
 			u.dcMu.Unlock()
-			if dc != nil {
-				for dc.BufferedAmount() > u.maxDCBuf {
+			if localDC != nil {
+				for safeBufferedAmount(localDC) > u.maxDCBuf {
 					time.Sleep(5 * time.Millisecond)
 				}
 			}
 		}
+
 		n, err := conn.Read(buf)
 		if n > 0 {
 			u.sendDCFrame(connID, msgData, buf[:n])
 			sent += n
 		}
 		if err != nil {
-			if err != io.EOF {
+			if err != io.EOF && !isClosedConnError(err) {
 				log.Printf("[dc] conn %d read error: %v", connID, err)
 			}
 			break
@@ -316,38 +361,83 @@ func (u *TunnelRelay) connectTCP(connID uint32, addr string) {
 
 func (u *TunnelRelay) handleUDP(connID uint32, payload []byte) {
 	if len(payload) < 2 {
+		log.Printf("[dc] UDP frame too short conn=%d len=%d", connID, len(payload))
 		return
 	}
 	addrLen := int(payload[0])
-	if len(payload) < 1+addrLen {
+	if addrLen == 0 || len(payload) < 1+addrLen {
 		return
 	}
 	addr := string(payload[1 : 1+addrLen])
 	data := payload[1+addrLen:]
-	udpAddr, err := net.ResolveUDPAddr("udp", addr)
-	if err != nil {
-		return
+
+	val, ok := u.udps.Load(connID)
+	if !ok {
+		udpAddr, err := net.ResolveUDPAddr("udp", addr)
+		if err != nil {
+			log.Printf("[dc] UDP resolve failed conn=%d addr=%s: %v", connID, maskAddr(addr), err)
+			return
+		}
+		udpConn, err := net.DialUDP("udp", nil, udpAddr)
+		if err != nil {
+			log.Printf("[dc] UDP dial failed conn=%d addr=%s: %v", connID, maskAddr(addr), err)
+			return
+		}
+		sess := &dcUDPConn{conn: udpConn}
+		actual, loaded := u.udps.LoadOrStore(connID, sess)
+		if loaded {
+			udpConn.Close()
+			val = actual
+		} else {
+			val = sess
+			go func() {
+				buf := make([]byte, udpBufSize)
+				for {
+					_ = udpConn.SetReadDeadline(time.Now().Add(udpIdleTimeout))
+					n, err := udpConn.Read(buf)
+					if n > 0 {
+						resp := make([]byte, n)
+						copy(resp, buf[:n])
+						u.sendDCFrame(connID, msgUDPReply, resp)
+					}
+					if err != nil {
+						if ne, ok := err.(net.Error); ok && ne.Timeout() {
+							log.Printf("[dc] UDP conn %d idle timeout", connID)
+						} else if !isClosedConnError(err) {
+							log.Printf("[dc] UDP read failed conn=%d: %v", connID, err)
+						}
+						break
+					}
+				}
+				u.udps.Delete(connID)
+				_ = udpConn.Close()
+			}()
+		}
 	}
-	conn, err := net.DialUDP("udp", nil, udpAddr)
+	sess := val.(*dcUDPConn)
+	sess.mu.Lock()
+	_, err := sess.conn.Write(data)
+	sess.mu.Unlock()
 	if err != nil {
-		return
+		if !isClosedConnError(err) {
+			log.Printf("[dc] UDP write failed conn=%d: %v", connID, err)
+		}
+		u.udps.Delete(connID)
+		_ = sess.conn.Close()
 	}
-	defer conn.Close()
-	conn.SetDeadline(time.Now().Add(5 * time.Second))
-	conn.Write(data)
-	resp := make([]byte, udpBufSize)
-	n, err := conn.Read(resp)
-	if err != nil {
-		return
-	}
-	u.sendDCFrame(connID, msgUDPReply, resp[:n])
 }
 
 func (u *TunnelRelay) closeAllConns() {
 	u.conns.Range(func(key, val any) bool {
 		dc := val.(*dcConn)
+		dc.closeWriter()
 		dc.conn.Close()
 		u.conns.Delete(key)
+		return true
+	})
+	u.udps.Range(func(key, val any) bool {
+		_ = val.(*dcUDPConn).conn.Close()
+		u.udps.Delete(key)
 		return true
 	})
 }

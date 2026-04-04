@@ -2,6 +2,7 @@ package mobile
 
 import (
 	"encoding/binary"
+	"errors"
 	"fmt"
 	"io"
 	"log"
@@ -11,8 +12,9 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/gorilla/websocket"
 	"whitelist-bypass/relay/socks"
+
+	"github.com/gorilla/websocket"
 )
 
 const (
@@ -26,7 +28,6 @@ const (
 )
 
 const readBufSize = 65536
-
 
 var framePool = sync.Pool{
 	New: func() any {
@@ -73,6 +74,17 @@ func logMsg(format string, args ...any) {
 	}
 }
 
+func isClosedConnError(err error) bool {
+	return errors.Is(err, net.ErrClosed)
+}
+
+func closeWriteConn(conn net.Conn) {
+	if tcp, ok := conn.(*net.TCPConn); ok {
+		_ = tcp.CloseWrite()
+		return
+	}
+	_ = conn.Close()
+}
 
 type wsWriter struct {
 	ws   *websocket.Conn
@@ -113,7 +125,6 @@ func (w *wsWriter) close() {
 	close(w.ch)
 	<-w.done
 }
-
 
 var activeJoiner struct {
 	sync.Mutex
@@ -216,6 +227,7 @@ type joinerRelay struct {
 	writer     *wsWriter
 	conns      sync.Map
 	udpClients sync.Map
+	udpFlows   sync.Map
 	nextID     atomic.Uint32
 	ready      chan struct{}
 	once       sync.Once
@@ -243,7 +255,17 @@ type udpClient struct {
 	udpConn     *net.UDPConn
 	clientAddr  *net.UDPAddr
 	socksHeader []byte
+	id          uint32
+	dstAddr     string
+	lastSeen    atomic.Int64
 }
+
+type udpSession struct {
+	conn net.Conn
+	mu   sync.Mutex
+}
+
+const udpIdleTimeout = 30 * time.Second
 
 func (j *joinerRelay) handleUDPAssociate(tcpConn net.Conn) {
 	udpAddr, err := net.ResolveUDPAddr("udp", "127.0.0.1:0")
@@ -318,13 +340,52 @@ func (j *joinerRelay) handleUDPAssociate(tcpConn net.Conn) {
 			default:
 				continue
 			}
-			id := j.nextID.Add(1)
+			var uc *udpClient
+			if existing, ok := j.udpFlows.Load(dstAddr); ok {
+				uc = existing.(*udpClient)
+				uc.clientAddr = clientAddr
+				uc.socksHeader = append(uc.socksHeader[:0], buf[:headerLen]...)
+			} else {
+				id := j.nextID.Add(1)
+				uc = &udpClient{
+					udpConn:     udpConn,
+					clientAddr:  clientAddr,
+					socksHeader: append([]byte(nil), buf[:headerLen]...),
+					id:          id,
+					dstAddr:     dstAddr,
+				}
+				actual, loaded := j.udpFlows.LoadOrStore(dstAddr, uc)
+				if loaded {
+					uc = actual.(*udpClient)
+					uc.clientAddr = clientAddr
+					uc.socksHeader = append(uc.socksHeader[:0], buf[:headerLen]...)
+				} else {
+					j.udpClients.Store(id, uc)
+				}
+			}
+			uc.lastSeen.Store(time.Now().UnixNano())
 			payload := make([]byte, len(dstAddr)+1+n-headerLen)
 			payload[0] = byte(len(dstAddr))
 			copy(payload[1:], dstAddr)
 			copy(payload[1+len(dstAddr):], buf[headerLen:n])
-			j.udpClients.Store(id, &udpClient{udpConn: udpConn, clientAddr: clientAddr, socksHeader: buf[:headerLen]})
-			j.send(id, msgUDP, payload)
+			j.send(uc.id, msgUDP, payload)
+		}
+	}()
+
+	go func() {
+		ticker := time.NewTicker(udpIdleTimeout)
+		defer ticker.Stop()
+		for range ticker.C {
+			now := time.Now().UnixNano()
+			j.udpClients.Range(func(key, value any) bool {
+				uc := value.(*udpClient)
+				if now-uc.lastSeen.Load() > int64(udpIdleTimeout) {
+					j.udpClients.Delete(key)
+					j.udpFlows.Delete(uc.dstAddr)
+					logMsg("dc-joiner: UDP session expired conn=%d dst=%s", uc.id, maskAddr(uc.dstAddr))
+				}
+				return true
+			})
 		}
 	}()
 }
@@ -350,13 +411,14 @@ func (j *joinerRelay) handleWS(w http.ResponseWriter, r *http.Request) {
 }
 
 func (j *joinerRelay) handleMessage(connID uint32, msgType byte, payload []byte) {
-	val, ok := j.conns.Load(connID)
-	if !ok {
-		return
+	if msgType != msgData {
+		logMsg("dc-joiner: RX frame conn=%d type=%d payload=%d", connID, msgType, len(payload))
 	}
+	// UDP replies come with connID from udpClients, not conns — handle first.
 	if msgType == msgUDPReply {
 		uval, ok := j.udpClients.Load(connID)
 		if !ok {
+			logMsg("dc-joiner: UDP reply for unknown conn %d", connID)
 			return
 		}
 		uc := uval.(*udpClient)
@@ -364,7 +426,13 @@ func (j *joinerRelay) handleMessage(connID uint32, msgType byte, payload []byte)
 		copy(reply, uc.socksHeader)
 		copy(reply[len(uc.socksHeader):], payload)
 		uc.udpConn.WriteToUDP(reply, uc.clientAddr)
-		j.udpClients.Delete(connID)
+		logMsg("dc-joiner: UDP reply delivered conn=%d bytes=%d", connID, len(payload))
+		uc.lastSeen.Store(time.Now().UnixNano())
+		return
+	}
+	val, ok := j.conns.Load(connID)
+	if !ok {
+		logMsg("dc-joiner: unknown conn %d for type=%d payload=%d", connID, msgType, len(payload))
 		return
 	}
 	sc := val.(*socksConn)
@@ -374,9 +442,11 @@ func (j *joinerRelay) handleMessage(connID uint32, msgType byte, payload []byte)
 	case msgConnectErr:
 		sc.rdy <- fmt.Errorf("%s", payload)
 	case msgData:
-		sc.conn.Write(payload)
+		if _, err := sc.conn.Write(payload); err != nil {
+			logMsg("dc-joiner: conn %d local write error: %v", connID, err)
+		}
 	case msgClose:
-		sc.conn.Close()
+		closeWriteConn(sc.conn)
 		j.conns.Delete(connID)
 	}
 }
@@ -389,6 +459,9 @@ func (j *joinerRelay) send(connID uint32, msgType byte, payload []byte) {
 	bufp := framePool.Get().(*[]byte)
 	buf := *bufp
 	n := encodeFrameInto(buf, connID, msgType, payload)
+	if msgType != msgData {
+		logMsg("dc-joiner: TX frame conn=%d type=%d payload=%d", connID, msgType, len(payload))
+	}
 	w.send(buf[:n])
 	framePool.Put(bufp)
 }
@@ -478,8 +551,12 @@ func (j *joinerRelay) handleSOCKS(conn net.Conn) {
 			n, err := conn.Read(buf)
 			if n > 0 {
 				j.send(id, msgData, buf[:n])
+				if n >= 1024 {
+					logMsg("dc-joiner: conn %d local read %d bytes", id, n)
+				}
 			}
 			if err != nil {
+				logMsg("dc-joiner: conn %d local read error: %v", id, err)
 				j.send(id, msgClose, nil)
 				j.conns.Delete(id)
 				return
@@ -491,6 +568,7 @@ func (j *joinerRelay) handleSOCKS(conn net.Conn) {
 type creatorRelay struct {
 	writer *wsWriter
 	conns  sync.Map
+	udps   sync.Map
 }
 
 func (c *creatorRelay) handleWS(w http.ResponseWriter, r *http.Request) {
@@ -513,21 +591,28 @@ func (c *creatorRelay) handleWS(w http.ResponseWriter, r *http.Request) {
 }
 
 func (c *creatorRelay) handleMessage(connID uint32, msgType byte, payload []byte) {
+	if msgType != msgData {
+		logMsg("dc-creator: RX frame conn=%d type=%d payload=%d", connID, msgType, len(payload))
+	}
 	switch msgType {
 	case msgConnect:
 		go c.connect(connID, string(payload))
 	case msgUDP:
-		go c.handleUDP(connID, payload)
+		c.handleUDP(connID, payload)
 	case msgData:
 		if val, ok := c.conns.Load(connID); ok {
 			if conn, ok := val.(net.Conn); ok {
-				conn.Write(payload)
+				if _, err := conn.Write(payload); err != nil {
+					logMsg("dc-creator: conn %d downstream write error: %v", connID, err)
+				}
 			}
+		} else {
+			logMsg("dc-creator: DATA for unknown conn %d (%d bytes)", connID, len(payload))
 		}
 	case msgClose:
 		if val, ok := c.conns.LoadAndDelete(connID); ok {
 			if conn, ok := val.(net.Conn); ok {
-				conn.Close()
+				closeWriteConn(conn)
 			}
 		}
 	}
@@ -541,12 +626,16 @@ func (c *creatorRelay) send(connID uint32, msgType byte, payload []byte) {
 	bufp := framePool.Get().(*[]byte)
 	buf := *bufp
 	n := encodeFrameInto(buf, connID, msgType, payload)
+	if msgType != msgData {
+		logMsg("dc-creator: TX frame conn=%d type=%d payload=%d", connID, msgType, len(payload))
+	}
 	w.send(buf[:n])
 	framePool.Put(bufp)
 }
 
 func (c *creatorRelay) handleUDP(connID uint32, payload []byte) {
 	if len(payload) < 2 {
+		logMsg("dc-creator: UDP short frame conn=%d len=%d", connID, len(payload))
 		return
 	}
 	addrLen := int(payload[0])
@@ -555,29 +644,62 @@ func (c *creatorRelay) handleUDP(connID uint32, payload []byte) {
 	}
 	addr := string(payload[1 : 1+addrLen])
 	data := payload[1+addrLen:]
-
-	udpAddr, err := net.ResolveUDPAddr("udp", addr)
-	if err != nil {
-		logMsg("dc-creator: UDP resolve %s failed: %v", maskAddr(addr), err)
-		return
+	logMsg("dc-creator: UDP conn=%d -> %s payload=%d", connID, maskAddr(addr), len(data))
+	val, ok := c.udps.Load(connID)
+	if !ok {
+		udpAddr, err := net.ResolveUDPAddr("udp", addr)
+		if err != nil {
+			logMsg("dc-creator: UDP resolve %s failed: %v", maskAddr(addr), err)
+			return
+		}
+		udpConn, err := net.DialUDP("udp", nil, udpAddr)
+		if err != nil {
+			logMsg("dc-creator: UDP dial %s failed: %v", maskAddr(addr), err)
+			return
+		}
+		sess := &udpSession{conn: udpConn}
+		actual, loaded := c.udps.LoadOrStore(connID, sess)
+		if loaded {
+			udpConn.Close()
+			val = actual
+		} else {
+			val = sess
+			go func() {
+				buf := make([]byte, socks.UDPBufSize)
+				for {
+					_ = udpConn.SetReadDeadline(time.Now().Add(udpIdleTimeout))
+					n, err := udpConn.Read(buf)
+					if n > 0 {
+						resp := make([]byte, n)
+						copy(resp, buf[:n])
+						logMsg("dc-creator: UDP conn=%d reply=%d bytes", connID, n)
+						c.send(connID, msgUDPReply, resp)
+					}
+					if err != nil {
+						if ne, ok := err.(net.Error); ok && ne.Timeout() {
+							logMsg("dc-creator: UDP conn %d idle timeout", connID)
+						} else if !isClosedConnError(err) {
+							logMsg("dc-creator: UDP conn %d read error: %v", connID, err)
+						}
+						break
+					}
+				}
+				c.udps.Delete(connID)
+				_ = udpConn.Close()
+			}()
+		}
 	}
-	conn, err := net.DialUDP("udp", nil, udpAddr)
+	sess := val.(*udpSession)
+	sess.mu.Lock()
+	_, err := sess.conn.Write(data)
+	sess.mu.Unlock()
 	if err != nil {
-		logMsg("dc-creator: UDP dial %s failed: %v", maskAddr(addr), err)
-		return
+		if !isClosedConnError(err) {
+			logMsg("dc-creator: UDP conn %d write error: %v", connID, err)
+		}
+		c.udps.Delete(connID)
+		_ = sess.conn.Close()
 	}
-	defer conn.Close()
-	conn.SetDeadline(time.Now().Add(5 * time.Second))
-	_, err = conn.Write(data)
-	if err != nil {
-		return
-	}
-	buf := make([]byte, socks.UDPBufSize)
-	n, err := conn.Read(buf)
-	if err != nil {
-		return
-	}
-	c.send(connID, msgUDPReply, buf[:n])
 }
 
 func (c *creatorRelay) connect(connID uint32, addr string) {
@@ -596,9 +718,12 @@ func (c *creatorRelay) connect(connID uint32, addr string) {
 		n, err := conn.Read(buf)
 		if n > 0 {
 			c.send(connID, msgData, buf[:n])
+			if n >= 1024 {
+				logMsg("dc-creator: conn %d upstream read %d bytes", connID, n)
+			}
 		}
 		if err != nil {
-			if err != io.EOF {
+			if err != io.EOF && !isClosedConnError(err) {
 				logMsg("dc-creator: conn %d read error: %v", connID, err)
 			}
 			break
