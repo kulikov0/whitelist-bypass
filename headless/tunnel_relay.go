@@ -17,7 +17,11 @@ import (
 type dcConn struct {
 	conn net.Conn
 	ch   chan []byte
-	one  sync.Once
+	once sync.Once
+}
+
+func (c *dcConn) closeWriter() {
+	c.once.Do(func() { close(c.ch) })
 }
 
 type dcUDPConn struct {
@@ -37,12 +41,6 @@ func closeWriteConn(conn net.Conn) {
 		return
 	}
 	_ = conn.Close()
-}
-
-func (c *dcConn) closeWriter() {
-	c.one.Do(func() {
-		close(c.ch)
-	})
 }
 
 type TunnelRelay struct {
@@ -249,38 +247,34 @@ func (u *TunnelRelay) handleDCMessage(data []byte) {
 	connID := binary.BigEndian.Uint32(data[0:4])
 	mt := data[4]
 	payload := data[5:]
-	if mt != msgData {
-		log.Printf("[dc] RX frame conn=%d type=%d payload=%d", connID, mt, len(payload))
-	}
 
 	switch mt {
 	case msgConnect:
 		go u.connectTCP(connID, string(payload))
+
 	case msgUDP:
 		u.handleUDP(connID, payload)
+
 	case msgData:
 		val, ok := u.conns.Load(connID)
-		if ok {
-			dc := val.(*dcConn)
-			cp := make([]byte, len(payload))
-			copy(cp, payload)
-			select {
-			case dc.ch <- cp:
-				if len(payload) >= 1024 {
-					log.Printf("[dc] queued %d bytes for conn %d", len(payload), connID)
-				}
-			default:
-				log.Printf("[dc] conn %d write queue full, dropping %d bytes", connID, len(payload))
-			}
-		} else {
+		if !ok {
 			log.Printf("[dc] DATA for unknown conn %d (%d bytes)", connID, len(payload))
+			return
 		}
+		dc := val.(*dcConn)
+		cp := make([]byte, len(payload))
+		copy(cp, payload)
+		select {
+		case dc.ch <- cp:
+		default:
+			log.Printf("[dc] conn %d write queue full, dropping %d bytes", connID, len(payload))
+		}
+
 	case msgClose:
 		val, ok := u.conns.LoadAndDelete(connID)
 		if ok {
 			dc := val.(*dcConn)
 			dc.closeWriter()
-			closeWriteConn(dc.conn)
 		}
 	}
 }
@@ -295,12 +289,14 @@ func (u *TunnelRelay) sendDCFrame(connID uint32, mt byte, payload []byte) {
 	binary.BigEndian.PutUint32(buf[0:4], connID)
 	buf[4] = mt
 	copy(buf[5:], payload)
-	if mt != msgData {
-		log.Printf("[dc] TX frame conn=%d type=%d payload=%d", connID, mt, len(payload))
-	}
 	if err := u.dc.Send(buf); err != nil {
 		log.Printf("[dc] send frame conn=%d type=%d failed: %v", connID, mt, err)
 	}
+}
+
+func safeBufferedAmount(dc *webrtc.DataChannel) (n uint64) {
+	defer func() { recover() }()
+	return dc.BufferedAmount()
 }
 
 func (u *TunnelRelay) connectTCP(connID uint32, addr string) {
@@ -337,22 +333,19 @@ func (u *TunnelRelay) connectTCP(connID uint32, addr string) {
 	for {
 		if u.maxDCBuf > 0 {
 			u.dcMu.Lock()
-			dc := u.dc
+			localDC := u.dc
 			u.dcMu.Unlock()
-			if dc != nil {
-				for dc.BufferedAmount() > u.maxDCBuf {
-					log.Printf("[dc] conn %d backpressure buffered=%d limit=%d", connID, dc.BufferedAmount(), u.maxDCBuf)
+			if localDC != nil {
+				for safeBufferedAmount(localDC) > u.maxDCBuf {
 					time.Sleep(5 * time.Millisecond)
 				}
 			}
 		}
+
 		n, err := conn.Read(buf)
 		if n > 0 {
 			u.sendDCFrame(connID, msgData, buf[:n])
 			sent += n
-			if n >= 1024 {
-				log.Printf("[dc] conn %d read %d bytes from upstream (total=%d)", connID, n, sent)
-			}
 		}
 		if err != nil {
 			if err != io.EOF && !isClosedConnError(err) {
@@ -372,12 +365,12 @@ func (u *TunnelRelay) handleUDP(connID uint32, payload []byte) {
 		return
 	}
 	addrLen := int(payload[0])
-	if len(payload) < 1+addrLen {
+	if addrLen == 0 || len(payload) < 1+addrLen {
 		return
 	}
 	addr := string(payload[1 : 1+addrLen])
 	data := payload[1+addrLen:]
-	log.Printf("[dc] UDP conn=%d -> %s payload=%d", connID, maskAddr(addr), len(data))
+
 	val, ok := u.udps.Load(connID)
 	if !ok {
 		udpAddr, err := net.ResolveUDPAddr("udp", addr)
@@ -405,7 +398,6 @@ func (u *TunnelRelay) handleUDP(connID uint32, payload []byte) {
 					if n > 0 {
 						resp := make([]byte, n)
 						copy(resp, buf[:n])
-						log.Printf("[dc] UDP reply conn=%d bytes=%d", connID, n)
 						u.sendDCFrame(connID, msgUDPReply, resp)
 					}
 					if err != nil {
@@ -419,7 +411,6 @@ func (u *TunnelRelay) handleUDP(connID uint32, payload []byte) {
 				}
 				u.udps.Delete(connID)
 				_ = udpConn.Close()
-				log.Printf("[dc] UDP conn %d closed", connID)
 			}()
 		}
 	}

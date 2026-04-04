@@ -40,6 +40,16 @@ type RelayBridge struct {
 	logFn  func(string, ...any)
 }
 
+type rbConn struct {
+	conn net.Conn
+	ch   chan []byte
+	once sync.Once
+}
+
+func (c *rbConn) closeWriter() {
+	c.once.Do(func() { close(c.ch) })
+}
+
 type videoUDPConn struct {
 	conn net.Conn
 	mu   sync.Mutex
@@ -58,8 +68,9 @@ func NewRelayBridge(tunnel *VP8DataTunnel, mode string, logFn func(string, ...an
 func (rb *RelayBridge) closeAll() {
 	rb.logFn("relay: closing all connections")
 	rb.conns.Range(func(key, value any) bool {
-		if c, ok := value.(net.Conn); ok {
-			c.Close()
+		if c, ok := value.(*rbConn); ok {
+			c.closeWriter()
+			c.conn.Close()
 		}
 		rb.conns.Delete(key)
 		return true
@@ -83,27 +94,32 @@ func (rb *RelayBridge) handleTunnelData(data []byte) {
 }
 
 func (rb *RelayBridge) handleCreatorMessage(connID uint32, msgType byte, payload []byte) {
-	if msgType != msgData {
-		rb.logFn("relay: RX frame conn=%d type=%d payload=%d", connID, msgType, len(payload))
-	}
 	switch msgType {
 	case msgConnect:
 		go rb.connectTCP(connID, string(payload))
+
 	case msgUDP:
 		rb.handleUDP(connID, payload)
+
 	case msgData:
 		val, ok := rb.conns.Load(connID)
-		if ok {
-			if _, err := val.(net.Conn).Write(payload); err != nil {
-				rb.logFn("relay: conn %d downstream write error: %v", connID, err)
-			}
-		} else {
+		if !ok {
 			rb.logFn("relay: DATA for unknown conn %d (%d bytes)", connID, len(payload))
+			return
 		}
+		c := val.(*rbConn)
+		cp := make([]byte, len(payload))
+		copy(cp, payload)
+		select {
+		case c.ch <- cp:
+		default:
+			rb.logFn("relay: conn %d write queue full, dropping %d bytes", connID, len(payload))
+		}
+
 	case msgClose:
 		val, ok := rb.conns.LoadAndDelete(connID)
 		if ok {
-			closeWriteConn(val.(net.Conn))
+			val.(*rbConn).closeWriter()
 		}
 	}
 }
@@ -119,7 +135,7 @@ func (rb *RelayBridge) handleUDP(connID uint32, payload []byte) {
 	}
 	addr := string(payload[1 : 1+addrLen])
 	data := payload[1+addrLen:]
-	rb.logFn("relay: UDP conn=%d -> %s payload=%d", connID, maskAddr(addr), len(data))
+
 	val, ok := rb.udps.Load(connID)
 	if !ok {
 		udpAddr, err := net.ResolveUDPAddr("udp", addr)
@@ -147,7 +163,6 @@ func (rb *RelayBridge) handleUDP(connID uint32, payload []byte) {
 					if n > 0 {
 						resp := make([]byte, n)
 						copy(resp, buf[:n])
-						rb.logFn("relay: UDP conn=%d reply=%d bytes", connID, n)
 						rb.send(connID, msgUDPReply, resp)
 					}
 					if err != nil {
@@ -179,24 +194,34 @@ func (rb *RelayBridge) handleUDP(connID uint32, payload []byte) {
 
 func (rb *RelayBridge) connectTCP(connID uint32, addr string) {
 	rb.logFn("relay: CONNECT %d -> %s", connID, maskAddr(addr))
-	conn, err := net.DialTimeout("tcp", addr, 10e9)
+	conn, err := net.DialTimeout("tcp", addr, 10*time.Second)
 	if err != nil {
 		rb.logFn("relay: CONNECT %d failed: %v", connID, err)
 		rb.send(connID, msgConnectErr, []byte(err.Error()))
 		return
 	}
-	rb.conns.Store(connID, conn)
+	rc := &rbConn{conn: conn, ch: make(chan []byte, 256)}
+	rb.conns.Store(connID, rc)
 	rb.send(connID, msgConnectOK, nil)
 	rb.logFn("relay: CONNECTED %d -> %s", connID, maskAddr(addr))
+
+	go func() {
+		for data := range rc.ch {
+			if _, err := conn.Write(data); err != nil {
+				if !isClosedConnError(err) {
+					rb.logFn("relay: conn %d write error: %v", connID, err)
+				}
+				break
+			}
+		}
+		closeWriteConn(conn)
+	}()
 
 	buf := make([]byte, vp8RelayBufSize)
 	for {
 		n, err := conn.Read(buf)
 		if n > 0 {
 			rb.send(connID, msgData, buf[:n])
-			if n >= 1024 {
-				rb.logFn("relay: conn %d upstream read %d bytes", connID, n)
-			}
 		}
 		if err != nil {
 			if err != io.EOF && !isClosedConnError(err) {
@@ -206,6 +231,5 @@ func (rb *RelayBridge) connectTCP(connID uint32, addr string) {
 		}
 	}
 	rb.send(connID, msgClose, nil)
-	rb.logFn("relay: conn %d cleanup delete", connID)
 	rb.conns.Delete(connID)
 }
