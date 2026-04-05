@@ -54,6 +54,7 @@ echo ""
 echo "=== Building Electron apps ==="
 cd "$CREATOR_DIR"
 npm install --quiet 2>&1
+npm run build 2>&1
 
 # macOS (universal binary already)
 echo ""
