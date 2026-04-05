@@ -31,6 +31,28 @@ func main() {
 
 	cb := stdLogger{}
 
+	type signalingClient interface {
+		HandleSignaling(http.ResponseWriter, *http.Request)
+	}
+
+	startVideo := func(name string, client signalingClient, onConnected func(*pion.VP8DataTunnel)) {
+		mux := http.NewServeMux()
+		mux.HandleFunc("/signaling", client.HandleSignaling)
+		addr := fmt.Sprintf("127.0.0.1:%d", *wsPort)
+		log.Printf("%s: signaling on %s", name, addr)
+		log.Fatal(http.ListenAndServe(addr, mux))
+	}
+
+	joinerCallback := func(tunnel *pion.VP8DataTunnel) {
+		rb := pion.NewRelayBridge(tunnel, "joiner", log.Printf)
+		rb.MarkReady()
+		go rb.ListenSOCKS(fmt.Sprintf("127.0.0.1:%d", *socksPort))
+	}
+
+	creatorCallback := func(tunnel *pion.VP8DataTunnel) {
+		pion.NewRelayBridge(tunnel, "creator", log.Printf)
+	}
+
 	switch *mode {
 	case "dc-joiner":
 		log.Fatal(mobile.StartJoiner(*wsPort, *socksPort, cb))
@@ -38,48 +60,20 @@ func main() {
 		log.Fatal(mobile.StartCreator(*wsPort, cb))
 	case "vk-video-joiner":
 		c := pion.NewVKClient(log.Printf)
-		c.OnConnected = func(tunnel *pion.VP8DataTunnel) {
-			rb := pion.NewRelayBridge(tunnel, "joiner", log.Printf)
-			rb.MarkReady()
-			go rb.ListenSOCKS(fmt.Sprintf("127.0.0.1:%d", *socksPort))
-		}
-		mux := http.NewServeMux()
-		mux.HandleFunc("/signaling", c.HandleSignaling)
-		addr := fmt.Sprintf("127.0.0.1:%d", *wsPort)
-		log.Printf("vk-video-joiner: signaling on %s, SOCKS5 on :%d", addr, *socksPort)
-		log.Fatal(http.ListenAndServe(addr, mux))
+		c.OnConnected = joinerCallback
+		startVideo(*mode, c, joinerCallback)
 	case "vk-video-creator":
 		c := pion.NewVKClient(log.Printf)
-		c.OnConnected = func(tunnel *pion.VP8DataTunnel) {
-			pion.NewRelayBridge(tunnel, "creator", log.Printf)
-		}
-		mux := http.NewServeMux()
-		mux.HandleFunc("/signaling", c.HandleSignaling)
-		addr := fmt.Sprintf("127.0.0.1:%d", *wsPort)
-		log.Printf("vk-video-creator: signaling on %s", addr)
-		log.Fatal(http.ListenAndServe(addr, mux))
+		c.OnConnected = creatorCallback
+		startVideo(*mode, c, creatorCallback)
 	case "telemost-video-joiner":
 		c := pion.NewTelemostClient(log.Printf)
-		c.OnConnected = func(tunnel *pion.VP8DataTunnel) {
-			rb := pion.NewRelayBridge(tunnel, "joiner", log.Printf)
-			rb.MarkReady()
-			go rb.ListenSOCKS(fmt.Sprintf("127.0.0.1:%d", *socksPort))
-		}
-		mux := http.NewServeMux()
-		mux.HandleFunc("/signaling", c.HandleSignaling)
-		addr := fmt.Sprintf("127.0.0.1:%d", *wsPort)
-		log.Printf("telemost-video-joiner: signaling on %s, SOCKS5 on :%d", addr, *socksPort)
-		log.Fatal(http.ListenAndServe(addr, mux))
+		c.OnConnected = joinerCallback
+		startVideo(*mode, c, joinerCallback)
 	case "telemost-video-creator":
 		c := pion.NewTelemostClient(log.Printf)
-		c.OnConnected = func(tunnel *pion.VP8DataTunnel) {
-			pion.NewRelayBridge(tunnel, "creator", log.Printf)
-		}
-		mux := http.NewServeMux()
-		mux.HandleFunc("/signaling", c.HandleSignaling)
-		addr := fmt.Sprintf("127.0.0.1:%d", *wsPort)
-		log.Printf("telemost-video-creator: signaling on %s", addr)
-		log.Fatal(http.ListenAndServe(addr, mux))
+		c.OnConnected = creatorCallback
+		startVideo(*mode, c, creatorCallback)
 	default:
 		fmt.Fprintf(os.Stderr, "Unknown mode: %s\n", *mode)
 		os.Exit(1)

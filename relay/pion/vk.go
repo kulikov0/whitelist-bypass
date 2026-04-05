@@ -5,10 +5,7 @@ import (
 	"log"
 	"net/http"
 
-	"github.com/pion/rtp"
-	"github.com/pion/rtp/codecs"
 	"github.com/pion/webrtc/v4"
-	"whitelist-bypass/relay/socks"
 )
 
 type VKClient struct {
@@ -82,22 +79,8 @@ func (c *VKClient) createPC(config webrtc.Configuration) error {
 	}
 	c.pc = pc
 
-	sampleTrack, _ := webrtc.NewTrackLocalStaticSample(
-		webrtc.RTPCodecCapability{MimeType: webrtc.MimeTypeVP8},
-		"video", "tunnel-video",
-	)
+	sampleTrack := AddTunnelTracks(pc, c.logFn, "vk")
 	c.sampleTrack = sampleTrack
-
-	audioTrack, _ := webrtc.NewTrackLocalStaticRTP(
-		webrtc.RTPCodecCapability{MimeType: webrtc.MimeTypeOpus},
-		"audio", "tunnel-audio",
-	)
-
-	audioSender, audioErr := pc.AddTrack(audioTrack)
-	videoSender, videoErr := pc.AddTrack(sampleTrack)
-	c.logFn("vk: AddTrack audio: sender=%v err=%v", audioSender != nil, audioErr)
-	c.logFn("vk: AddTrack video: sender=%v err=%v", videoSender != nil, videoErr)
-	c.logFn("vk: senders count: %d", len(pc.GetSenders()))
 
 	// Create DataChannels required by VK SFU.
 	// The SFU sends producer-updated (SDP offer) via producerNotification DC.
@@ -246,12 +229,7 @@ func (c *VKClient) handleSetRemoteDescription(data json.RawMessage, id int) {
 		}
 		return
 	}
-	var sdpType webrtc.SDPType
-	if sdpMsg.Type == "offer" {
-		sdpType = webrtc.SDPTypeOffer
-	} else {
-		sdpType = webrtc.SDPTypeAnswer
-	}
+	sdpType := ParseSDPType(sdpMsg.Type)
 	connState := c.pc.ConnectionState().String()
 	iceState := c.pc.ICEConnectionState().String()
 	c.logFn("vk: setRemoteDescription: type=%s signalingState=%s connectionState=%s iceState=%s senders=%d receivers=%d",
@@ -313,56 +291,7 @@ func (c *VKClient) handleICECandidate(data json.RawMessage) {
 }
 
 func (c *VKClient) readTrack(track *webrtc.TrackRemote) {
-	if track.Codec().MimeType != webrtc.MimeTypeVP8 {
-		buf := make([]byte, socks.UDPBufSize)
-		for {
-			if _, _, err := track.Read(buf); err != nil {
-				return
-			}
-		}
-	}
-
-	var vp8Pkt codecs.VP8Packet
-	var frameBuf []byte
-	dataCount := 0
-	recvCount := 0
-	buf := make([]byte, socks.RTPBufSize)
-	for {
-		n, _, err := track.Read(buf)
-		if err != nil {
-			return
-		}
-		pkt := &rtp.Packet{}
-		if pkt.Unmarshal(buf[:n]) != nil {
-			continue
-		}
-		vp8Payload, err := vp8Pkt.Unmarshal(pkt.Payload)
-		if err != nil {
-			continue
-		}
-		if vp8Pkt.S == 1 {
-			frameBuf = frameBuf[:0]
-		}
-		frameBuf = append(frameBuf, vp8Payload...)
-		if pkt.Marker {
-			recvCount++
-			if recvCount <= 3 || recvCount%25 == 0 {
-				if len(frameBuf) > 0 {
-					c.logFn("vk: recv frame #%d %d bytes, first=0x%02x", recvCount, len(frameBuf), frameBuf[0])
-				}
-			}
-			data := ExtractDataFromPayload(frameBuf)
-			if data != nil {
-				dataCount++
-				if dataCount <= 5 || dataCount%100 == 0 {
-					c.logFn("vk: TUNNEL DATA #%d: %d bytes", dataCount, len(data))
-				}
-				if c.tunnel != nil && c.tunnel.onData != nil {
-					c.tunnel.onData(data)
-				}
-			}
-		}
-	}
+	ReadTrack(track, c.tunnel, c.logFn, "vk")
 }
 
 func (c *VKClient) handleReset(id int) {

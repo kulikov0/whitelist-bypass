@@ -1,4 +1,4 @@
-package main
+package tunnel
 
 import (
 	"encoding/binary"
@@ -10,7 +10,6 @@ import (
 	"github.com/pion/webrtc/v4/pkg/media"
 )
 
-// Real VP8 frames
 var vp8Keyframe = []byte{
 	16, 2, 0, 157, 1, 42, 2, 0, 2, 0, 2, 7, 8, 133, 133, 136,
 	153, 132, 136, 11, 2, 0, 12, 13, 96, 0, 254, 252, 173, 16,
@@ -20,7 +19,6 @@ var vp8Interframe = []byte{
 	177, 1, 0, 8, 17, 24, 0, 24, 0, 24, 88, 47, 244, 0, 8, 0, 0,
 }
 
-// Handles sending and receiving data through VP8 video samples
 type VP8DataTunnel struct {
 	track      *webrtc.TrackLocalStaticSample
 	mu         sync.Mutex
@@ -29,8 +27,8 @@ type VP8DataTunnel struct {
 	running    bool
 	stopCh     chan struct{}
 	sendQueue  chan []byte
-	onData     func([]byte)
-	onClose func()
+	OnData     func([]byte)
+	OnClose    func()
 }
 
 func NewVP8DataTunnel(track *webrtc.TrackLocalStaticSample, logFn func(string, ...any)) *VP8DataTunnel {
@@ -42,30 +40,23 @@ func NewVP8DataTunnel(track *webrtc.TrackLocalStaticSample, logFn func(string, .
 	}
 }
 
-// Data frame marker - first byte 0xFF distinguishes from VP8 (keyframe bit0=0, inter bit0=1)
-const dataFrameMarker = 0xFF
+const DataFrameMarker = 0xFF
 
-// buildFrame creates a VP8 frame or a data frame
 func (t *VP8DataTunnel) buildFrame(data []byte) []byte {
 	t.frameCount++
-
 	if len(data) == 0 {
-		// Keepalive - send valid VP8 keyframe every 60 frames (~2.4s)
 		if t.frameCount%60 == 0 {
 			return vp8Keyframe
 		}
 		return vp8Interframe
 	}
-
-	// Data frame: [0xFF][4-byte length][payload]
 	frame := make([]byte, 1+4+len(data))
-	frame[0] = dataFrameMarker
+	frame[0] = DataFrameMarker
 	binary.BigEndian.PutUint32(frame[1:5], uint32(len(data)))
 	copy(frame[5:], data)
 	return frame
 }
 
-// SendData queues tunnel data to be sent in the next VP8 frame
 var sendCount atomic.Uint64
 
 func (t *VP8DataTunnel) SendData(data []byte) {
@@ -124,21 +115,18 @@ func (t *VP8DataTunnel) Stop() {
 	if t.running {
 		close(t.stopCh)
 		t.running = false
-		if t.onClose != nil {
-			t.onClose()
+		if t.OnClose != nil {
+			t.OnClose()
 		}
 	}
 }
 
-// Extracts tunnel data from reassembled VP8 frame
-// The payload has VP8 RTP payload descriptor stripped by the depacketizer
-// First byte: 0xFF = data frame, anything else = valid VP8 (keepalive)
 func ExtractDataFromPayload(payload []byte) []byte {
 	if len(payload) < 5 {
 		return nil
 	}
-	if payload[0] != dataFrameMarker {
-		return nil // valid VP8 keepalive frame, skip
+	if payload[0] != DataFrameMarker {
+		return nil
 	}
 	dataLen := binary.BigEndian.Uint32(payload[1:5])
 	if dataLen == 0 || int(dataLen) > len(payload)-5 {

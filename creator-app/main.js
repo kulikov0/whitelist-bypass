@@ -370,11 +370,19 @@ ipcMain.handle('stop-bot', function() {
 ipcMain.handle('get-cookies', async function(e, domain) {
   var ses = session.fromPartition('persist:creator');
   var all = await ses.cookies.get({});
-  var vkCookies = all.filter(function(c) {
-    return c.domain && (c.domain.indexOf('vk.com') !== -1 || c.domain.indexOf('vk.ru') !== -1);
-  });
-  console.log('[COOKIES] total:', all.length, 'vk:', vkCookies.length);
-  return vkCookies;
+  var filtered;
+  if (domain === 'yandex') {
+    filtered = all.filter(function(c) {
+      return c.domain && (c.domain.indexOf('yandex.ru') !== -1 || c.domain.indexOf('yandex.net') !== -1 || c.domain.indexOf('ya.ru') !== -1);
+    });
+    console.log('[COOKIES] total:', all.length, 'yandex:', filtered.length);
+  } else {
+    filtered = all.filter(function(c) {
+      return c.domain && (c.domain.indexOf('vk.com') !== -1 || c.domain.indexOf('vk.ru') !== -1);
+    });
+    console.log('[COOKIES] total:', all.length, 'vk:', filtered.length);
+  }
+  return filtered;
 });
 
 

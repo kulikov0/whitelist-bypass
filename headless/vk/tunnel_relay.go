@@ -11,6 +11,7 @@ import (
 	"github.com/pion/rtp"
 	"github.com/pion/rtp/codecs"
 	"github.com/pion/webrtc/v4"
+	"headless-creator/tunnel"
 )
 
 type dcConn struct {
@@ -30,8 +31,8 @@ type TunnelRelay struct {
 	conns sync.Map
 
 	sampleTrack *webrtc.TrackLocalStaticSample
-	tunnel      *VP8DataTunnel
-	OnConnected func(*VP8DataTunnel)
+	tun         *tunnel.VP8DataTunnel
+	OnConnected func(*tunnel.VP8DataTunnel)
 
 	readBufSize int
 	maxDCBuf    uint64
@@ -131,10 +132,10 @@ func (u *TunnelRelay) Init(iceServers []webrtc.ICEServer) error {
 		u.modeOnce.Do(func() {
 			u.mode = "video"
 			log.Println("[relay] === MODE: VIDEO ===")
-			u.tunnel = NewVP8DataTunnel(sampleTrack, log.Printf)
-			u.tunnel.Start(25)
+			u.tun = tunnel.NewVP8DataTunnel(sampleTrack, log.Printf)
+			u.tun.Start(25)
 			if u.OnConnected != nil {
-				u.OnConnected(u.tunnel)
+				u.OnConnected(u.tun)
 			}
 		})
 		go u.readTrack(track)
@@ -193,9 +194,9 @@ func (u *TunnelRelay) OnConnectionStateChange(fn func(webrtc.PeerConnectionState
 
 func (u *TunnelRelay) Close() {
 	u.closeAllConns()
-	if u.tunnel != nil {
-		u.tunnel.Stop()
-		u.tunnel = nil
+	if u.tun != nil {
+		u.tun.Stop()
+		u.tun = nil
 	}
 	u.dcMu.Lock()
 	u.dc = nil
@@ -222,11 +223,11 @@ func (u *TunnelRelay) handleDCMessage(data []byte) {
 	payload := data[5:]
 
 	switch mt {
-	case msgConnect:
+	case tunnel.MsgConnect:
 		go u.connectTCP(connID, string(payload))
-	case msgUDP:
+	case tunnel.MsgUDP:
 		go u.handleUDP(connID, payload)
-	case msgData:
+	case tunnel.MsgData:
 		val, ok := u.conns.Load(connID)
 		if ok {
 			dc := val.(*dcConn)
@@ -238,7 +239,7 @@ func (u *TunnelRelay) handleDCMessage(data []byte) {
 				log.Printf("[dc] conn %d write queue full, dropping %d bytes", connID, len(payload))
 			}
 		}
-	case msgClose:
+	case tunnel.MsgClose:
 		val, ok := u.conns.LoadAndDelete(connID)
 		if ok {
 			dc := val.(*dcConn)
@@ -261,17 +262,17 @@ func (u *TunnelRelay) sendDCFrame(connID uint32, mt byte, payload []byte) {
 }
 
 func (u *TunnelRelay) connectTCP(connID uint32, addr string) {
-	log.Printf("[dc] CONNECT %d -> %s", connID, maskAddr(addr))
+	log.Printf("[dc] CONNECT %d -> %s", connID, tunnel.MaskAddr(addr))
 	conn, err := net.DialTimeout("tcp", addr, 10*time.Second)
 	if err != nil {
 		log.Printf("[dc] CONNECT %d failed: %v", connID, err)
-		u.sendDCFrame(connID, msgConnectErr, []byte(err.Error()))
+		u.sendDCFrame(connID, tunnel.MsgConnectErr, []byte(err.Error()))
 		return
 	}
 	dc := &dcConn{conn: conn, ch: make(chan []byte, 256)}
 	u.conns.Store(connID, dc)
-	u.sendDCFrame(connID, msgConnectOK, nil)
-	log.Printf("[dc] CONNECTED %d -> %s", connID, maskAddr(addr))
+	u.sendDCFrame(connID, tunnel.MsgConnectOK, nil)
+	log.Printf("[dc] CONNECTED %d -> %s", connID, tunnel.MaskAddr(addr))
 
 	go func() {
 		for data := range dc.ch {
@@ -282,7 +283,7 @@ func (u *TunnelRelay) connectTCP(connID uint32, addr string) {
 
 	bufSz := u.readBufSize
 	if bufSz <= 0 {
-		bufSz = rtpBufSize
+		bufSz = tunnel.RTPBufSize
 	}
 	buf := make([]byte, bufSz)
 	sent := 0
@@ -299,7 +300,7 @@ func (u *TunnelRelay) connectTCP(connID uint32, addr string) {
 		}
 		n, err := conn.Read(buf)
 		if n > 0 {
-			u.sendDCFrame(connID, msgData, buf[:n])
+			u.sendDCFrame(connID, tunnel.MsgData, buf[:n])
 			sent += n
 		}
 		if err != nil {
@@ -310,7 +311,7 @@ func (u *TunnelRelay) connectTCP(connID uint32, addr string) {
 		}
 	}
 	log.Printf("[dc] conn %d closed, sent %d bytes", connID, sent)
-	u.sendDCFrame(connID, msgClose, nil)
+	u.sendDCFrame(connID, tunnel.MsgClose, nil)
 	u.conns.Delete(connID)
 }
 
@@ -335,12 +336,12 @@ func (u *TunnelRelay) handleUDP(connID uint32, payload []byte) {
 	defer conn.Close()
 	conn.SetDeadline(time.Now().Add(5 * time.Second))
 	conn.Write(data)
-	resp := make([]byte, udpBufSize)
+	resp := make([]byte, tunnel.UDPBufSize)
 	n, err := conn.Read(resp)
 	if err != nil {
 		return
 	}
-	u.sendDCFrame(connID, msgUDPReply, resp[:n])
+	u.sendDCFrame(connID, tunnel.MsgUDPReply, resp[:n])
 }
 
 func (u *TunnelRelay) closeAllConns() {
@@ -354,7 +355,7 @@ func (u *TunnelRelay) closeAllConns() {
 
 func (u *TunnelRelay) readTrack(track *webrtc.TrackRemote) {
 	if track.Codec().MimeType != webrtc.MimeTypeVP8 {
-		buf := make([]byte, udpBufSize)
+		buf := make([]byte, tunnel.UDPBufSize)
 		for {
 			if _, _, err := track.Read(buf); err != nil {
 				return
@@ -365,7 +366,7 @@ func (u *TunnelRelay) readTrack(track *webrtc.TrackRemote) {
 	var vp8Pkt codecs.VP8Packet
 	var frameBuf []byte
 	var dataCount, recvCount int
-	buf := make([]byte, rtpBufSize)
+	buf := make([]byte, tunnel.RTPBufSize)
 	for {
 		n, _, err := track.Read(buf)
 		if err != nil {
@@ -390,14 +391,14 @@ func (u *TunnelRelay) readTrack(track *webrtc.TrackRemote) {
 					log.Printf("[video] recv frame #%d %d bytes, first=0x%02x", recvCount, len(frameBuf), frameBuf[0])
 				}
 			}
-			data := ExtractDataFromPayload(frameBuf)
+			data := tunnel.ExtractDataFromPayload(frameBuf)
 			if data != nil {
 				dataCount++
 				if dataCount <= 5 || dataCount%100 == 0 {
 					log.Printf("[video] TUNNEL DATA #%d: %d bytes", dataCount, len(data))
 				}
-				if u.tunnel != nil && u.tunnel.onData != nil {
-					u.tunnel.onData(data)
+				if u.tun != nil && u.tun.OnData != nil {
+					u.tun.OnData(data)
 				}
 			}
 		}

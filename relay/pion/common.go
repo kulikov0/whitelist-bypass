@@ -8,7 +8,10 @@ import (
 	"sync"
 
 	"github.com/gorilla/websocket"
+	"github.com/pion/rtp"
+	"github.com/pion/rtp/codecs"
 	"github.com/pion/webrtc/v4"
+	"whitelist-bypass/relay/socks"
 )
 
 type SignalingMessage struct {
@@ -175,5 +178,82 @@ func (h *WSHelper) ReadMessages(handler func([]byte), onDisconnect func()) {
 			return
 		}
 		handler(msg)
+	}
+}
+
+func AddTunnelTracks(pc *webrtc.PeerConnection, logFn func(string, ...any), prefix string) *webrtc.TrackLocalStaticSample {
+	sampleTrack, _ := webrtc.NewTrackLocalStaticSample(
+		webrtc.RTPCodecCapability{MimeType: webrtc.MimeTypeVP8},
+		"video", "tunnel-video",
+	)
+	audioTrack, _ := webrtc.NewTrackLocalStaticRTP(
+		webrtc.RTPCodecCapability{MimeType: webrtc.MimeTypeOpus},
+		"audio", "tunnel-audio",
+	)
+	audioSender, audioErr := pc.AddTrack(audioTrack)
+	videoSender, videoErr := pc.AddTrack(sampleTrack)
+	logFn("%s: AddTrack audio: sender=%v err=%v", prefix, audioSender != nil, audioErr)
+	logFn("%s: AddTrack video: sender=%v err=%v", prefix, videoSender != nil, videoErr)
+	logFn("%s: senders count: %d", prefix, len(pc.GetSenders()))
+	return sampleTrack
+}
+
+func ParseSDPType(t string) webrtc.SDPType {
+	if t == "offer" {
+		return webrtc.SDPTypeOffer
+	}
+	return webrtc.SDPTypeAnswer
+}
+
+func ReadTrack(track *webrtc.TrackRemote, tunnel *VP8DataTunnel, logFn func(string, ...any), prefix string) {
+	if track.Codec().MimeType != webrtc.MimeTypeVP8 {
+		buf := make([]byte, socks.UDPBufSize)
+		for {
+			if _, _, err := track.Read(buf); err != nil {
+				return
+			}
+		}
+	}
+
+	var vp8Pkt codecs.VP8Packet
+	var frameBuf []byte
+	dataCount := 0
+	recvCount := 0
+	buf := make([]byte, socks.RTPBufSize)
+	for {
+		n, _, err := track.Read(buf)
+		if err != nil {
+			return
+		}
+		pkt := &rtp.Packet{}
+		if pkt.Unmarshal(buf[:n]) != nil {
+			continue
+		}
+		vp8Payload, err := vp8Pkt.Unmarshal(pkt.Payload)
+		if err != nil {
+			continue
+		}
+		if vp8Pkt.S == 1 {
+			frameBuf = frameBuf[:0]
+		}
+		frameBuf = append(frameBuf, vp8Payload...)
+		if pkt.Marker {
+			recvCount++
+			if recvCount <= 3 || recvCount%25 == 0 {
+				if len(frameBuf) > 0 {
+					logFn("%s: recv frame #%d %d bytes, first=0x%02x", prefix, recvCount, len(frameBuf), frameBuf[0])
+				}
+			}
+			data := ExtractDataFromPayload(frameBuf)
+			if data != nil {
+				dataCount++
+				if dataCount <= 5 || dataCount%100 == 0 {
+					logFn("%s: TUNNEL DATA #%d: %d bytes", prefix, dataCount, len(data))
+				}
+				if tunnel != nil && tunnel.onData != nil {
+					tunnel.onData(data)
+				}
+			}
+		}
 	}
 }

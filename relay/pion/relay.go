@@ -273,32 +273,8 @@ func (rb *RelayBridge) handleSOCKS(conn net.Conn) {
 		conn.Close()
 		return
 	}
-	var host string
-	switch buf[3] {
-	case socks.AtypIPv4:
-		if n < 10 {
-			conn.Close()
-			return
-		}
-		host = fmt.Sprintf("%d.%d.%d.%d:%d", buf[4], buf[5], buf[6], buf[7],
-			binary.BigEndian.Uint16(buf[8:10]))
-	case socks.AtypDomain:
-		dlen := int(buf[4])
-		if n < 5+dlen+2 {
-			conn.Close()
-			return
-		}
-		host = fmt.Sprintf("%s:%d", string(buf[5:5+dlen]),
-			binary.BigEndian.Uint16(buf[5+dlen:7+dlen]))
-	case socks.AtypIPv6:
-		if n < 22 {
-			conn.Close()
-			return
-		}
-		ip := net.IP(buf[4:20])
-		host = fmt.Sprintf("[%s]:%d", ip.String(),
-			binary.BigEndian.Uint16(buf[20:22]))
-	default:
+	host, _, err := socks.ParseAddress(buf, n)
+	if err != nil {
 		conn.Write(socks.AddrErr)
 		conn.Close()
 		return
@@ -376,34 +352,8 @@ func (rb *RelayBridge) handleUDPAssociate(tcpConn net.Conn) {
 			if frag != 0 {
 				continue
 			}
-			atyp := buf[3]
-			var dstAddr string
-			var headerLen int
-			switch atyp {
-			case socks.AtypIPv4:
-				if n < 10 {
-					continue
-				}
-				dstAddr = fmt.Sprintf("%d.%d.%d.%d:%d", buf[4], buf[5], buf[6], buf[7],
-					binary.BigEndian.Uint16(buf[8:10]))
-				headerLen = 10
-			case socks.AtypDomain:
-				dlen := int(buf[4])
-				if n < 5+dlen+2 {
-					continue
-				}
-				dstAddr = fmt.Sprintf("%s:%d", string(buf[5:5+dlen]),
-					binary.BigEndian.Uint16(buf[5+dlen:7+dlen]))
-				headerLen = 5 + dlen + 2
-			case socks.AtypIPv6:
-				if n < 22 {
-					continue
-				}
-				ip := net.IP(buf[4:20])
-				dstAddr = fmt.Sprintf("[%s]:%d", ip.String(),
-					binary.BigEndian.Uint16(buf[20:22]))
-				headerLen = 22
-			default:
+			dstAddr, headerLen, addrErr := socks.ParseAddress(buf, n)
+			if addrErr != nil {
 				continue
 			}
 			id := rb.nextID.Add(1)

@@ -3,7 +3,7 @@ interval="${1:-5}"
 printf "%-8s %-20s %10s %6s %6s\n" "TIME" "PROCESS" "RSS(MB)" "THR" "FD"
 echo "-------------------------------------------------------"
 while true; do
-    pids=$(pgrep -f "headless-creator" 2>/dev/null)
+    pids=$(pgrep -f "headless-" 2>/dev/null)
     if [ -z "$pids" ]; then
         printf "%-8s %s\n" "$(date +%H:%M:%S)" "no processes found"
     else

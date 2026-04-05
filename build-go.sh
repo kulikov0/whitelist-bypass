@@ -27,13 +27,6 @@ GOOS=linux GOARCH=arm64 go build -o ../android-app/app/src/main/jniLibs/arm64-v8
 GOOS=linux GOARCH=arm go build -o ../android-app/app/src/main/jniLibs/armeabi-v7a/librelay.so .
 echo "Pion relay built"
 
-echo "Copying hooks to assets..."
-mkdir -p ../android-app/app/src/main/assets
-cp ../hooks/dc-joiner-vk.js ../android-app/app/src/main/assets/dc-joiner-vk.js
-cp ../hooks/dc-joiner-telemost.js ../android-app/app/src/main/assets/dc-joiner-telemost.js
-cp ../hooks/video-vk.js ../android-app/app/src/main/assets/video-vk.js
-cp ../hooks/video-telemost.js ../android-app/app/src/main/assets/video-telemost.js
-
 echo "Done. .aar size: $(du -h mobile.aar | cut -f1)"
 
 echo ""
@@ -41,7 +34,7 @@ echo "Building desktop relay..."
 go -C "$ROOT/relay" build -o relay .
 
 echo "Building headless-creator..."
-go -C "$ROOT/headless" build -o headless-creator .
+go -C "$ROOT/headless" build -ldflags="-s -w" -o headless-creator .
 
 echo "Done."
 ls -lh "$ROOT/relay/relay" "$ROOT/headless/headless-creator"

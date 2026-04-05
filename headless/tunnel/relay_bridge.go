@@ -1,4 +1,4 @@
-package main
+package tunnel
 
 import (
 	"encoding/binary"
@@ -9,7 +9,7 @@ import (
 	"time"
 )
 
-func encodeFrame(connID uint32, msgType byte, payload []byte) []byte {
+func EncodeFrame(connID uint32, msgType byte, payload []byte) []byte {
 	buf := make([]byte, 4+5+len(payload))
 	binary.BigEndian.PutUint32(buf[0:4], uint32(5+len(payload)))
 	binary.BigEndian.PutUint32(buf[4:8], connID)
@@ -18,7 +18,7 @@ func encodeFrame(connID uint32, msgType byte, payload []byte) []byte {
 	return buf
 }
 
-func decodeFrames(data []byte, cb func(connID uint32, msgType byte, payload []byte)) {
+func DecodeFrames(data []byte, cb func(connID uint32, msgType byte, payload []byte)) {
 	for len(data) >= 4 {
 		frameLen := int(binary.BigEndian.Uint32(data[0:4]))
 		if frameLen < 5 || 4+frameLen > len(data) {
@@ -39,13 +39,13 @@ type RelayBridge struct {
 	logFn  func(string, ...any)
 }
 
-func NewRelayBridge(tunnel *VP8DataTunnel, mode string, logFn func(string, ...any)) *RelayBridge {
+func NewRelayBridge(tun *VP8DataTunnel, mode string, logFn func(string, ...any)) *RelayBridge {
 	rb := &RelayBridge{
-		tunnel: tunnel,
+		tunnel: tun,
 		logFn:  logFn,
 	}
-	tunnel.onData = rb.handleTunnelData
-	tunnel.onClose = rb.closeAll
+	tun.OnData = rb.handleTunnelData
+	tun.OnClose = rb.closeAll
 	return rb
 }
 
@@ -61,26 +61,26 @@ func (rb *RelayBridge) closeAll() {
 }
 
 func (rb *RelayBridge) send(connID uint32, msgType byte, payload []byte) {
-	frame := encodeFrame(connID, msgType, payload)
+	frame := EncodeFrame(connID, msgType, payload)
 	rb.tunnel.SendData(frame)
 }
 
 func (rb *RelayBridge) handleTunnelData(data []byte) {
-	decodeFrames(data, rb.handleCreatorMessage)
+	DecodeFrames(data, rb.handleCreatorMessage)
 }
 
 func (rb *RelayBridge) handleCreatorMessage(connID uint32, msgType byte, payload []byte) {
 	switch msgType {
-	case msgConnect:
+	case MsgConnect:
 		go rb.connectTCP(connID, string(payload))
-	case msgUDP:
+	case MsgUDP:
 		go rb.handleUDP(connID, payload)
-	case msgData:
+	case MsgData:
 		val, ok := rb.conns.Load(connID)
 		if ok {
 			val.(net.Conn).Write(payload)
 		}
-	case msgClose:
+	case MsgClose:
 		val, ok := rb.conns.LoadAndDelete(connID)
 		if ok {
 			val.(net.Conn).Close()
@@ -109,31 +109,31 @@ func (rb *RelayBridge) handleUDP(connID uint32, payload []byte) {
 	defer conn.Close()
 	conn.SetDeadline(time.Now().Add(5 * time.Second))
 	conn.Write(data)
-	buf := make([]byte, udpBufSize)
+	buf := make([]byte, UDPBufSize)
 	n, err := conn.Read(buf)
 	if err != nil {
 		return
 	}
-	rb.send(connID, msgUDPReply, buf[:n])
+	rb.send(connID, MsgUDPReply, buf[:n])
 }
 
 func (rb *RelayBridge) connectTCP(connID uint32, addr string) {
-	rb.logFn("relay: CONNECT %d -> %s", connID, maskAddr(addr))
+	rb.logFn("relay: CONNECT %d -> %s", connID, MaskAddr(addr))
 	conn, err := net.DialTimeout("tcp", addr, 10e9)
 	if err != nil {
 		rb.logFn("relay: CONNECT %d failed: %v", connID, err)
-		rb.send(connID, msgConnectErr, []byte(err.Error()))
+		rb.send(connID, MsgConnectErr, []byte(err.Error()))
 		return
 	}
 	rb.conns.Store(connID, conn)
-	rb.send(connID, msgConnectOK, nil)
-	rb.logFn("relay: CONNECTED %d -> %s", connID, maskAddr(addr))
+	rb.send(connID, MsgConnectOK, nil)
+	rb.logFn("relay: CONNECTED %d -> %s", connID, MaskAddr(addr))
 
-	buf := make([]byte, vp8RelayBufSize)
+	buf := make([]byte, VP8RelayBufSize)
 	for {
 		n, err := conn.Read(buf)
 		if n > 0 {
-			rb.send(connID, msgData, buf[:n])
+			rb.send(connID, MsgData, buf[:n])
 		}
 		if err != nil {
 			if err != io.EOF {
@@ -142,6 +142,6 @@ func (rb *RelayBridge) connectTCP(connID uint32, addr string) {
 			break
 		}
 	}
-	rb.send(connID, msgClose, nil)
+	rb.send(connID, MsgClose, nil)
 	rb.conns.Delete(connID)
 }

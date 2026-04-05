@@ -1,16 +1,11 @@
-package main
+package tunnel
 
 import (
 	"fmt"
 	"net"
 )
 
-// maskAddr masks the sensitive portion of an address for logging.
-// IPv4: keeps first two octets, e.g. "192.168.x.x"
-// IPv6: fully masked
-// hostname: first char + "***"
-// host:port: masks host, keeps port
-func maskAddr(addr string) string {
+func MaskAddr(addr string) string {
 	host, port, err := net.SplitHostPort(addr)
 	if err != nil {
 		host = addr

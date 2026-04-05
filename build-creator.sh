@@ -33,20 +33,20 @@ echo "=== Building headless-creator ==="
 cd "$HEADLESS_DIR"
 
 echo "macOS (universal)..."
-GOOS=darwin GOARCH=amd64 go build -o headless-darwin-amd64 .
-GOOS=darwin GOARCH=arm64 go build -o headless-darwin-arm64 .
+GOOS=darwin GOARCH=amd64 go build -ldflags="-s -w" -o headless-darwin-amd64 .
+GOOS=darwin GOARCH=arm64 go build -ldflags="-s -w" -o headless-darwin-arm64 .
 lipo -create -output headless-darwin headless-darwin-amd64 headless-darwin-arm64
 rm headless-darwin-amd64 headless-darwin-arm64
 
 echo "Windows x64..."
-GOOS=windows GOARCH=amd64 go build -o headless-windows-x64.exe .
+GOOS=windows GOARCH=amd64 go build -ldflags="-s -w" -o headless-windows-x64.exe .
 echo "Windows x86..."
-GOOS=windows GOARCH=386 go build -o headless-windows-ia32.exe .
+GOOS=windows GOARCH=386 go build -ldflags="-s -w" -o headless-windows-ia32.exe .
 
 echo "Linux x64..."
-GOOS=linux GOARCH=amd64 go build -o headless-linux-x64 .
+GOOS=linux GOARCH=amd64 go build -ldflags="-s -w" -o headless-linux-x64 .
 echo "Linux x86..."
-GOOS=linux GOARCH=386 go build -o headless-linux-ia32 .
+GOOS=linux GOARCH=386 go build -ldflags="-s -w" -o headless-linux-ia32 .
 
 ls -lh headless-darwin headless-windows-*.exe headless-linux-*
 

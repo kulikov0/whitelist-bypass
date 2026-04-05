@@ -16,16 +16,10 @@ import (
 
 	"github.com/gorilla/websocket"
 	"github.com/pion/webrtc/v4"
+	"headless-creator/tunnel"
 )
 
-const userAgent = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
-
 const TopologyDirect = "DIRECT"
-
-type Cookie struct {
-	Name  string `json:"name"`
-	Value string `json:"value"`
-}
 
 type CallInfo struct {
 	CallID     string
@@ -47,20 +41,47 @@ type StunServer struct {
 	URLs []string `json:"urls"`
 }
 
-func loadCookies(path string) string {
-	data, err := os.ReadFile(path)
-	if err != nil {
-		log.Fatalf("Cannot read cookies: %v", err)
-	}
-	var cookies []Cookie
-	if err := json.Unmarshal(data, &cookies); err != nil {
-		log.Fatalf("Cannot parse cookies: %v", err)
-	}
-	parts := make([]string, len(cookies))
-	for i, c := range cookies {
-		parts[i] = c.Name + "=" + c.Value
-	}
-	return strings.Join(parts, "; ")
+type VKTokenResponse struct {
+	Data struct {
+		AccessToken string `json:"access_token"`
+	} `json:"data"`
+}
+
+type CallSettingsResponse struct {
+	Response struct {
+		Settings struct {
+			PublicKey string `json:"public_key"`
+		} `json:"settings"`
+	} `json:"response"`
+}
+
+type CallTokenResponse struct {
+	Response struct {
+		Token      string `json:"token"`
+		APIBaseURL string `json:"api_base_url"`
+	} `json:"response"`
+}
+
+type OKAuthResponse struct {
+	SessionKey string `json:"session_key"`
+}
+
+type JoinResponse struct {
+	Endpoint   string     `json:"endpoint"`
+	TurnServer TurnServer `json:"turn_server"`
+	StunServer StunServer `json:"stun_server"`
+}
+
+type Bridge struct {
+	mu         sync.Mutex
+	vkWs       *websocket.Conn
+	vkSeq      int
+	iceServers []webrtc.ICEServer
+	topology   string
+	peers      map[int64]struct{}
+	relay      Relay
+	newRelay   func() Relay
+	p2p        *P2PHandler
 }
 
 func httpPost(endpoint string, form url.Values, extraHeaders map[string]string) ([]byte, error) {
@@ -70,7 +91,7 @@ func httpPost(endpoint string, form url.Values, extraHeaders map[string]string) 
 		return nil, err
 	}
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
-	req.Header.Set("User-Agent", userAgent)
+	req.Header.Set("User-Agent", tunnel.UserAgent)
 	req.Header.Set("Origin", "https://vk.com")
 	req.Header.Set("Referer", "https://vk.com/")
 	for k, v := range extraHeaders {
@@ -89,7 +110,7 @@ func httpGet(endpoint string) ([]byte, error) {
 	if err != nil {
 		return nil, err
 	}
-	req.Header.Set("User-Agent", userAgent)
+	req.Header.Set("User-Agent", tunnel.UserAgent)
 	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
 		return nil, err
@@ -99,6 +120,89 @@ func httpGet(endpoint string) ([]byte, error) {
 		return nil, fmt.Errorf("VK captcha required - open %s in browser and solve it", resp.Request.URL.String())
 	}
 	return io.ReadAll(resp.Body)
+}
+
+func authAndJoin(cookieStr, okJoinLink string, cfg VKConfig) (*JoinResponse, error) {
+	auth := func(bearer string) map[string]string {
+		return map[string]string{"Authorization": "Bearer " + bearer}
+	}
+
+	r, err := httpPost("https://login.vk.com/?act=web_token",
+		url.Values{"version": {"1"}, "app_id": {cfg.AppID}},
+		map[string]string{"Cookie": cookieStr})
+	if err != nil {
+		return nil, fmt.Errorf("web_token: %w", err)
+	}
+	var tok VKTokenResponse
+	json.Unmarshal(r, &tok)
+	if tok.Data.AccessToken == "" {
+		return nil, fmt.Errorf("empty VK token, response: %s", string(r))
+	}
+
+	r, err = httpPost("https://api.vk.com/method/calls.getSettings",
+		url.Values{"v": {cfg.APIVersion}}, auth(tok.Data.AccessToken))
+	if err != nil {
+		return nil, fmt.Errorf("calls.getSettings: %w", err)
+	}
+	var settings CallSettingsResponse
+	json.Unmarshal(r, &settings)
+	appKey := settings.Response.Settings.PublicKey
+	if appKey == "" {
+		return nil, fmt.Errorf("empty public_key, response: %s", string(r))
+	}
+
+	r, err = httpPost("https://api.vk.com/method/messages.getCallToken",
+		url.Values{"v": {cfg.APIVersion}, "env": {"production"}}, auth(tok.Data.AccessToken))
+	if err != nil {
+		return nil, fmt.Errorf("messages.getCallToken: %w", err)
+	}
+	var callToken CallTokenResponse
+	json.Unmarshal(r, &callToken)
+	if callToken.Response.Token == "" {
+		return nil, fmt.Errorf("empty call token, response: %s", string(r))
+	}
+	if callToken.Response.APIBaseURL == "" {
+		return nil, fmt.Errorf("empty api_base_url, response: %s", string(r))
+	}
+
+	apiBaseURL := strings.TrimRight(callToken.Response.APIBaseURL, "/")
+	if !strings.HasSuffix(apiBaseURL, "/fb.do") {
+		apiBaseURL += "/fb.do"
+	}
+	sd, _ := json.Marshal(map[string]interface{}{
+		"device_id": "headless-go-1", "client_version": cfg.AppVersion,
+		"client_type": "SDK_JS", "auth_token": callToken.Response.Token, "version": 3,
+	})
+	r, err = httpPost(apiBaseURL, url.Values{
+		"method": {"auth.anonymLogin"}, "application_key": {appKey},
+		"format": {"json"}, "session_data": {string(sd)},
+	}, nil)
+	if err != nil {
+		return nil, fmt.Errorf("auth.anonymLogin: %w", err)
+	}
+	var okAuth OKAuthResponse
+	json.Unmarshal(r, &okAuth)
+	if okAuth.SessionKey == "" {
+		return nil, fmt.Errorf("empty session_key, response: %s", string(r))
+	}
+
+	ms, _ := json.Marshal(map[string]bool{
+		"isAudioEnabled": false, "isVideoEnabled": true, "isScreenSharingEnabled": false,
+	})
+	r, err = httpPost(apiBaseURL, url.Values{
+		"method": {"vchat.joinConversationByLink"}, "session_key": {okAuth.SessionKey},
+		"application_key": {appKey}, "format": {"json"}, "joinLink": {okJoinLink},
+		"isVideo": {"true"}, "isAudio": {"false"}, "mediaSettings": {string(ms)},
+	}, nil)
+	if err != nil {
+		return nil, fmt.Errorf("vchat.joinConversationByLink: %w", err)
+	}
+	var joinResp JoinResponse
+	json.Unmarshal(r, &joinResp)
+	if joinResp.Endpoint == "" {
+		return nil, fmt.Errorf("empty WS endpoint, response: %s", string(r))
+	}
+	return &joinResp, nil
 }
 
 func createAndJoinCall(cookieStr, peerId string, cfg VKConfig) (*CallInfo, error) {
@@ -117,39 +221,11 @@ func createAndJoinCall(cookieStr, peerId string, cfg VKConfig) (*CallInfo, error
 	if err != nil {
 		return nil, fmt.Errorf("web_token: %w", err)
 	}
-	var tok struct {
-		Data struct {
-			AccessToken string `json:"access_token"`
-		} `json:"data"`
-	}
+	var tok VKTokenResponse
 	json.Unmarshal(r, &tok)
 	vkToken := tok.Data.AccessToken
 	if vkToken == "" {
 		return nil, fmt.Errorf("empty VK token, response: %s", string(r))
-	}
-
-	log.Println("[auth] Getting call settings...")
-	r, err = httpPost("https://api.vk.com/method/calls.getSettings",
-		url.Values{"v": {cfg.APIVersion}}, auth(vkToken))
-	if err != nil {
-		return nil, fmt.Errorf("calls.getSettings: %w", err)
-	}
-	var settings struct {
-		Response struct {
-			Settings struct {
-				PublicKey string `json:"public_key"`
-				IsDev     bool   `json:"is_dev"`
-			} `json:"settings"`
-		} `json:"response"`
-	}
-	json.Unmarshal(r, &settings)
-	appKey := settings.Response.Settings.PublicKey
-	if appKey == "" {
-		return nil, fmt.Errorf("empty public_key, response: %s", string(r))
-	}
-	env := "production"
-	if settings.Response.Settings.IsDev {
-		env = "development"
 	}
 
 	log.Printf("[auth] Creating call peer_id=%s...", peerId)
@@ -179,89 +255,17 @@ func createAndJoinCall(cookieStr, peerId string, cfg VKConfig) (*CallInfo, error
 	log.Printf("[auth] call_id: %s", c.CallID)
 	log.Printf("[auth] join_link: %s", c.JoinLink)
 
-	log.Println("[auth] Getting call token...")
-	r, err = httpPost("https://api.vk.com/method/messages.getCallToken",
-		url.Values{"v": {cfg.APIVersion}, "env": {env}}, auth(vkToken))
-	if err != nil {
-		return nil, fmt.Errorf("messages.getCallToken: %w", err)
-	}
-	var ct struct {
-		Response struct {
-			Token      string `json:"token"`
-			APIBaseURL string `json:"api_base_url"`
-		} `json:"response"`
-	}
-	json.Unmarshal(r, &ct)
-	if ct.Response.Token == "" {
-		return nil, fmt.Errorf("empty call token, response: %s", string(r))
-	}
-	if ct.Response.APIBaseURL == "" {
-		return nil, fmt.Errorf("empty api_base_url, response: %s", string(r))
-	}
-
-	log.Println("[auth] OK.ru auth...")
-	apiBaseURL := strings.TrimRight(ct.Response.APIBaseURL, "/")
-	if !strings.HasSuffix(apiBaseURL, "/fb.do") {
-		apiBaseURL += "/fb.do"
-	}
-	sd, _ := json.Marshal(map[string]interface{}{
-		"device_id": "headless-go-1", "client_version": cfg.AppVersion,
-		"client_type": "SDK_JS", "auth_token": ct.Response.Token, "version": 3,
-	})
-	r, err = httpPost(apiBaseURL, url.Values{
-		"method": {"auth.anonymLogin"}, "application_key": {appKey},
-		"format": {"json"}, "session_data": {string(sd)},
-	}, nil)
-	if err != nil {
-		return nil, fmt.Errorf("auth.anonymLogin: %w", err)
-	}
-	var okAuth struct {
-		SessionKey string `json:"session_key"`
-	}
-	json.Unmarshal(r, &okAuth)
-	if okAuth.SessionKey == "" {
-		return nil, fmt.Errorf("empty session_key, response: %s", string(r))
-	}
-
 	log.Println("[auth] Joining conversation...")
-	ms, _ := json.Marshal(map[string]bool{
-		"isAudioEnabled": false, "isVideoEnabled": true, "isScreenSharingEnabled": false,
-	})
-	r, err = httpPost(apiBaseURL, url.Values{
-		"method": {"vchat.joinConversationByLink"}, "session_key": {okAuth.SessionKey},
-		"application_key": {appKey}, "format": {"json"}, "joinLink": {c.OKJoinLink},
-		"isVideo": {"true"}, "isAudio": {"false"}, "mediaSettings": {string(ms)},
-	}, nil)
+	joinResp, err := authAndJoin(cookieStr, c.OKJoinLink, cfg)
 	if err != nil {
-		return nil, fmt.Errorf("vchat.joinConversationByLink: %w", err)
-	}
-	var jr struct {
-		Endpoint   string     `json:"endpoint"`
-		TurnServer TurnServer `json:"turn_server"`
-		StunServer StunServer `json:"stun_server"`
-	}
-	json.Unmarshal(r, &jr)
-	if jr.Endpoint == "" {
-		return nil, fmt.Errorf("empty WS endpoint, response: %s", string(r))
+		return nil, err
 	}
 
 	return &CallInfo{
 		CallID: c.CallID, JoinLink: c.JoinLink, ShortLink: c.ShortCredentials.LinkWithPassword,
-		OKJoinLink: c.OKJoinLink, TurnServer: jr.TurnServer, StunServer: jr.StunServer,
-		WSEndpoint: jr.Endpoint,
+		OKJoinLink: c.OKJoinLink, TurnServer: joinResp.TurnServer, StunServer: joinResp.StunServer,
+		WSEndpoint: joinResp.Endpoint,
 	}, nil
-}
-
-type Bridge struct {
-	mu         sync.Mutex
-	vkWs       *websocket.Conn
-	vkSeq      int
-	iceServers []webrtc.ICEServer
-	topology   string
-	peers      map[int64]struct{}
-	relay      Relay
-	newRelay   func() Relay
-	p2p        *P2PHandler
 }
 
 func (b *Bridge) vkSend(command string, extra map[string]interface{}) {
@@ -359,6 +363,15 @@ func (b *Bridge) handleVKMessage(raw []byte) {
 				log.Println("[vk-ws]    Participant hung up")
 			}
 
+		case "closed-conversation":
+			reason, _ := msg["reason"].(string)
+			log.Printf("[vk-ws]    Conversation closed: %s", reason)
+			b.mu.Lock()
+			if b.vkWs != nil {
+				b.vkWs.Close()
+			}
+			b.mu.Unlock()
+
 		default:
 			snippet, _ := json.Marshal(msg)
 			if len(snippet) > 1000 {
@@ -399,9 +412,9 @@ func buildICEServers(callInfo *CallInfo) []webrtc.ICEServer {
 
 func (b *Bridge) connectVKWs(wsURL string) error {
 	vkHeader := http.Header{}
-	vkHeader.Set("User-Agent", userAgent)
+	vkHeader.Set("User-Agent", tunnel.UserAgent)
 	vkHeader.Set("Origin", "https://vk.com")
-	vkDialer := websocket.Dialer{WriteBufferSize: rtpBufSize}
+	vkDialer := websocket.Dialer{WriteBufferSize: tunnel.RTPBufSize}
 	vkWs, _, err := vkDialer.Dial(wsURL, vkHeader)
 	if err != nil {
 		return err
@@ -431,14 +444,16 @@ func (b *Bridge) readLoop() error {
 			return err
 		}
 		if string(msg) == "ping" {
+			b.mu.Lock()
 			b.vkWs.WriteMessage(websocket.TextMessage, []byte("pong"))
+			b.mu.Unlock()
 			continue
 		}
 		b.handleVKMessage(msg)
 	}
 }
 
-func (b *Bridge) run(callInfo *CallInfo, cfg VKConfig) {
+func (b *Bridge) run(callInfo *CallInfo, cookieStr string, cfg VKConfig) {
 	fmt.Println("")
 	fmt.Println("  CALL CREATED")
 	fmt.Println("  join_link:", callInfo.JoinLink)
@@ -449,14 +464,16 @@ func (b *Bridge) run(callInfo *CallInfo, cfg VKConfig) {
 	fmt.Printf("  protocol:  v%s sdk %s\n\n", cfg.ProtocolVersion, cfg.SDKVersion)
 
 	b.iceServers = buildICEServers(callInfo)
+	wsEndpoint := callInfo.WSEndpoint
 
-	wsURL := callInfo.WSEndpoint +
-		"&platform=WEB" +
-		"&appVersion=" + cfg.AppVersion +
-		"&version=" + cfg.ProtocolVersion +
-		"&device=browser&capabilities=0&clientType=VK&tgt=join"
+	makeWSURL := func(ep string) string {
+		return ep +
+			"&platform=WEB" +
+			"&appVersion=" + cfg.AppVersion +
+			"&version=" + cfg.ProtocolVersion +
+			"&device=browser&capabilities=0&clientType=VK&tgt=join"
+	}
 
-	// Keepalive goroutine
 	go func() {
 		for {
 			time.Sleep(15 * time.Second)
@@ -464,7 +481,9 @@ func (b *Bridge) run(callInfo *CallInfo, cfg VKConfig) {
 			ws := b.vkWs
 			b.mu.Unlock()
 			if ws != nil {
+				b.mu.Lock()
 				ws.WriteMessage(websocket.PingMessage, nil)
+				b.mu.Unlock()
 			}
 		}
 	}()
@@ -473,7 +492,7 @@ func (b *Bridge) run(callInfo *CallInfo, cfg VKConfig) {
 		b.initRelay()
 
 		log.Println("[vk-ws] Connecting...")
-		if err := b.connectVKWs(wsURL); err != nil {
+		if err := b.connectVKWs(makeWSURL(wsEndpoint)); err != nil {
 			log.Printf("[vk-ws] Connect failed: %v, retrying in 5s...", err)
 			time.Sleep(5 * time.Second)
 			continue
@@ -495,8 +514,19 @@ func (b *Bridge) run(callInfo *CallInfo, cfg VKConfig) {
 		b.vkWs = nil
 		b.mu.Unlock()
 
-		log.Println("[vk-ws] Reconnecting in 3s...")
+		log.Println("[vk-ws] Rejoining in 3s...")
 		time.Sleep(3 * time.Second)
+
+		joinResp, rerr := authAndJoin(cookieStr, callInfo.OKJoinLink, cfg)
+		if rerr != nil {
+			log.Printf("[rejoin] Failed: %v, retrying in 5s...", rerr)
+			time.Sleep(5 * time.Second)
+			continue
+		}
+		wsEndpoint = joinResp.Endpoint
+		callInfo.TurnServer = joinResp.TurnServer
+		callInfo.StunServer = joinResp.StunServer
+		b.iceServers = buildICEServers(callInfo)
 	}
 }
 
@@ -520,7 +550,7 @@ func main() {
 		maxDCBuf = 4 * 1024 * 1024
 		memLimit = 128 * 1024 * 1024
 	case "unlimited":
-		readBuf = rtpBufSize
+		readBuf = tunnel.RTPBufSize
 		maxDCBuf = 8 * 1024 * 1024
 		memLimit = 256 * 1024 * 1024
 	default:
@@ -535,7 +565,7 @@ func main() {
 	if *cookieString != "" {
 		cookieStr = *cookieString
 	} else if *cookiesPath != "" {
-		cookieStr = loadCookies(*cookiesPath)
+		cookieStr = tunnel.LoadCookies(*cookiesPath)
 	} else {
 		log.Fatal("Either --cookies or --cookie-string is required")
 	}
@@ -556,10 +586,10 @@ func main() {
 		ur := NewTunnelRelay()
 		ur.readBufSize = readBuf
 		ur.maxDCBuf = maxDCBuf
-		ur.OnConnected = func(tunnel *VP8DataTunnel) {
-			NewRelayBridge(tunnel, "creator", log.Printf)
+		ur.OnConnected = func(tun *tunnel.VP8DataTunnel) {
+			tunnel.NewRelayBridge(tun, "creator", log.Printf)
 		}
 		return ur
 	}
-	bridge.run(callInfo, cfg)
+	bridge.run(callInfo, cookieStr, cfg)
 }

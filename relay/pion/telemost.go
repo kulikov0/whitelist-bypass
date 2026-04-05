@@ -7,10 +7,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/pion/rtp"
-	"github.com/pion/rtp/codecs"
 	"github.com/pion/webrtc/v4"
-	"whitelist-bypass/relay/socks"
 )
 
 type tmPCState struct {
@@ -147,21 +144,7 @@ func (c *TelemostClient) handleICEServers(data json.RawMessage, role string) {
 	c.pcMu.Unlock()
 
 	if role == "pub" {
-		sampleTrack, _ := webrtc.NewTrackLocalStaticSample(
-			webrtc.RTPCodecCapability{MimeType: webrtc.MimeTypeVP8},
-			"video", "tunnel-video",
-		)
-		c.sampleTrack = sampleTrack
-		audioTrack, _ := webrtc.NewTrackLocalStaticRTP(
-			webrtc.RTPCodecCapability{MimeType: webrtc.MimeTypeOpus},
-			"audio", "tunnel-audio",
-		)
-		audioSender, audioErr := pc.AddTrack(audioTrack)
-		videoSender, videoErr := pc.AddTrack(sampleTrack)
-		c.logFn("telemost [pub]: AddTrack audio: sender=%v err=%v", audioSender != nil, audioErr)
-		c.logFn("telemost [pub]: AddTrack video: sender=%v err=%v", videoSender != nil, videoErr)
-		c.logFn("telemost [pub]: senders count: %d", len(pc.GetSenders()))
-
+		c.sampleTrack = AddTunnelTracks(pc, c.logFn, "telemost [pub]")
 	}
 
 	pc.OnICECandidate(func(cand *webrtc.ICECandidate) {
@@ -240,12 +223,7 @@ func (c *TelemostClient) handleSetRemoteDescription(data json.RawMessage, id int
 	if ps == nil || ps.pc == nil {
 		return
 	}
-	var sdpType webrtc.SDPType
-	if sdpMsg.Type == "offer" {
-		sdpType = webrtc.SDPTypeOffer
-	} else {
-		sdpType = webrtc.SDPTypeAnswer
-	}
+	sdpType := ParseSDPType(sdpMsg.Type)
 	if err := ps.pc.SetRemoteDescription(webrtc.SessionDescription{Type: sdpType, SDP: sdpMsg.SDP}); err != nil {
 		c.logFn("telemost [%s]: setRemoteDescription error: %v", role, err)
 		return
@@ -283,58 +261,7 @@ func (c *TelemostClient) handleICECandidate(data json.RawMessage, role string) {
 }
 
 func (c *TelemostClient) readTrack(track *webrtc.TrackRemote) {
-	if track.Codec().MimeType != webrtc.MimeTypeVP8 {
-		buf := make([]byte, socks.UDPBufSize)
-		for {
-			if _, _, err := track.Read(buf); err != nil {
-				c.logFn("telemost: readTrack (%s) error: %v", track.Codec().MimeType, err)
-				return
-			}
-		}
-	}
-
-	var vp8Pkt codecs.VP8Packet
-	var frameBuf []byte
-	dataCount := 0
-	recvCount := 0
-	buf := make([]byte, socks.RTPBufSize)
-	for {
-		n, _, err := track.Read(buf)
-		if err != nil {
-			c.logFn("telemost: readTrack error: %v", err)
-			return
-		}
-		pkt := &rtp.Packet{}
-		if pkt.Unmarshal(buf[:n]) != nil {
-			continue
-		}
-		vp8Payload, err := vp8Pkt.Unmarshal(pkt.Payload)
-		if err != nil {
-			continue
-		}
-		if vp8Pkt.S == 1 {
-			frameBuf = frameBuf[:0]
-		}
-		frameBuf = append(frameBuf, vp8Payload...)
-		if pkt.Marker {
-			recvCount++
-			if recvCount <= 3 || recvCount%25 == 0 {
-				if len(frameBuf) > 0 {
-					c.logFn("telemost: recv frame #%d %d bytes, first=0x%02x", recvCount, len(frameBuf), frameBuf[0])
-				}
-			}
-			data := ExtractDataFromPayload(frameBuf)
-			if data != nil {
-				dataCount++
-				if dataCount <= 5 || dataCount%100 == 0 {
-					c.logFn("telemost: TUNNEL DATA #%d: %d bytes", dataCount, len(data))
-				}
-				if c.tunnel != nil && c.tunnel.onData != nil {
-					c.tunnel.onData(data)
-				}
-			}
-		}
-	}
+	ReadTrack(track, c.tunnel, c.logFn, "telemost")
 }
 
 func (c *TelemostClient) cleanup() {
