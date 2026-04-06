@@ -31,4 +31,5 @@
     <string name="vpn_tunnel_lost">Tunnel lost, reconnecting…</string>
     <string name="vpn_call_disconnected">Call disconnected</string>
     <string name="vpn_call_failed">Call failed</string>
+    <string name="action_required_captcha">Action required (captcha)</string>
 </resources>

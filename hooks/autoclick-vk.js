@@ -1,6 +1,7 @@
 (function() {
   if (window.__autoclickInstalled) return;
   window.__autoclickInstalled = true;
+  var wasCaptchaDetected = false;
 
   var log = function() {
     var args = ['[HOOK] [autoclick]'];
@@ -40,5 +41,27 @@
     }
   }
 
+  function scanForCaptcha() {
+    var iframes = document.querySelectorAll("iframe");
+    for (var i = 0; i < iframes.length; i++) {
+      if (iframes[i].src.startsWith("https://id.vk.com/not_robot_captcha")) {
+        if(!wasCaptchaDetected) {
+          log('Captcha detected, user action required');
+          AndroidBridge.onCaptchaDetected(false);
+          wasCaptchaDetected = true;
+        }
+        return;
+      }
+    }
+    if(wasCaptchaDetected) { // assuming captcha iframe wasn't found
+      log('Captcha closed or solved');
+      AndroidBridge.onCaptchaDetected(true);
+      wasCaptchaDetected = false;
+      clearInterval(captcha_iv);
+      return;
+    }
+  }
+
   var iv = setInterval(scan, 1500);
+  var captcha_iv = setInterval(scanForCaptcha, 1500);
 })();

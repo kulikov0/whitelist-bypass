@@ -64,6 +64,10 @@ class WebViewManager(
         setExpanded(false)
     }
 
+    fun expand() {
+        setExpanded(true)
+    }
+
     @SuppressLint("SetJavaScriptEnabled")
     fun setup(jsBridge: Any) {
         toggleButton.setOnClickListener { setExpanded(!expanded) }
