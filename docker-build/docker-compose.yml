@@ -1,0 +1,18 @@
+services:
+  build-all:
+    build:
+      context: ..
+      dockerfile: docker-build/Dockerfile
+    working_dir: /workspace
+    volumes:
+      - ../:/workspace/whitelist-bypass
+      - ./build-all.sh:/opt/build_all/build-all.sh
+      - android-sdk-cache:/opt/android-sdk
+      - android-gradle-cache:/opt/gradle
+    environment:
+      BUILD_NUMBER: "${BUILD_NUMBER:-0}"
+    command: "/opt/build_all/build-all.sh"
+
+volumes:
+  android-sdk-cache:
+  android-gradle-cache:
