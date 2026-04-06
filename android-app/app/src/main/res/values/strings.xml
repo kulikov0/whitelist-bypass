@@ -12,6 +12,11 @@
     <string name="menu_tunnel">Tunnel: %1$s</string>
     <string name="menu_split_tunneling">Split tunneling (%1$s)</string>
     <string name="menu_split_tunneling_manage">Manage split tunneling apps</string>
+    <string name="menu_autoclick_settings">Autoclick settings</string>
+    <string name="autoclick_settings_title">Autoclick settings</string>
+    <string name="autoclick_checkbox">Autoclick</string>
+    <string name="autoclick_name_input_hint">Autofill name</string>
+    <string name="autoclick_generate_random">Random</string>
     <string name="split_tunneling_mode_prompt">Split tunneling mode</string>
     <string name="split_tunneling_apps_prompt">Select apps</string>
     <string name="split_tunneling_show_system_apps">Show system apps</string>

@@ -51,4 +51,12 @@ object Prefs {
     var splitTunnelingPackages: Set<String>
         get() = prefs.getStringSet(PrefsKeys.SPLIT_TUNNELING_PACKAGES, emptySet()) ?: emptySet()
         set(value) = prefs.edit { putStringSet(PrefsKeys.SPLIT_TUNNELING_PACKAGES, value) }
+
+    var autoclickEnabled: Boolean
+        get() = prefs.getBoolean(PrefsKeys.AUTOCLICK_ENABLED, true)
+        set(value) = prefs.edit { putBoolean(PrefsKeys.AUTOCLICK_ENABLED, value) }
+
+    var autoclickName: String
+        get() = prefs.getString(PrefsKeys.AUTOCLICK_NAME, "Hello")!!
+        set(value) = prefs.edit { putString(PrefsKeys.AUTOCLICK_NAME, value) }
 }

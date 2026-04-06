@@ -25,7 +25,7 @@
     if (inp && !inp.value) {
       log('Filling name');
       var set = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value').set;
-      set.call(inp, 'Hello');
+      set.call(inp, window.autofillName);
       inp.dispatchEvent(new Event('input', { bubbles: true }));
       inp.dispatchEvent(new Event('change', { bubbles: true }));
       return;

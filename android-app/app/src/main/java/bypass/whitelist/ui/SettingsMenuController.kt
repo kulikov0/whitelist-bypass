@@ -8,6 +8,7 @@ import android.widget.LinearLayout
 import android.widget.ListView
 import android.widget.PopupMenu
 import android.widget.EditText
+import android.widget.Button
 import android.widget.ProgressBar
 import android.widget.Toast
 import androidx.appcompat.app.AlertDialog
@@ -37,6 +38,7 @@ class SettingsMenuController(
         MODE(99, R.string.menu_tunnel),
         SPLIT_TUNNELING(98, R.string.menu_split_tunneling),
         SPLIT_TUNNELING_APPS(97, R.string.menu_split_tunneling_manage),
+        AUTOCLICK_SETTINGS(104, R.string.menu_autoclick_settings),
         RECONNECT_ON_START(100, R.string.menu_reconnect_on_start),
         SHOW_LOGS(101, R.string.menu_show_logs),
         SHARE_LOGS(102, R.string.menu_share_logs),
@@ -52,6 +54,7 @@ class SettingsMenuController(
         menu.add(0, MenuItem.SPLIT_TUNNELING_APPS.id, 0, MenuItem.SPLIT_TUNNELING_APPS.stringRes).apply {
             isEnabled = splitTunnelingMode != SplitTunnelingMode.NONE
         }
+        menu.add(0, MenuItem.AUTOCLICK_SETTINGS.id, 0, activity.getString(MenuItem.AUTOCLICK_SETTINGS.stringRes))
         menu.add(0, MenuItem.RECONNECT_ON_START.id, 0, MenuItem.RECONNECT_ON_START.stringRes).apply {
             isCheckable = true
             isChecked = Prefs.connectOnStart
@@ -85,6 +88,10 @@ class SettingsMenuController(
                 }
                 MenuItem.SHARE_LOGS.id -> {
                     onShareLogs()
+                    true
+                }
+                MenuItem.AUTOCLICK_SETTINGS.id -> {
+                    showAutoclickSettingsDialog()
                     true
                 }
                 MenuItem.RESET.id -> {
@@ -219,5 +226,31 @@ class SettingsMenuController(
                 })
             }
         }.start()
+    }
+
+    private fun showAutoclickSettingsDialog() {
+        val dialogLayout = activity.layoutInflater.inflate(R.layout.autoclick_settings_dialog, null)
+        var autoclickCheckbox = dialogLayout.findViewById<CheckBox>(R.id.autoclick_checkbox)
+        val nameInput = dialogLayout.findViewById<EditText>(R.id.autoclick_name_input)
+        val generateButton = dialogLayout.findViewById<Button>(R.id.autoclick_generate_random_button)
+
+        autoclickCheckbox.isChecked = Prefs.autoclickEnabled
+        nameInput.setText(Prefs.autoclickName)
+
+        generateButton.setOnClickListener {
+            val names = activity.assets.open("names.txt").bufferedReader().readLines()
+            val randomName = names.random()
+            nameInput.setText(randomName)
+        }
+
+        AlertDialog.Builder(activity)
+            .setTitle(R.string.autoclick_settings_title)
+            .setView(dialogLayout)
+            .setPositiveButton(android.R.string.ok) { _, _ ->
+                Prefs.autoclickEnabled = autoclickCheckbox.isChecked
+                Prefs.autoclickName = nameInput.text.toString()
+            }
+            .setNegativeButton(android.R.string.cancel, null)
+            .show()
     }
 }
