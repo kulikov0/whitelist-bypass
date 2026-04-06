@@ -170,6 +170,12 @@ body {
   opacity: 0.8;
 }
 
+.btn-headless-tm {
+  background: #fc3f1d;
+  color: white;
+  opacity: 0.8;
+}
+
 .toolbar-spacer {
   margin-left: auto;
 }

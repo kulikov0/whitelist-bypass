@@ -11,6 +11,7 @@ import {
   RELAY_RESTART_DELAY_MS,
   SESSION_PARTITION,
   VK_COOKIE_DOMAINS,
+  YANDEX_COOKIE_DOMAINS,
   LOG_CAPTURE_SNIPPET,
 } from '../constants';
 import { BotManager } from '../bot/bot-manager';
@@ -34,7 +35,8 @@ export class TabManager {
   private _mainWindow: BrowserWindow | null = null;
   private _botManager: BotManager | null = null;
   private relayPath: string;
-  private headlessPath: string;
+  private headlessVKPath: string;
+  private headlessTelemostPath: string;
   private hooksDir: string;
 
   constructor() {
@@ -42,9 +44,13 @@ export class TabManager {
       path.join('relay', binaryName('relay')),
       binaryName('relay'),
     );
-    this.headlessPath = resolveResourcePath(
-      path.join('headless', binaryName('headless-creator')),
-      binaryName('headless-creator'),
+    this.headlessVKPath = resolveResourcePath(
+      path.join('headless', 'vk', binaryName('headless-vk-creator')),
+      binaryName('headless-vk-creator'),
+    );
+    this.headlessTelemostPath = resolveResourcePath(
+      path.join('headless', 'telemost', binaryName('headless-telemost')),
+      binaryName('headless-telemost-creator'),
     );
     this.hooksDir = app.isPackaged
       ? path.join(process.resourcesPath!, 'hooks')
@@ -110,7 +116,7 @@ export class TabManager {
   deleteTab(tabId: string): void {
     const tab = this.tabs.get(tabId);
     if (tab) {
-      this.killRelay(tab);
+      this.killRelay(tabId, tab);
       this.tabs.delete(tabId);
     }
     this.botTabIds.delete(tabId);
@@ -183,7 +189,7 @@ export class TabManager {
   }
 
   startRelay(tabId: string, tab: TabState): void {
-    this.killRelay(tab);
+    this.killRelay(tabId, tab);
     const port = tab.tunnelMode === TunnelMode.PionVideo ? tab.pionPort : tab.dcPort;
     let relayMode: RelayMode = RelayMode.DCCreator;
     if (tab.tunnelMode === TunnelMode.PionVideo) {
@@ -201,16 +207,22 @@ export class TabManager {
     });
   }
 
-  async startHeadless(tabId: string): Promise<void> {
+  async startHeadless(tabId: string, platform: Platform): Promise<void> {
     const tab = await this.getOrCreateTab(tabId);
-    tab.tunnelMode = TunnelMode.HeadlessVK;
-    const cookieStr = await this.getVKCookieString();
+    const isTelemost = platform === Platform.Telemost;
+    tab.tunnelMode = isTelemost ? TunnelMode.HeadlessTelemost : TunnelMode.HeadlessVK;
+    tab.platform = platform;
+    const cookieStr = isTelemost
+      ? await this.getYandexCookieString()
+      : await this.getVKCookieString();
     if (!cookieStr) {
-      this.sendLog(tabId, 'No VK cookies found. Please log into VK first.');
+      const name = isTelemost ? 'Yandex' : 'VK';
+      this.sendLog(tabId, `No ${name} cookies found. Please log into ${name} first.`);
       return;
     }
-    this.killRelay(tab);
-    const proc = spawn(this.headlessPath, ['--cookie-string', cookieStr, '--resources', 'default'], {
+    this.killRelay(tabId, tab);
+    const binaryPath = isTelemost ? this.headlessTelemostPath : this.headlessVKPath;
+    const proc = spawn(binaryPath, ['--cookie-string', cookieStr, '--resources', 'default'], {
       stdio: ['ignore', 'pipe', 'pipe'],
     });
     tab.relay = proc;
@@ -220,15 +232,16 @@ export class TabManager {
     });
   }
 
-  killRelay(tab: TabState): void {
+  killRelay(tabId: string, tab: TabState): void {
     if (tab.relay) {
+      console.log(`[${tabId}] killing process pid=${tab.relay.pid}`);
       tab.relay.kill();
       tab.relay = null;
     }
   }
 
   killAllRelays(): void {
-    this.tabs.forEach((tab) => this.killRelay(tab));
+    this.tabs.forEach((tab, tabId) => this.killRelay(tabId, tab));
   }
 
   async loadHook(tabId: string, url: string, tab: TabState): Promise<string> {
@@ -237,7 +250,7 @@ export class TabManager {
 
     if (newPlatform !== tab.platform && tab.tunnelMode === TunnelMode.PionVideo) {
       tab.platform = newPlatform;
-      this.killRelay(tab);
+      this.killRelay(tabId, tab);
       setTimeout(() => this.startRelay(tabId, tab), RELAY_RESTART_DELAY_MS);
     } else {
       tab.platform = newPlatform;
@@ -258,7 +271,7 @@ export class TabManager {
     const tab = this.tabs.get(tabId);
     if (!tab) return;
     tab.tunnelMode = mode;
-    this.killRelay(tab);
+    this.killRelay(tabId, tab);
     setTimeout(() => this.startRelay(tabId, tab), RELAY_RESTART_DELAY_MS);
   }
 
@@ -269,6 +282,15 @@ export class TabManager {
       return cookie.domain != null && VK_COOKIE_DOMAINS.some((d) => cookie.domain!.includes(d));
     });
     return vkCookies.map((cookie) => `${cookie.name}=${cookie.value}`).join('; ');
+  }
+
+  async getYandexCookieString(): Promise<string> {
+    const ses = session.fromPartition(SESSION_PARTITION);
+    const all = await ses.cookies.get({});
+    const yaCookies = all.filter((cookie) => {
+      return cookie.domain != null && YANDEX_COOKIE_DOMAINS.some((d) => cookie.domain!.includes(d));
+    });
+    return yaCookies.map((cookie) => `${cookie.name}=${cookie.value}`).join('; ');
   }
 
 }

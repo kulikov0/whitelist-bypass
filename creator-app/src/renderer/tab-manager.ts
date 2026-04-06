@@ -35,21 +35,24 @@ export class RendererTabManager {
     return tabId;
   }
 
-  createHeadlessTab(): string {
-    const tabId = 'tab-' + this.nextId++;
-    this.tabs[tabId] = {
-      wv: null,
-      url: '',
-      mode: TunnelMode.HeadlessVK,
-      relayLogs: '',
-      hookLogs: '',
-      name: 'Headless VK',
-      isBot: false,
-      headless: true,
-    };
-    window.bridge.startHeadless(tabId);
-    this.selectTab(tabId);
-    return tabId;
+  switchToHeadless(platform: Platform): void {
+    if (!this.activeTabId) return;
+    const tab = this.tabs[this.activeTabId];
+    if (tab.wv) tab.wv.remove();
+    const isTelemost = platform === Platform.Telemost;
+    tab.wv = null;
+    tab.url = '';
+    tab.mode = isTelemost ? TunnelMode.HeadlessTelemost : TunnelMode.HeadlessVK;
+    tab.name = isTelemost ? 'Headless TM' : 'Headless VK';
+    tab.headless = true;
+    tab.platform = platform;
+    tab.callInfo = undefined;
+    tab.headlessStatus = 'Starting...';
+    tab.tunnelConnected = false;
+    tab.relayLogs = '';
+    tab.hookLogs = '';
+    window.bridge.startHeadless(this.activeTabId, platform);
+    this.onRender();
   }
 
   createBotTab(data: BotTabData): void {

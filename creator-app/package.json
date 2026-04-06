@@ -57,8 +57,12 @@
           "to": "relay"
         },
         {
-          "from": "../headless/headless-darwin",
-          "to": "headless-creator"
+          "from": "../headless/headless-vk-darwin",
+          "to": "headless-vk-creator"
+        },
+        {
+          "from": "../headless/headless-telemost-darwin",
+          "to": "headless-telemost-creator"
         }
       ]
     },
@@ -72,8 +76,12 @@
           "to": "relay.exe"
         },
         {
-          "from": "../headless/headless-bundle.exe",
-          "to": "headless-creator.exe"
+          "from": "../headless/headless-vk-bundle.exe",
+          "to": "headless-vk-creator.exe"
+        },
+        {
+          "from": "../headless/headless-telemost-bundle.exe",
+          "to": "headless-telemost-creator.exe"
         }
       ]
     },
@@ -86,8 +94,12 @@
           "to": "relay"
         },
         {
-          "from": "../headless/headless-bundle",
-          "to": "headless-creator"
+          "from": "../headless/headless-vk-bundle",
+          "to": "headless-vk-creator"
+        },
+        {
+          "from": "../headless/headless-telemost-bundle",
+          "to": "headless-telemost-creator"
         }
       ]
     }

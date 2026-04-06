@@ -32,8 +32,8 @@ export function registerIpcHandlers(tabManager: TabManager): void {
     tabManager.startRelay(tabId, tab);
   });
 
-  ipcMain.handle(IPC.START_HEADLESS, async (_e, tabId: string) => {
-    await tabManager.startHeadless(tabId);
+  ipcMain.handle(IPC.START_HEADLESS, async (_e, tabId: string, platform: string) => {
+    await tabManager.startHeadless(tabId, platform as Platform);
   });
 
   ipcMain.handle(IPC.CLOSE_TAB, (_e, tabId: string) => {

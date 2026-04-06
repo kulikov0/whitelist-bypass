@@ -45,17 +45,28 @@ export function renderContent(tm: RendererTabManager): void {
   if (activeTab.headless) {
     toolbar.style.display = 'none';
     headlessInfo.style.display = 'block';
+    const title = activeTab.platform === Platform.Telemost ? 'Headless Telemost' : 'Headless VK';
+    document.getElementById('headlessTitle')!.textContent = title;
     document.getElementById('headlessStatus')!.textContent = activeTab.headlessStatus || 'Starting...';
     const callInfo = activeTab.callInfo;
-    const callInfoEl = document.getElementById('headlessCallInfo')!;
-    if (callInfo) {
-      callInfoEl.style.display = 'block';
+    const isTelemost = activeTab.platform === Platform.Telemost;
+    const callInfoVK = document.getElementById('headlessCallInfo')!;
+    const callInfoTM = document.getElementById('headlessCallInfoTM')!;
+    if (callInfo && isTelemost) {
+      callInfoVK.style.display = 'none';
+      callInfoTM.style.display = 'block';
+      document.getElementById('headlessTMJoinLink')!.textContent = callInfo.joinLink || '';
+      document.getElementById('headlessTMProtocol')!.textContent = callInfo.protocol || '';
+    } else if (callInfo) {
+      callInfoTM.style.display = 'none';
+      callInfoVK.style.display = 'block';
       document.getElementById('headlessJoinLink')!.textContent = callInfo.joinLink || '';
       document.getElementById('headlessShortLink')!.textContent = callInfo.shortLink || '';
       document.getElementById('headlessTurn')!.textContent = callInfo.turn || '';
       document.getElementById('headlessProtocol')!.textContent = callInfo.protocol || '';
     } else {
-      callInfoEl.style.display = 'none';
+      callInfoVK.style.display = 'none';
+      callInfoTM.style.display = 'none';
     }
     document.getElementById('headlessTunnel')!.style.display = activeTab.tunnelConnected ? 'block' : 'none';
   } else {

@@ -18,7 +18,8 @@
 <div class="toolbar" id="toolbar" style="display:none">
   <button class="btn-vk" id="btnVk">VK</button>
   <button class="btn-telemost" id="btnTelemost">Telemost</button>
-  <button class="btn-headless" id="btnHeadless">Headless VK</button>
+  <button class="btn-headless" id="btnHeadlessVK">Headless VK</button>
+  <button class="btn-headless-tm" id="btnHeadlessTM">Headless TM</button>
   <span class="toolbar-spacer"></span>
   <span class="toolbar-label">Tunnel:</span>
   <select id="modeSelect" class="toolbar-select">
@@ -33,13 +34,17 @@
     <p>Click + to add a tab</p>
   </div>
   <div class="headless-info" id="headlessInfo">
-    <div class="headless-title">Headless VK</div>
+    <div class="headless-title" id="headlessTitle">Headless</div>
     <div class="headless-status" id="headlessStatus">Starting...</div>
     <div class="headless-call-info" id="headlessCallInfo">
       <div class="headless-row"><span class="headless-label">Join link:</span> <a id="headlessJoinLink" href="#" class="headless-link"></a></div>
       <div class="headless-row"><span class="headless-label">Short:</span> <a id="headlessShortLink" href="#" class="headless-link"></a></div>
       <div class="headless-row"><span class="headless-label">TURN:</span> <span id="headlessTurn"></span></div>
       <div class="headless-row"><span class="headless-label">Protocol:</span> <span id="headlessProtocol"></span></div>
+    </div>
+    <div class="headless-call-info" id="headlessCallInfoTM">
+      <div class="headless-row"><span class="headless-label">Join link:</span> <a id="headlessTMJoinLink" href="#" class="headless-link"></a></div>
+      <div class="headless-row"><span class="headless-label">Protocol:</span> <span id="headlessTMProtocol"></span></div>
     </div>
     <div class="headless-tunnel" id="headlessTunnel">TUNNEL CONNECTED</div>
   </div>

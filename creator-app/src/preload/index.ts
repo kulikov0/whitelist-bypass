@@ -35,8 +35,8 @@ import { IPC } from '../constants';
   getCookies(domain: string) {
     return ipcRenderer.invoke(IPC.GET_COOKIES, domain);
   },
-  startHeadless(tabId: string) {
-    return ipcRenderer.invoke(IPC.START_HEADLESS, tabId);
+  startHeadless(tabId: string, platform: string) {
+    return ipcRenderer.invoke(IPC.START_HEADLESS, tabId, platform);
   },
   onCloseBotTab(cb: (data: any) => void) {
     ipcRenderer.on(IPC.CLOSE_BOT_TAB, (_e, data) => cb(data));

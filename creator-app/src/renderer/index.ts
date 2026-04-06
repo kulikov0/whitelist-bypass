@@ -14,7 +14,7 @@ import {
   renameTab,
 } from './dom';
 import { VK_IM_URL, TELEMOST_URL } from '../constants';
-import { Platform, Bridge, BotTabData, LogPanel } from '../types';
+import { Platform, Bridge, BotTabData, LogPanel, TunnelMode } from '../types';
 
 declare const window: Window & { bridge: Bridge };
 
@@ -53,7 +53,8 @@ function bindTabBarEvents(): void {
 function bindToolbarEvents(): void {
   document.getElementById('btnVk')!.addEventListener('click', () => loadURL(tm, VK_IM_URL));
   document.getElementById('btnTelemost')!.addEventListener('click', () => loadURL(tm, TELEMOST_URL));
-  document.getElementById('btnHeadless')!.addEventListener('click', () => tm.createHeadlessTab());
+  document.getElementById('btnHeadlessVK')!.addEventListener('click', () => tm.switchToHeadless(Platform.VK));
+  document.getElementById('btnHeadlessTM')!.addEventListener('click', () => tm.switchToHeadless(Platform.Telemost));
   document.getElementById('modeSelect')!.addEventListener('change', (event) => {
     tm.setTunnelMode((event.target as HTMLSelectElement).value);
   });

@@ -33,8 +33,11 @@ echo ""
 echo "Building desktop relay..."
 go -C "$ROOT/relay" build -o relay .
 
-echo "Building headless-creator..."
-go -C "$ROOT/headless" build -ldflags="-s -w" -o headless-creator .
+echo "Building headless-vk-creator..."
+go -C "$ROOT/headless/vk" build -ldflags="-s -w" -o headless-vk-creator .
+
+echo "Building headless-telemost-creator..."
+go -C "$ROOT/headless/telemost" build -ldflags="-s -w" -o headless-telemost .
 
 echo "Done."
-ls -lh "$ROOT/relay/relay" "$ROOT/headless/headless-creator"
+ls -lh "$ROOT/relay/relay" "$ROOT/headless/vk/headless-vk-creator" "$ROOT/headless/telemost/headless-telemost"

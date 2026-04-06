@@ -4,6 +4,7 @@ export enum TunnelMode {
   DC = 'dc',
   PionVideo = 'pion-video',
   HeadlessVK = 'headless-vk',
+  HeadlessTelemost = 'headless-telemost',
 }
 
 export enum Platform {
@@ -124,6 +125,6 @@ export interface Bridge {
   getCallCreatorCode(scriptFile: string): Promise<string>;
   onBotError(cb: (msg: string) => void): void;
   getCookies(domain: string): Promise<Electron.Cookie[]>;
-  startHeadless(tabId: string): Promise<void>;
+  startHeadless(tabId: string, platform: string): Promise<void>;
   onCloseBotTab(cb: (data: { tabId: string }) => void): void;
 }

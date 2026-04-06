@@ -529,8 +529,8 @@ func (b *Bridge) initRelay() {
 func (b *Bridge) run() {
 	fmt.Println("")
 	fmt.Println("  CALL CREATED")
-	fmt.Println("  uri:", b.connInfo.ConferenceURI)
-	fmt.Printf("  sdk: %s  app: %s\n\n", b.config.SDKVersion, b.config.AppVersion)
+	fmt.Println("  join_link:", b.connInfo.ConferenceURI)
+	fmt.Printf("  protocol:  sdk %s app %s\n\n", b.config.SDKVersion, b.config.AppVersion)
 
 	wsHeader := http.Header{}
 	wsHeader.Set("User-Agent", tunnel.UserAgent)
