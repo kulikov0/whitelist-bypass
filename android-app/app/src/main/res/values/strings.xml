@@ -16,6 +16,7 @@
     <string name="split_tunneling_apps_prompt">Select apps</string>
     <string name="split_tunneling_show_system_apps">Show system apps</string>
     <string name="split_tunneling_mode_changed">Reconnect for changes to take effect</string>
+    <string name="split_tunneling_search_apps_hint">Search</string>
     <string name="hint_call_link">Paste call link</string>
     <string name="cd_clear">Clear</string>
     <string name="cd_settings">Settings</string>
