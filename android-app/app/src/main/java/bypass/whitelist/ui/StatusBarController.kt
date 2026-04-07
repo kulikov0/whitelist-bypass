@@ -36,7 +36,8 @@ class StatusBarController(
             VpnStatus.CALL_CONNECTED,
             VpnStatus.DATACHANNEL_OPEN -> R.color.status_connecting
             VpnStatus.TUNNEL_LOST,
-            VpnStatus.DATACHANNEL_LOST -> R.color.status_warning
+            VpnStatus.DATACHANNEL_LOST,
+            VpnStatus.ACTION_REQUIRED_CAPTCHA -> R.color.status_warning
             VpnStatus.CALL_DISCONNECTED,
             VpnStatus.CALL_FAILED -> R.color.status_error
             VpnStatus.STARTING -> R.color.status_idle

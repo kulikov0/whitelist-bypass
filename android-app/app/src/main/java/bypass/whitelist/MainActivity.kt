@@ -245,6 +245,16 @@ class MainActivity : AppCompatActivity() {
             onVpnStatus(VpnStatus.TUNNEL_ACTIVE)
             runOnUiThread { requestVpn() }
         }
+
+        @JavascriptInterface
+        fun onCaptchaDetected(isDone: Boolean) {
+            if(!isDone) {
+                onVpnStatus(VpnStatus.ACTION_REQUIRED_CAPTCHA)
+                runOnUiThread { webViewMgr.expand() }
+            } else {
+                onVpnStatus(VpnStatus.CONNECTING)
+            }
+        }
     }
 
     companion object {

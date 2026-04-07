@@ -13,6 +13,8 @@ object PrefsKeys {
     const val SHOW_LOGS = "show_logs"
     const val SPLIT_TUNNELING_MODE = "split_tunneling_mode"
     const val SPLIT_TUNNELING_PACKAGES = "split_tunneling_packages"
+    const val AUTOCLICK_ENABLED = "autoclick_enabled"
+    const val AUTOCLICK_NAME = "autoclick_name"
 }
 
 object Vpn {

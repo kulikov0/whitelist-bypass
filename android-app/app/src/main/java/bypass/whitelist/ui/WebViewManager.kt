@@ -20,6 +20,7 @@ import bypass.whitelist.tunnel.TunnelMode
 import bypass.whitelist.tunnel.VpnStatus
 import bypass.whitelist.util.ParamCallback
 import bypass.whitelist.util.maskUrl
+import bypass.whitelist.util.Prefs
 
 private data class HookKey(val isPion: Boolean, val platform: CallPlatform)
 
@@ -62,6 +63,10 @@ class WebViewManager(
 
     fun collapse() {
         setExpanded(false)
+    }
+
+    fun expand() {
+        setExpanded(true)
     }
 
     @SuppressLint("SetJavaScriptEnabled")
@@ -134,8 +139,11 @@ class WebViewManager(
                     onLog("Page loaded, injecting hook for ${maskUrl(url)}")
                     view.evaluateJavascript("window.WS_PORT=${mobile.Mobile.activeWsPort()}", null)
                     view.evaluateJavascript(hookForPlatform(platform), null)
-                    onLog("Injecting autoclick for ${maskUrl(url)}")
-                    view.evaluateJavascript(autoclickers[platform]!!.value, null)
+                    if (Prefs.autoclickEnabled) {
+                        onLog("Injecting autoclick for ${maskUrl(url)}")
+                        view.evaluateJavascript("window.autofillName='${Prefs.autoclickName}'", null)
+                        view.evaluateJavascript(autoclickers[platform]!!.value, null)
+                    }
                 }
             }
         }
