@@ -1,6 +1,7 @@
 (function() {
   if (window.__autoclickInstalled) return;
   window.__autoclickInstalled = true;
+  var wasCaptchaDetected = false;
 
   var log = function() {
     var args = ['[HOOK] [autoclick]'];
@@ -24,7 +25,7 @@
     if (inp && !inp.value) {
       log('Filling name');
       var set = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value').set;
-      set.call(inp, 'Hello');
+      set.call(inp, window.autofillName);
       inp.dispatchEvent(new Event('input', { bubbles: true }));
       inp.dispatchEvent(new Event('change', { bubbles: true }));
       return;
@@ -40,5 +41,27 @@
     }
   }
 
+  function scanForCaptcha() {
+    var iframes = document.querySelectorAll("iframe");
+    for (var i = 0; i < iframes.length; i++) {
+      if (iframes[i].src.startsWith("https://id.vk.com/not_robot_captcha")) {
+        if(!wasCaptchaDetected) {
+          log('Captcha detected, user action required');
+          AndroidBridge.onCaptchaDetected(false);
+          wasCaptchaDetected = true;
+        }
+        return;
+      }
+    }
+    if(wasCaptchaDetected) { // assuming captcha iframe wasn't found
+      log('Captcha closed or solved');
+      AndroidBridge.onCaptchaDetected(true);
+      wasCaptchaDetected = false;
+      clearInterval(captcha_iv);
+      return;
+    }
+  }
+
   var iv = setInterval(scan, 1500);
+  var captcha_iv = setInterval(scanForCaptcha, 1500);
 })();
