@@ -52,26 +52,34 @@ type udpClient struct {
 	socksHdr   []byte
 }
 
+type DataTunnel interface {
+	SendData(data []byte)
+	SetOnData(fn func([]byte))
+	SetOnClose(fn func())
+}
+
 type RelayBridge struct {
-	tunnel     *VP8DataTunnel
+	tunnel     DataTunnel
 	conns      sync.Map
 	udpClients sync.Map
 	nextID     atomic.Uint32
 	logFn      func(string, ...any)
 	mode       string
+	readBuf    int
 	ready      chan struct{}
 	once       sync.Once
 }
 
-func NewRelayBridge(tunnel *VP8DataTunnel, mode string, logFn func(string, ...any)) *RelayBridge {
+func NewRelayBridge(tunnel DataTunnel, mode string, readBuf int, logFn func(string, ...any)) *RelayBridge {
 	rb := &RelayBridge{
-		tunnel: tunnel,
-		logFn:  logFn,
-		mode:   mode,
-		ready:  make(chan struct{}),
+		tunnel:  tunnel,
+		logFn:   logFn,
+		mode:    mode,
+		readBuf: readBuf,
+		ready:   make(chan struct{}),
 	}
-	tunnel.onData = rb.handleTunnelData
-	tunnel.onClose = rb.closeAll
+	tunnel.SetOnData(rb.handleTunnelData)
+	tunnel.SetOnClose(rb.closeAll)
 	return rb
 }
 
@@ -208,7 +216,7 @@ func (rb *RelayBridge) connectTCP(connID uint32, addr string) {
 	rb.send(connID, msgConnectOK, nil)
 	rb.logFn("relay: CONNECTED %d -> %s", connID, maskAddr(addr))
 
-	buf := make([]byte, socks.VP8BufSize)
+	buf := make([]byte, rb.readBuf)
 	for {
 		n, err := conn.Read(buf)
 		if n > 0 {
@@ -297,7 +305,7 @@ func (rb *RelayBridge) handleSOCKS(conn net.Conn) {
 	rb.logFn("relay: SOCKS CONNECTED %d -> %s", id, maskAddr(host))
 
 	go func() {
-		readBuf := make([]byte, socks.VP8BufSize)
+		readBuf := make([]byte, rb.readBuf)
 		for {
 			rn, rerr := conn.Read(readBuf)
 			if rn > 0 {

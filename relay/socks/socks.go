@@ -18,6 +18,7 @@ const (
 	UDPBufSize   = 4096
 	RTPBufSize   = 65536
 	VP8BufSize   = 900
+	DCBufSize    = 32768
 )
 
 var (

@@ -386,7 +386,7 @@
         }
       }
       if (msg.notification === 'remote-media-settings' || msg.notification === 'media-settings' || msg.notification === 'media-settings-changed') {
-        log('VK media-settings notification:', maskAddr(JSON.stringify(msg).substring(0, 300)));
+        log('VK media-settings notification:', maskAddr(JSON.stringify(msg)));
       }
       if (msg.notification === 'participant-added' || msg.notification === 'participant-removed') {
         log('VK participant event: ' + msg.notification);

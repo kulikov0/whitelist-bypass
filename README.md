@@ -10,7 +10,7 @@ Two tunnel modes are available: **DC** (DataChannel) and **Pion Video** (VP8 dat
 
 Browser-based. JavaScript hooks intercept RTCPeerConnection on the call page, create a DataChannel alongside the call's built-in channels, and use it as a bidirectional data pipe.
 
-- **VK Call** - Negotiated DataChannel id:2 (alongside VK's animoji channel id:1). P2P via TURN relay
+- **VK Call** - Negotiated DataChannel id:2 (alongside VK's animoji channel id:1). Data flows through VK's SFU
 - **Telemost** - Non-negotiated DataChannel labeled "sharing" (matching real screen sharing traffic), with SDP renegotiation via signaling WebSocket. SFU architecture
 
 ```
@@ -28,7 +28,7 @@ WebSocket (:9000)
   |
 WebView (call page)                       Electron (call page)
   |                                         |
-DataChannel  <--- TURN/SFU --->   DataChannel
+DataChannel  <----- SFU ----->   DataChannel
                                             |
                                         WebSocket (:9000)
                                             |
@@ -41,7 +41,7 @@ DataChannel  <--- TURN/SFU --->   DataChannel
 
 Go-based. Pion (Go WebRTC library) connects directly to the platform's TURN/SFU servers, bypassing the browser's WebRTC stack entirely. Data is encoded inside VP8 video frames.
 
-- **VK Call** - Single PeerConnection, P2P via TURN relay
+- **VK Call** - Single PeerConnection, data flows through VK's SFU
 - **Telemost** - Dual PeerConnection (pub/sub), SFU architecture
 
 The JS hook replaces `RTCPeerConnection` with a `MockPeerConnection` that forwards all SDP/ICE operations to the local Pion server via WebSocket. Pion creates the real PeerConnection with the platform's TURN servers.
@@ -71,46 +71,23 @@ VP8 data tunnel (Pion)                    VP8 data tunnel (Pion)
   |                                         |
 MockPC (WebView)                          MockPC (Electron)
   |                                         |
-Pion WebRTC  <--- TURN/SFU --->   Pion WebRTC
+Pion WebRTC  <------ SFU ------>  Pion WebRTC
                                             |
                                         Relay bridge
                                             |
                                         Internet
 ```
 
-Traffic goes through the platform's TURN servers which are whitelisted. To the network firewall it looks like a normal video call.
+Traffic goes through the platform's SFU servers which are whitelisted. To the network firewall it looks like a normal video call.
 
 ## Components
 
-- `hooks/` - JavaScript hooks injected into call pages
-  - `joiner-vk.js`, `creator-vk.js` - VK Call DC hooks
-  - `joiner-telemost.js`, `creator-telemost.js` - Telemost DC hooks
-  - `pion-vk.js`, `pion-telemost.js` - Pion Video hooks (MockPeerConnection mode)
-  - DC hooks intercept RTCPeerConnection, create tunnel DataChannel, bridge to local WebSocket
-  - Pion hooks replace RTCPeerConnection with MockPC, forward SDP/ICE to Pion via WebSocket
-  - Telemost hooks include fake media (camera/mic), message chunking (994B payload, 1000B total), and SDP renegotiation
-- `relay/` - Go relay binary and gomobile library
-  - `relay/mobile/` - DC mode: SOCKS5 proxy, WebSocket server, binary framing protocol
-  - `relay/pion/` - Pion Video mode: VP8 data tunnel, relay bridge, SOCKS5 proxy
-    - `common.go` - Shared types, WebSocket helper, ICE server parsing, AndroidNet
-    - `vk.go` - VK Pion client (single PeerConnection, P2P)
-    - `telemost.go` - Telemost Pion client (dual PeerConnection, pub/sub)
-    - `vp8tunnel.go` - VP8 frame encoding/decoding, keepalive generation
-    - `relay.go` - Relay bridge with connection multiplexing, SOCKS5 proxy, UDP ASSOCIATE
-  - `relay/mobile/tun_android.go` - Android-only: tun2socks + fdsan fix (CGo)
-  - `relay/mobile/tun_stub.go` - Desktop stub (no tun2socks needed)
-- `android-app/` - Android joiner app
-  - WebView loading call page with hook injection
-  - VpnService capturing all device traffic
-  - Tunnel mode selector (DC / Pion Video)
-  - Go relay as .aar library (gomobile) + Pion relay as native binary
+- `hooks/` - JavaScript hooks for DC, Video, and Headless modes (VK and Telemost)
+- `relay/` - Go relay: SOCKS5 proxy, WebSocket server, VP8 video tunnel, headless joiner, connection multiplexing
+- `headless/vk/` - Headless VK creator: creates calls via API, Pion DataChannel tunnel, no browser
+- `headless/telemost/` - Headless Telemost creator: same approach for Yandex Telemost
+- `android-app/` - Android joiner app (WebView/headless + VpnService + Go relay)
 - `creator-app/` - Electron desktop creator app
-  - Webview with persistent session for login retention
-  - CSP header stripping for localhost WebSocket access
-  - Auto-permission granting (camera/mic)
-  - Tunnel mode selector (DC / Pion Video)
-  - Go relay spawned as child process
-  - Log panels for relay and hook output
 
 ## Download
 
@@ -201,20 +178,22 @@ The Go relay is split into platform-specific files:
 
 This allows cross-compiling the relay for macOS/Windows/Linux without CGo or Android NDK.
 
-### Headless creator
+### Headless creators
 
-Pure Go creator that creates VK calls via API without a browser. No Electron, no JS hooks - Go Pion PeerConnection handles the DataChannel tunnel directly.
+Pure Go creators that create calls via API without a browser. No Electron, no JS hooks - Go Pion PeerConnection handles the DataChannel tunnel directly.
 
 ```sh
-# Build
-cd headless && go build -o headless-creator .
+# VK
+cd headless/vk && go build -o headless-vk-creator .
+./headless-vk-creator --cookies cookies.json [--peer-id <vk_peer_id>] [--resources <mode>]
 
-# Run
-./headless-creator --cookies cookies.json [--peer-id <vk_peer_id>] [--resources <mode>]
+# Telemost
+cd headless/telemost && go build -o headless-telemost .
+./headless-telemost --cookies cookies-yandex.json [--resources <mode>]
 ```
 
-- `--cookies` - path to VK cookies exported as JSON (`[{"name":"..","value":".."},...]`). Use the "Export Cookies" button in the Creator app to get this file
-- `--peer-id` - VK peer_id for the call (optional)
+- `--cookies` - path to cookies exported as JSON (`[{"name":"..","value":".."},...]`)
+- `--peer-id` - VK peer_id for the call (VK only, optional)
 - `--resources` - resource mode (see below)
 
 **Resource modes:**

@@ -30,8 +30,11 @@ type VP8DataTunnel struct {
 	stopCh     chan struct{}
 	sendQueue  chan []byte
 	onData     func([]byte)
-	onClose func()
+	onClose    func()
 }
+
+func (t *VP8DataTunnel) SetOnData(fn func([]byte))  { t.onData = fn }
+func (t *VP8DataTunnel) SetOnClose(fn func())        { t.onClose = fn }
 
 func NewVP8DataTunnel(track *webrtc.TrackLocalStaticSample, logFn func(string, ...any)) *VP8DataTunnel {
 	return &VP8DataTunnel{

@@ -9,6 +9,7 @@ import (
 
 	"whitelist-bypass/relay/mobile"
 	"whitelist-bypass/relay/pion"
+	"whitelist-bypass/relay/socks"
 )
 
 type stdLogger struct{}
@@ -35,7 +36,7 @@ func main() {
 		HandleSignaling(http.ResponseWriter, *http.Request)
 	}
 
-	startVideo := func(name string, client signalingClient, onConnected func(*pion.VP8DataTunnel)) {
+	startVideo := func(name string, client signalingClient, onConnected func(pion.DataTunnel)) {
 		mux := http.NewServeMux()
 		mux.HandleFunc("/signaling", client.HandleSignaling)
 		addr := fmt.Sprintf("127.0.0.1:%d", *wsPort)
@@ -43,14 +44,18 @@ func main() {
 		log.Fatal(http.ListenAndServe(addr, mux))
 	}
 
-	joinerCallback := func(tunnel *pion.VP8DataTunnel) {
-		rb := pion.NewRelayBridge(tunnel, "joiner", log.Printf)
+	startJoinerBridge := func(tunnel pion.DataTunnel, readBuf int) {
+		rb := pion.NewRelayBridge(tunnel, "joiner", readBuf, log.Printf)
 		rb.MarkReady()
 		go rb.ListenSOCKS(fmt.Sprintf("127.0.0.1:%d", *socksPort))
 	}
 
-	creatorCallback := func(tunnel *pion.VP8DataTunnel) {
-		pion.NewRelayBridge(tunnel, "creator", log.Printf)
+	joinerCallback := func(tunnel pion.DataTunnel) {
+		startJoinerBridge(tunnel, socks.VP8BufSize)
+	}
+
+	creatorCallback := func(tunnel pion.DataTunnel) {
+		pion.NewRelayBridge(tunnel, "creator", socks.VP8BufSize, log.Printf)
 	}
 
 	switch *mode {
@@ -62,6 +67,16 @@ func main() {
 		c := pion.NewVKClient(log.Printf)
 		c.OnConnected = joinerCallback
 		startVideo(*mode, c, joinerCallback)
+	case "vk-headless-joiner":
+		c := pion.NewVKHeadlessJoiner(log.Printf)
+		c.OnConnected = func(tunnel pion.DataTunnel) {
+			readBuf := socks.VP8BufSize
+			if _, ok := tunnel.(*pion.DCTunnel); ok {
+				readBuf = socks.DCBufSize
+			}
+			startJoinerBridge(tunnel, readBuf)
+		}
+		c.Run()
 	case "vk-video-creator":
 		c := pion.NewVKClient(log.Printf)
 		c.OnConnected = creatorCallback

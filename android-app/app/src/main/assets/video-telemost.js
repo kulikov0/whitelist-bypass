@@ -412,13 +412,13 @@
       log('Incoming subscriberSdpOffer, pcSeq=' + result.subscriberSdpOffer.pcSeq);
     }
     if (result && result.slotsChanged) {
-      log('Incoming slotsChanged:', JSON.stringify(result.slotsChanged).substring(0, 200));
+      log('Incoming slotsChanged:', JSON.stringify(result.slotsChanged));
     }
     if (result && result.participantsChanged) {
       log('Incoming participantsChanged');
     }
     if (result && result.connectionStatusChanged) {
-      log('Incoming connectionStatusChanged:', JSON.stringify(result.connectionStatusChanged).substring(0, 200));
+      log('Incoming connectionStatusChanged:', JSON.stringify(result.connectionStatusChanged));
     }
     return result;
   };
