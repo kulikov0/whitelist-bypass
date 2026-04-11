@@ -19,10 +19,11 @@ import androidx.core.view.ViewCompat
 import androidx.core.view.WindowInsetsCompat
 import bypass.whitelist.tunnel.CallPlatform
 import bypass.whitelist.tunnel.RelayController
+import bypass.whitelist.tunnel.TunnelMode
 import bypass.whitelist.tunnel.TunnelVpnService
 import bypass.whitelist.tunnel.VpnStatus
 import bypass.whitelist.ui.LogViewController
-import bypass.whitelist.ui.SettingsMenuController
+import bypass.whitelist.ui.SettingsDialogFragment
 import bypass.whitelist.ui.StatusBarController
 import bypass.whitelist.ui.WebViewManager
 import bypass.whitelist.util.LogWriter
@@ -32,7 +33,7 @@ import bypass.whitelist.util.maskUrl
 import java.net.Inet4Address
 import java.net.InetAddress
 
-class MainActivity : AppCompatActivity() {
+class MainActivity : AppCompatActivity(), SettingsDialogFragment.Listener {
 
     private val logWriter by lazy { LogWriter(cacheDir) }
     private val relay by lazy {
@@ -46,7 +47,6 @@ class MainActivity : AppCompatActivity() {
     private lateinit var urlInput: EditText
     private lateinit var logCtrl: LogViewController
     private lateinit var statusCtrl: StatusBarController
-    private lateinit var settingsCtrl: SettingsMenuController
     private lateinit var webViewMgr: WebViewManager
     private lateinit var logContainer: View
 
@@ -87,20 +87,6 @@ class MainActivity : AppCompatActivity() {
             onDisconnect = ::fullReset,
         )
 
-        settingsCtrl = SettingsMenuController(
-            activity = this,
-            onModeChanged = { mode ->
-                statusCtrl.tunnelMode = mode
-                webViewMgr.tunnelMode = mode
-                fullReset()
-            },
-            onShareLogs = { logCtrl.shareLogs() },
-            onReset = ::fullReset,
-        )
-        settingsCtrl.onShowLogsChanged = { visible ->
-            logContainer.visibility = if (visible) View.VISIBLE else View.GONE
-        }
-
         webViewMgr = WebViewManager(
             activity = this,
             webView = findViewById(R.id.webView),
@@ -121,7 +107,9 @@ class MainActivity : AppCompatActivity() {
 
         findViewById<Button>(R.id.goButton).setOnClickListener { onGoPressed() }
         findViewById<ImageButton>(R.id.shareLogsButton).setOnClickListener { logCtrl.shareLogs() }
-        findViewById<ImageButton>(R.id.gearButton).setOnClickListener { settingsCtrl.show(it) }
+        findViewById<ImageButton>(R.id.gearButton).setOnClickListener {
+            SettingsDialogFragment().show(supportFragmentManager, SettingsDialogFragment.TAG)
+        }
         findViewById<View>(R.id.clearButton).setOnClickListener { urlInput.setText("") }
 
         TunnelVpnService.onDisconnect = { runOnUiThread { resetState() } }
@@ -149,12 +137,30 @@ class MainActivity : AppCompatActivity() {
         super.onDestroy()
     }
 
+    override fun onTunnelModeChanged(mode: TunnelMode) {
+        statusCtrl.tunnelMode = mode
+        webViewMgr.tunnelMode = mode
+        fullReset()
+    }
+
+    override fun onShowLogsChanged(visible: Boolean) {
+        logContainer.visibility = if (visible) View.VISIBLE else View.GONE
+    }
+
+    override fun onShareLogs() {
+        logCtrl.shareLogs()
+    }
+
+    override fun onReset() {
+        fullReset()
+    }
+
     private fun onGoPressed() {
         val url = urlInput.text.toString().trim()
         if (url.isEmpty()) return
         logCtrl.reset()
         relay.stop()
-        relay.start(settingsCtrl.tunnelMode, CallPlatform.fromUrl(url))
+        relay.start(Prefs.tunnelMode, CallPlatform.fromUrl(url))
         hideKeyboard()
         urlInput.clearFocus()
         statusCtrl.setConnected(false)

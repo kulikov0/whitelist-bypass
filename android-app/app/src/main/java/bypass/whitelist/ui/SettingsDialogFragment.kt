@@ -1,143 +1,167 @@
 package bypass.whitelist.ui
 
+import android.app.Dialog
 import android.content.pm.ApplicationInfo
 import android.content.pm.PackageManager
+import android.os.Bundle
+import android.view.LayoutInflater
 import android.view.View
+import android.view.ViewGroup
+import android.widget.Button
 import android.widget.CheckBox
+import android.widget.EditText
 import android.widget.LinearLayout
 import android.widget.ListView
-import android.widget.PopupMenu
-import android.widget.EditText
-import android.widget.Button
 import android.widget.ProgressBar
+import android.widget.TextView
 import android.widget.Toast
 import androidx.appcompat.app.AlertDialog
-import androidx.appcompat.app.AppCompatActivity
+import androidx.fragment.app.DialogFragment
 import bypass.whitelist.R
 import bypass.whitelist.tunnel.SplitTunnelingMode
 import bypass.whitelist.tunnel.TunnelMode
 import bypass.whitelist.tunnel.TunnelVpnService
-import bypass.whitelist.util.Callback
-import bypass.whitelist.util.ParamCallback
 import bypass.whitelist.util.Prefs
 
-class SettingsMenuController(
-    private val activity: AppCompatActivity,
-    private val onModeChanged: ParamCallback<TunnelMode>,
-    private val onShareLogs: Callback,
-    private val onReset: Callback,
-) {
-    var tunnelMode: TunnelMode = Prefs.tunnelMode
-    var splitTunnelingMode: SplitTunnelingMode = Prefs.splitTunnelingMode
-    var splitTunnelingPackages: MutableSet<String> = Prefs.splitTunnelingPackages.toMutableSet()
-    var showLogs: Boolean = Prefs.showLogs
+class SettingsDialogFragment : DialogFragment() {
 
-    var onShowLogsChanged: ParamCallback<Boolean> = {}
-
-    private enum class MenuItem(val id: Int, val stringRes: Int) {
-        MODE(99, R.string.menu_tunnel),
-        SPLIT_TUNNELING(98, R.string.menu_split_tunneling),
-        SPLIT_TUNNELING_APPS(97, R.string.menu_split_tunneling_manage),
-        AUTOCLICK_SETTINGS(104, R.string.menu_autoclick_settings),
-        RECONNECT_ON_START(100, R.string.menu_reconnect_on_start),
-        SHOW_LOGS(101, R.string.menu_show_logs),
-        SHARE_LOGS(102, R.string.menu_share_logs),
-        RESET(200, R.string.menu_reset),
+    interface Listener {
+        fun onTunnelModeChanged(mode: TunnelMode)
+        fun onShowLogsChanged(visible: Boolean)
+        fun onShareLogs()
+        fun onReset()
     }
 
-    fun show(anchor: View) {
-        val popup = PopupMenu(activity, anchor)
-        val menu = popup.menu
+    private var listener: Listener? = null
 
-        menu.add(0, MenuItem.MODE.id, 0, activity.getString(MenuItem.MODE.stringRes, tunnelMode.label))
-        menu.add(0, MenuItem.SPLIT_TUNNELING.id, 0, activity.getString(MenuItem.SPLIT_TUNNELING.stringRes, splitTunnelingMode.label))
-        menu.add(0, MenuItem.SPLIT_TUNNELING_APPS.id, 0, MenuItem.SPLIT_TUNNELING_APPS.stringRes).apply {
-            isEnabled = splitTunnelingMode != SplitTunnelingMode.NONE
-        }
-        menu.add(0, MenuItem.AUTOCLICK_SETTINGS.id, 0, activity.getString(MenuItem.AUTOCLICK_SETTINGS.stringRes))
-        menu.add(0, MenuItem.RECONNECT_ON_START.id, 0, MenuItem.RECONNECT_ON_START.stringRes).apply {
-            isCheckable = true
-            isChecked = Prefs.connectOnStart
-        }
-        menu.add(0, MenuItem.SHOW_LOGS.id, 0, MenuItem.SHOW_LOGS.stringRes).apply {
-            isCheckable = true
-            isChecked = showLogs
-        }
-        menu.add(0, MenuItem.SHARE_LOGS.id, 0, MenuItem.SHARE_LOGS.stringRes)
-        menu.add(0, MenuItem.RESET.id, 0, MenuItem.RESET.stringRes)
+    private var tunnelMode: TunnelMode = Prefs.tunnelMode
+    private var splitTunnelingMode: SplitTunnelingMode = Prefs.splitTunnelingMode
+    private var splitTunnelingPackages: MutableSet<String> = Prefs.splitTunnelingPackages.toMutableSet()
 
-        popup.setOnMenuItemClickListener { item ->
-            when (item.itemId) {
-                MenuItem.RECONNECT_ON_START.id -> {
-                    Prefs.connectOnStart = !item.isChecked
-                    true
-                }
-                MenuItem.SPLIT_TUNNELING.id -> {
-                    showSplitTunnelingDialog()
-                    true
-                }
-                MenuItem.SPLIT_TUNNELING_APPS.id -> {
-                    showSplitTunnelingAppSelection()
-                    true
-                }
-                MenuItem.SHOW_LOGS.id -> {
-                    showLogs = !item.isChecked
-                    Prefs.showLogs = showLogs
-                    onShowLogsChanged(showLogs)
-                    true
-                }
-                MenuItem.SHARE_LOGS.id -> {
-                    onShareLogs()
-                    true
-                }
-                MenuItem.AUTOCLICK_SETTINGS.id -> {
-                    showAutoclickSettingsDialog()
-                    true
-                }
-                MenuItem.RESET.id -> {
-                    onReset()
-                    true
-                }
-                MenuItem.MODE.id -> {
-                    showModeDialog()
-                    true
-                }
-                else -> false
+    override fun onCreateDialog(savedInstanceState: Bundle?): Dialog {
+        val dialog = super.onCreateDialog(savedInstanceState)
+        dialog.setTitle(R.string.cd_settings)
+        return dialog
+    }
+
+    override fun onCreateView(
+        inflater: LayoutInflater,
+        container: ViewGroup?,
+        savedInstanceState: Bundle?,
+    ): View = inflater.inflate(R.layout.fragment_settings, container, false)
+
+    override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
+        listener = activity as? Listener
+
+        val tunnelModeItem = view.findViewById<TextView>(R.id.tunnelModeItem)
+        val splitTunnelingItem = view.findViewById<TextView>(R.id.splitTunnelingItem)
+        val splitTunnelingAppsItem = view.findViewById<TextView>(R.id.splitTunnelingAppsItem)
+        val autoclickItem = view.findViewById<TextView>(R.id.autoclickItem)
+        val reconnectCheckbox = view.findViewById<CheckBox>(R.id.reconnectOnStartCheckbox)
+        val showLogsCheckbox = view.findViewById<CheckBox>(R.id.showLogsCheckbox)
+        val shareLogsItem = view.findViewById<TextView>(R.id.shareLogsItem)
+        val resetItem = view.findViewById<TextView>(R.id.resetItem)
+        val closeButton = view.findViewById<Button>(R.id.closeButton)
+
+        updateTunnelModeLabel(tunnelModeItem)
+        updateSplitTunnelingLabel(splitTunnelingItem)
+        updateSplitTunnelingAppsEnabled(splitTunnelingAppsItem)
+
+        reconnectCheckbox.isChecked = Prefs.connectOnStart
+        showLogsCheckbox.isChecked = Prefs.showLogs
+
+        tunnelModeItem.setOnClickListener {
+            showModeDialog(tunnelModeItem)
+        }
+
+        splitTunnelingItem.setOnClickListener {
+            showSplitTunnelingDialog(splitTunnelingItem, splitTunnelingAppsItem)
+        }
+
+        splitTunnelingAppsItem.setOnClickListener {
+            if (splitTunnelingMode != SplitTunnelingMode.NONE) {
+                showSplitTunnelingAppSelection()
             }
         }
-        popup.show()
+
+        autoclickItem.setOnClickListener {
+            showAutoclickSettingsDialog()
+        }
+
+        reconnectCheckbox.setOnCheckedChangeListener { _, checked ->
+            Prefs.connectOnStart = checked
+        }
+
+        showLogsCheckbox.setOnCheckedChangeListener { _, checked ->
+            Prefs.showLogs = checked
+            listener?.onShowLogsChanged(checked)
+        }
+
+        shareLogsItem.setOnClickListener {
+            listener?.onShareLogs()
+            dismiss()
+        }
+
+        resetItem.setOnClickListener {
+            listener?.onReset()
+            dismiss()
+        }
+
+        closeButton.setOnClickListener {
+            dismiss()
+        }
     }
 
-    private fun showModeDialog() {
+    private fun updateTunnelModeLabel(textView: TextView) {
+        textView.text = getString(R.string.menu_tunnel, tunnelMode.label)
+    }
+
+    private fun updateSplitTunnelingLabel(textView: TextView) {
+        textView.text = getString(R.string.menu_split_tunneling, splitTunnelingMode.label)
+    }
+
+    private fun updateSplitTunnelingAppsEnabled(textView: TextView) {
+        val enabled = splitTunnelingMode != SplitTunnelingMode.NONE
+        textView.isEnabled = enabled
+        textView.alpha = if (enabled) 1.0f else 0.4f
+    }
+
+    private fun showModeDialog(tunnelModeItem: TextView) {
         val modes = TunnelMode.entries
         val labels = modes.map { it.label }.toTypedArray()
         val current = modes.indexOf(tunnelMode)
-        AlertDialog.Builder(activity)
+        AlertDialog.Builder(requireContext())
             .setSingleChoiceItems(labels, current) { dialog, which ->
                 dialog.dismiss()
                 val mode = modes[which]
                 if (mode != tunnelMode) {
                     tunnelMode = mode
                     Prefs.tunnelMode = mode
-                    onModeChanged(mode)
+                    updateTunnelModeLabel(tunnelModeItem)
+                    listener?.onTunnelModeChanged(mode)
                 }
             }
             .show()
     }
 
-    private fun showSplitTunnelingDialog() {
+    private fun showSplitTunnelingDialog(
+        splitTunnelingItem: TextView,
+        splitTunnelingAppsItem: TextView,
+    ) {
         val modes = SplitTunnelingMode.entries.toTypedArray()
         val labels = modes.map { it.label }.toTypedArray()
         val selectedIndex = modes.indexOf(splitTunnelingMode)
 
-        AlertDialog.Builder(activity)
+        AlertDialog.Builder(requireContext())
             .setTitle(R.string.split_tunneling_mode_prompt)
             .setSingleChoiceItems(labels, selectedIndex) { dialog, which ->
                 splitTunnelingMode = modes[which]
                 Prefs.splitTunnelingMode = splitTunnelingMode
+                updateSplitTunnelingLabel(splitTunnelingItem)
+                updateSplitTunnelingAppsEnabled(splitTunnelingAppsItem)
                 dialog.dismiss()
                 if (TunnelVpnService.instance?.isRunning == true) {
-                    Toast.makeText(activity, R.string.split_tunneling_mode_changed, Toast.LENGTH_SHORT).show()
+                    Toast.makeText(requireContext(), R.string.split_tunneling_mode_changed, Toast.LENGTH_SHORT).show()
                 }
             }
             .setNegativeButton(android.R.string.cancel, null)
@@ -145,21 +169,21 @@ class SettingsMenuController(
     }
 
     private fun showSplitTunnelingAppSelection() {
-        val dialogLayout = activity.layoutInflater.inflate(R.layout.split_tunneling_app_list_dialog, null)
+        val dialogLayout = layoutInflater.inflate(R.layout.split_tunneling_app_list_dialog, null)
         val loadingProgressBar = dialogLayout.findViewById<ProgressBar>(R.id.loading_progress_bar)
         val appListContainer = dialogLayout.findViewById<LinearLayout>(R.id.app_list_container)
         val searchEditText = dialogLayout.findViewById<EditText>(R.id.search_input)
         val systemAppsCheckbox = dialogLayout.findViewById<CheckBox>(R.id.system_apps_checkbox)
         val listView = dialogLayout.findViewById<ListView>(R.id.app_list_view)
 
-        val dialog = AlertDialog.Builder(activity)
+        AlertDialog.Builder(requireContext())
             .setTitle(R.string.split_tunneling_apps_prompt)
             .setView(dialogLayout)
             .setPositiveButton(android.R.string.ok) { _, _ ->
                 Prefs.splitTunnelingMode = splitTunnelingMode
                 Prefs.splitTunnelingPackages = splitTunnelingPackages
                 if (TunnelVpnService.instance?.isRunning == true) {
-                    Toast.makeText(activity, R.string.split_tunneling_mode_changed, Toast.LENGTH_SHORT).show()
+                    Toast.makeText(requireContext(), R.string.split_tunneling_mode_changed, Toast.LENGTH_SHORT).show()
                 }
             }
             .setNegativeButton(android.R.string.cancel, null)
@@ -170,10 +194,12 @@ class SettingsMenuController(
 
         Thread {
             var includeSystemApps = false
-            val pm = activity.packageManager
+            val context = requireContext()
+            val pm = context.packageManager
+            val ownPackage = context.packageName
 
             val installedApps = pm.getInstalledApplications(PackageManager.GET_META_DATA)
-                .filter { it.packageName != activity.packageName }
+                .filter { it.packageName != ownPackage }
                 .mapNotNull { appInfo ->
                     val pkg = appInfo.packageName
                     if (pkg.isBlank()) return@mapNotNull null
@@ -187,7 +213,7 @@ class SettingsMenuController(
                 .distinctBy { it.packageName }
                 .sortedWith(compareByDescending<SplitTunnelingAppItem> { it.isSelected }.thenBy { it.label.lowercase() })
 
-            activity.runOnUiThread {
+            activity?.runOnUiThread {
                 loadingProgressBar.visibility = View.GONE
                 appListContainer.visibility = View.VISIBLE
 
@@ -203,7 +229,7 @@ class SettingsMenuController(
                     }
                 }
 
-                val adapter = SplitTunnelingAdapter(activity.layoutInflater, splitTunnelingPackages)
+                val adapter = SplitTunnelingAdapter(layoutInflater, splitTunnelingPackages)
                 adapter.items = buildAppList("", includeSystemApps)
 
                 if (adapter.items.isEmpty()) return@runOnUiThread
@@ -229,8 +255,8 @@ class SettingsMenuController(
     }
 
     private fun showAutoclickSettingsDialog() {
-        val dialogLayout = activity.layoutInflater.inflate(R.layout.autoclick_settings_dialog, null)
-        var autoclickCheckbox = dialogLayout.findViewById<CheckBox>(R.id.autoclick_checkbox)
+        val dialogLayout = layoutInflater.inflate(R.layout.autoclick_settings_dialog, null)
+        val autoclickCheckbox = dialogLayout.findViewById<CheckBox>(R.id.autoclick_checkbox)
         val nameInput = dialogLayout.findViewById<EditText>(R.id.autoclick_name_input)
         val generateButton = dialogLayout.findViewById<Button>(R.id.autoclick_generate_random_button)
 
@@ -238,12 +264,12 @@ class SettingsMenuController(
         nameInput.setText(Prefs.autoclickName)
 
         generateButton.setOnClickListener {
-            val names = activity.assets.open("names.txt").bufferedReader().readLines()
+            val names = requireContext().assets.open("names.txt").bufferedReader().readLines()
             val randomName = names.random()
             nameInput.setText(randomName)
         }
 
-        AlertDialog.Builder(activity)
+        AlertDialog.Builder(requireContext())
             .setTitle(R.string.autoclick_settings_title)
             .setView(dialogLayout)
             .setPositiveButton(android.R.string.ok) { _, _ ->
@@ -252,5 +278,9 @@ class SettingsMenuController(
             }
             .setNegativeButton(android.R.string.cancel, null)
             .show()
+    }
+
+    companion object {
+        const val TAG = "SettingsDialogFragment"
     }
 }

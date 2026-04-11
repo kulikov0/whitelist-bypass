@@ -11,6 +11,13 @@
         android:layout_height="wrap_content"
         android:text="@string/autoclick_checkbox" />
     
+    <TextView
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="8dp"
+        android:text="@string/autoclick_name_input_hint"
+        android:textSize="14sp" />
+
     <EditText
         android:id="@+id/autoclick_name_input"
         android:layout_width="match_parent"

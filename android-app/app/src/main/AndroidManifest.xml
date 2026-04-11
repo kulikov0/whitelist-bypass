@@ -21,7 +21,7 @@
         android:usesCleartextTraffic="true"
         android:extractNativeLibs="true">
         <activity
-            android:name=".TelemostHeadlessJoinActivity"
+            android:name=".MainActivity"
             android:screenOrientation="portrait"
             android:exported="true">
             <intent-filter>
@@ -35,7 +35,7 @@
             android:exported="true">
         </activity>
         <activity
-            android:name=".MainActivity"
+            android:name=".TelemostHeadlessJoinActivity"
             android:screenOrientation="portrait"
             android:exported="true">
         </activity>
