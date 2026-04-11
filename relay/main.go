@@ -7,9 +7,10 @@ import (
 	"net/http"
 	"os"
 
+	"whitelist-bypass/relay/common"
 	"whitelist-bypass/relay/mobile"
 	"whitelist-bypass/relay/pion"
-	"whitelist-bypass/relay/common"
+	"whitelist-bypass/relay/tunnel"
 )
 
 type stdLogger struct{}
@@ -36,7 +37,7 @@ func main() {
 		HandleSignaling(http.ResponseWriter, *http.Request)
 	}
 
-	startVideo := func(name string, client signalingClient, onConnected func(pion.DataTunnel)) {
+	startVideo := func(name string, client signalingClient, onConnected func(tunnel.DataTunnel)) {
 		mux := http.NewServeMux()
 		mux.HandleFunc("/signaling", client.HandleSignaling)
 		addr := fmt.Sprintf("127.0.0.1:%d", *wsPort)
@@ -44,18 +45,18 @@ func main() {
 		log.Fatal(http.ListenAndServe(addr, mux))
 	}
 
-	startJoinerBridge := func(tunnel pion.DataTunnel, readBuf int) {
-		rb := pion.NewRelayBridge(tunnel, "joiner", readBuf, log.Printf)
+	startJoinerBridge := func(tun tunnel.DataTunnel, readBuf int) {
+		rb := tunnel.NewRelayBridge(tun, "joiner", readBuf, log.Printf)
 		rb.MarkReady()
 		go rb.ListenSOCKS(fmt.Sprintf("127.0.0.1:%d", *socksPort))
 	}
 
-	joinerCallback := func(tunnel pion.DataTunnel) {
-		startJoinerBridge(tunnel, common.VP8BufSize)
+	joinerCallback := func(tun tunnel.DataTunnel) {
+		startJoinerBridge(tun, common.VP8BufSize)
 	}
 
-	creatorCallback := func(tunnel pion.DataTunnel) {
-		pion.NewRelayBridge(tunnel, "creator", common.VP8BufSize, log.Printf)
+	creatorCallback := func(tun tunnel.DataTunnel) {
+		tunnel.NewRelayBridge(tun, "creator", common.VP8BufSize, log.Printf)
 	}
 
 	switch *mode {
@@ -69,12 +70,12 @@ func main() {
 		startVideo(*mode, c, joinerCallback)
 	case "vk-headless-joiner":
 		c := pion.NewVKHeadlessJoiner(log.Printf)
-		c.OnConnected = func(tunnel pion.DataTunnel) {
+		c.OnConnected = func(tun tunnel.DataTunnel) {
 			readBuf := common.VP8BufSize
-			if _, ok := tunnel.(*pion.DCTunnel); ok {
+			if _, ok := tun.(*tunnel.DCTunnel); ok {
 				readBuf = common.DCBufSize
 			}
-			startJoinerBridge(tunnel, readBuf)
+			startJoinerBridge(tun, readBuf)
 		}
 		c.Run()
 	case "vk-video-creator":
@@ -83,12 +84,12 @@ func main() {
 		startVideo(*mode, c, creatorCallback)
 	case "telemost-headless-joiner":
 		c := pion.NewTelemostHeadlessJoiner(log.Printf)
-		c.OnConnected = func(tunnel pion.DataTunnel) {
+		c.OnConnected = func(tun tunnel.DataTunnel) {
 			readBuf := common.VP8BufSize
-			if _, ok := tunnel.(*pion.DCTunnel); ok {
+			if _, ok := tun.(*tunnel.DCTunnel); ok {
 				readBuf = common.DCBufSize
 			}
-			startJoinerBridge(tunnel, readBuf)
+			startJoinerBridge(tun, readBuf)
 		}
 		c.Run()
 	case "telemost-video-joiner":

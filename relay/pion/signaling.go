@@ -12,6 +12,7 @@ import (
 	"github.com/pion/rtp/codecs"
 	"github.com/pion/webrtc/v4"
 	"whitelist-bypass/relay/common"
+	"whitelist-bypass/relay/tunnel"
 )
 
 type SignalingMessage struct {
@@ -205,7 +206,7 @@ func ParseSDPType(t string) webrtc.SDPType {
 	return webrtc.SDPTypeAnswer
 }
 
-func ReadTrack(track *webrtc.TrackRemote, tunnel *VP8DataTunnel, logFn func(string, ...any), prefix string) {
+func ReadTrack(track *webrtc.TrackRemote, tun *tunnel.VP8DataTunnel, logFn func(string, ...any), prefix string) {
 	if track.Codec().MimeType != webrtc.MimeTypeVP8 {
 		buf := make([]byte, common.UDPBufSize)
 		for {
@@ -244,14 +245,14 @@ func ReadTrack(track *webrtc.TrackRemote, tunnel *VP8DataTunnel, logFn func(stri
 					logFn("%s: recv frame #%d %d bytes, first=0x%02x", prefix, recvCount, len(frameBuf), frameBuf[0])
 				}
 			}
-			data := ExtractDataFromPayload(frameBuf)
+			data := tunnel.ExtractDataFromPayload(frameBuf)
 			if data != nil {
 				dataCount++
 				if dataCount <= 5 || dataCount%100 == 0 {
 					logFn("%s: TUNNEL DATA #%d: %d bytes", prefix, dataCount, len(data))
 				}
-				if tunnel != nil && tunnel.onData != nil {
-					tunnel.onData(data)
+				if tun != nil && tun.OnData != nil {
+					tun.OnData(data)
 				}
 			}
 		}

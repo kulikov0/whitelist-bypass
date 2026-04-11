@@ -6,10 +6,10 @@ require (
 	github.com/gorilla/websocket v1.5.3
 	github.com/pion/rtp v1.10.1
 	github.com/pion/webrtc/v4 v4.2.11
-	headless-creator/tunnel v0.0.0
+	whitelist-bypass/relay v0.0.0
 )
 
-replace headless-creator/tunnel => ../tunnel
+replace whitelist-bypass/relay => ../../relay
 
 require (
 	github.com/google/uuid v1.6.0 // indirect
@@ -28,8 +28,8 @@ require (
 	github.com/pion/transport/v4 v4.0.1 // indirect
 	github.com/pion/turn/v4 v4.1.4 // indirect
 	github.com/wlynxg/anet v0.0.5 // indirect
-	golang.org/x/crypto v0.48.0 // indirect
-	golang.org/x/net v0.50.0 // indirect
-	golang.org/x/sys v0.41.0 // indirect
-	golang.org/x/time v0.10.0 // indirect
+	golang.org/x/crypto v0.49.0 // indirect
+	golang.org/x/net v0.52.0 // indirect
+	golang.org/x/sys v0.42.0 // indirect
+	golang.org/x/time v0.11.0 // indirect
 )

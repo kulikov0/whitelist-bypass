@@ -16,7 +16,8 @@ import (
 
 	"github.com/gorilla/websocket"
 	"github.com/pion/webrtc/v4"
-	"headless-creator/tunnel"
+	"whitelist-bypass/relay/common"
+	"whitelist-bypass/relay/tunnel"
 )
 
 const TopologyDirect = "DIRECT"
@@ -91,7 +92,7 @@ func httpPost(endpoint string, form url.Values, extraHeaders map[string]string) 
 		return nil, err
 	}
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
-	req.Header.Set("User-Agent", tunnel.UserAgent)
+	req.Header.Set("User-Agent", common.UserAgent)
 	req.Header.Set("Origin", "https://vk.com")
 	req.Header.Set("Referer", "https://vk.com/")
 	for k, v := range extraHeaders {
@@ -110,7 +111,7 @@ func httpGet(endpoint string) ([]byte, error) {
 	if err != nil {
 		return nil, err
 	}
-	req.Header.Set("User-Agent", tunnel.UserAgent)
+	req.Header.Set("User-Agent", common.UserAgent)
 	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
 		return nil, err
@@ -412,9 +413,9 @@ func buildICEServers(callInfo *CallInfo) []webrtc.ICEServer {
 
 func (b *Bridge) connectVKWs(wsURL string) error {
 	vkHeader := http.Header{}
-	vkHeader.Set("User-Agent", tunnel.UserAgent)
+	vkHeader.Set("User-Agent", common.UserAgent)
 	vkHeader.Set("Origin", "https://vk.com")
-	vkDialer := websocket.Dialer{WriteBufferSize: tunnel.RTPBufSize}
+	vkDialer := websocket.Dialer{WriteBufferSize: common.RTPBufSize}
 	vkWs, _, err := vkDialer.Dial(wsURL, vkHeader)
 	if err != nil {
 		return err
@@ -550,7 +551,7 @@ func main() {
 		maxDCBuf = 4 * 1024 * 1024
 		memLimit = 128 * 1024 * 1024
 	case "unlimited":
-		readBuf = tunnel.RTPBufSize
+		readBuf = common.RTPBufSize
 		maxDCBuf = 8 * 1024 * 1024
 		memLimit = 256 * 1024 * 1024
 	default:
@@ -565,7 +566,7 @@ func main() {
 	if *cookieString != "" {
 		cookieStr = *cookieString
 	} else if *cookiesPath != "" {
-		cookieStr = tunnel.LoadCookies(*cookiesPath)
+		cookieStr = common.LoadCookies(*cookiesPath)
 	} else {
 		log.Fatal("Either --cookies or --cookie-string is required")
 	}
@@ -587,7 +588,7 @@ func main() {
 		ur.readBufSize = readBuf
 		ur.maxDCBuf = maxDCBuf
 		ur.OnConnected = func(tun *tunnel.VP8DataTunnel) {
-			tunnel.NewRelayBridge(tun, "creator", log.Printf)
+			tunnel.NewRelayBridge(tun, "creator", readBuf, log.Printf)
 		}
 		return ur
 	}

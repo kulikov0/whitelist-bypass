@@ -17,6 +17,7 @@ import (
 	"github.com/gorilla/websocket"
 	"github.com/pion/webrtc/v4"
 	"whitelist-bypass/relay/common"
+	"whitelist-bypass/relay/tunnel"
 )
 
 const (
@@ -28,7 +29,7 @@ const (
 
 type TelemostHeadlessJoiner struct {
 	logFn       func(string, ...any)
-	OnConnected func(DataTunnel)
+	OnConnected func(tunnel.DataTunnel)
 
 	joinLink    string
 	displayName string
@@ -48,7 +49,7 @@ type TelemostHeadlessJoiner struct {
 	pubPending   []webrtc.ICECandidateInit
 
 	sampleTrack *webrtc.TrackLocalStaticSample
-	tunnel      *VP8DataTunnel
+	vp8tunnel   *tunnel.VP8DataTunnel
 	pubDC       *webrtc.DataChannel
 	dcReady     chan struct{}
 
@@ -352,7 +353,7 @@ func (j *TelemostHeadlessJoiner) initPC() {
 	subPC.OnTrack(func(track *webrtc.TrackRemote, receiver *webrtc.RTPReceiver) {
 		j.logFn("telemost-joiner: sub remote track: %s", track.Codec().MimeType)
 		if j.tunnelMode == "video" {
-			go ReadTrack(track, j.tunnel, j.logFn, "telemost-joiner")
+			go ReadTrack(track, j.vp8tunnel, j.logFn, "telemost-joiner")
 		} else {
 			go drainTrack(track)
 		}
@@ -378,13 +379,13 @@ func (j *TelemostHeadlessJoiner) initPC() {
 
 	pubPC.OnConnectionStateChange(func(state webrtc.PeerConnectionState) {
 		j.logFn("telemost-joiner: pub PC state: %s", state.String())
-		if state == webrtc.PeerConnectionStateConnected && j.tunnelMode == "video" && j.tunnel == nil {
+		if state == webrtc.PeerConnectionStateConnected && j.tunnelMode == "video" && j.vp8tunnel == nil {
 			j.logFn("telemost-joiner: === VP8 TUNNEL CONNECTED ===")
 			common.EmitStatus(common.StatusTunnelConnected)
-			j.tunnel = NewVP8DataTunnel(j.sampleTrack, j.logFn)
-			j.tunnel.Start(25)
+			j.vp8tunnel = tunnel.NewVP8DataTunnel(j.sampleTrack, j.logFn)
+			j.vp8tunnel.Start(25)
 			if j.OnConnected != nil {
-				j.OnConnected(j.tunnel)
+				j.OnConnected(j.vp8tunnel)
 			}
 		}
 	})
@@ -471,9 +472,9 @@ func (j *TelemostHeadlessJoiner) waitForPong(dc *webrtc.DataChannel) {
 				close(j.dcReady)
 				j.logFn("telemost-joiner: === DC TUNNEL CONNECTED ===")
 				common.EmitStatus(common.StatusTunnelConnected)
-				tunnel := NewChunkedDCTunnel(raw, j.pubDC, j.logFn)
+				dcTunnel := tunnel.NewChunkedDCTunnel(raw, j.pubDC, j.logFn)
 				if j.OnConnected != nil {
-					j.OnConnected(tunnel)
+					j.OnConnected(dcTunnel)
 				}
 				return
 			}
@@ -768,8 +769,8 @@ func (j *TelemostHeadlessJoiner) connectAndRun() {
 	}
 
 	close(stopPing)
-	if j.tunnel != nil {
-		j.tunnel.Stop()
+	if j.vp8tunnel != nil {
+		j.vp8tunnel.Stop()
 	}
 	if j.subPC != nil {
 		j.subPC.Close()

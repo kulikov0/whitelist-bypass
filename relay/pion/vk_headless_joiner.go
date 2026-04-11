@@ -18,6 +18,7 @@ import (
 	"github.com/gorilla/websocket"
 	"github.com/pion/webrtc/v4"
 	"whitelist-bypass/relay/common"
+	"whitelist-bypass/relay/tunnel"
 )
 
 func init() {
@@ -57,7 +58,7 @@ type VKJoinResponse struct {
 
 type VKHeadlessJoiner struct {
 	logFn       func(string, ...any)
-	OnConnected func(DataTunnel)
+	OnConnected func(tunnel.DataTunnel)
 
 	authParams   *VKHeadlessAuthParams
 	joinResp     *VKJoinResponse
@@ -69,7 +70,7 @@ type VKHeadlessJoiner struct {
 	pc          *webrtc.PeerConnection
 	sampleTrack *webrtc.TrackLocalStaticSample
 	dc          *webrtc.DataChannel
-	tunnel      *VP8DataTunnel
+	vp8tunnel   *tunnel.VP8DataTunnel
 	remoteSet   bool
 	pendingICE  []webrtc.ICECandidateInit
 }
@@ -457,7 +458,7 @@ func (h *VKHeadlessJoiner) initPC() {
 				h.logFn("headless: === DC TUNNEL CONNECTED ===")
 				common.EmitStatus(common.StatusTunnelConnected)
 				if h.OnConnected != nil {
-					h.OnConnected(NewDCTunnel(dc, h.logFn))
+					h.OnConnected(tunnel.NewDCTunnel(dc, h.logFn))
 				}
 			}
 		})
@@ -481,20 +482,20 @@ func (h *VKHeadlessJoiner) initPC() {
 			h.logFn("headless: ERROR: connection lost")
 			common.EmitStatus(common.StatusTunnelLost)
 		}
-		if mode == "video" && state == webrtc.PeerConnectionStateConnected && h.tunnel == nil {
+		if mode == "video" && state == webrtc.PeerConnectionStateConnected && h.vp8tunnel == nil {
 			h.logFn("headless: === TUNNEL CONNECTED ===")
 			common.EmitStatus(common.StatusTunnelConnected)
-			h.tunnel = NewVP8DataTunnel(h.sampleTrack, h.logFn)
-			h.tunnel.Start(25)
+			h.vp8tunnel = tunnel.NewVP8DataTunnel(h.sampleTrack, h.logFn)
+			h.vp8tunnel.Start(25)
 			if h.OnConnected != nil {
-				h.OnConnected(h.tunnel)
+				h.OnConnected(h.vp8tunnel)
 			}
 		}
 	})
 	if mode == "video" {
 		pc.OnTrack(func(track *webrtc.TrackRemote, receiver *webrtc.RTPReceiver) {
 			h.logFn("headless: remote track: %s", track.Codec().MimeType)
-			go ReadTrack(track, h.tunnel, h.logFn, "headless")
+			go ReadTrack(track, h.vp8tunnel, h.logFn, "headless")
 		})
 	}
 

@@ -9,6 +9,7 @@ import (
 
 	"github.com/pion/webrtc/v4"
 	"whitelist-bypass/relay/common"
+	"whitelist-bypass/relay/tunnel"
 )
 
 type tmPCState struct {
@@ -22,12 +23,12 @@ type TelemostClient struct {
 	pcs         map[string]*tmPCState
 	pcMu        sync.Mutex
 	sampleTrack *webrtc.TrackLocalStaticSample
-	tunnel      *VP8DataTunnel
+	vp8tunnel   *tunnel.VP8DataTunnel
 	logFn       func(string, ...any)
 	LocalIP     string
 	ipReady     chan struct{}
 	ipOnce      sync.Once
-	OnConnected func(DataTunnel)
+	OnConnected func(tunnel.DataTunnel)
 }
 
 func NewTelemostClient(logFn func(string, ...any)) *TelemostClient {
@@ -160,14 +161,14 @@ func (c *TelemostClient) handleICEServers(data json.RawMessage, role string) {
 	pc.OnConnectionStateChange(func(state webrtc.PeerConnectionState) {
 		c.logFn("telemost [%s]: connection state: %s", role, state.String())
 		c.SendToHook("connection-state", state.String())
-		if state == webrtc.PeerConnectionStateConnected && role == "pub" && c.tunnel == nil {
+		if state == webrtc.PeerConnectionStateConnected && role == "pub" && c.vp8tunnel == nil {
 			c.logFn("telemost: === CONNECTED - starting VP8 tunnel ===")
 			c.logFn("telemost: sampleTrack id=%s kind=%s", c.sampleTrack.ID(), c.sampleTrack.Kind().String())
 			c.logFn("telemost: pub senders=%d receivers=%d", len(pc.GetSenders()), len(pc.GetReceivers()))
-			c.tunnel = NewVP8DataTunnel(c.sampleTrack, c.logFn)
-			c.tunnel.Start(25)
+			c.vp8tunnel = tunnel.NewVP8DataTunnel(c.sampleTrack, c.logFn)
+			c.vp8tunnel.Start(25)
 			if c.OnConnected != nil {
-				c.OnConnected(c.tunnel)
+				c.OnConnected(c.vp8tunnel)
 			}
 		}
 	})
@@ -262,13 +263,13 @@ func (c *TelemostClient) handleICECandidate(data json.RawMessage, role string) {
 }
 
 func (c *TelemostClient) readTrack(track *webrtc.TrackRemote) {
-	ReadTrack(track, c.tunnel, c.logFn, "telemost")
+	ReadTrack(track, c.vp8tunnel, c.logFn, "telemost")
 }
 
 func (c *TelemostClient) cleanup() {
-	if c.tunnel != nil {
-		c.tunnel.Stop()
-		c.tunnel = nil
+	if c.vp8tunnel != nil {
+		c.vp8tunnel.Stop()
+		c.vp8tunnel = nil
 	}
 	c.pcMu.Lock()
 	for role, ps := range c.pcs {

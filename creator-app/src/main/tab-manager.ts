@@ -49,7 +49,7 @@ export class TabManager {
       binaryName('headless-vk-creator'),
     );
     this.headlessTelemostPath = resolveResourcePath(
-      path.join('headless', 'telemost', binaryName('headless-telemost')),
+      path.join('headless', 'telemost', binaryName('headless-telemost-creator')),
       binaryName('headless-telemost-creator'),
     );
     this.hooksDir = app.isPackaged

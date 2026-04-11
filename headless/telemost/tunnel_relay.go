@@ -14,7 +14,8 @@ import (
 	"github.com/pion/rtp"
 	"github.com/pion/rtp/codecs"
 	"github.com/pion/webrtc/v4"
-	"headless-creator/tunnel"
+	"whitelist-bypass/relay/common"
+	"whitelist-bypass/relay/tunnel"
 )
 
 type SFURelay struct {
@@ -365,7 +366,7 @@ func (r *SFURelay) sendDCFrame(connID uint32, mt byte, payload []byte) {
 }
 
 func (r *SFURelay) connectTCP(connID uint32, addr string) {
-	log.Printf("[dc] CONNECT %d -> %s", connID, tunnel.MaskAddr(addr))
+	log.Printf("[dc] CONNECT %d -> %s", connID, common.MaskAddr(addr))
 	conn, err := net.DialTimeout("tcp", addr, 10*time.Second)
 	if err != nil {
 		log.Printf("[dc] CONNECT %d failed: %v", connID, err)
@@ -374,7 +375,7 @@ func (r *SFURelay) connectTCP(connID uint32, addr string) {
 	}
 	r.conns.Store(connID, conn)
 	r.sendDCFrame(connID, tunnel.MsgConnectOK, nil)
-	log.Printf("[dc] CONNECTED %d -> %s", connID, tunnel.MaskAddr(addr))
+	log.Printf("[dc] CONNECTED %d -> %s", connID, common.MaskAddr(addr))
 
 	buf := make([]byte, chunkSize-5)
 	for {
@@ -414,7 +415,7 @@ func (r *SFURelay) handleUDP(connID uint32, payload []byte) {
 	defer conn.Close()
 	conn.SetDeadline(time.Now().Add(5 * time.Second))
 	conn.Write(data)
-	resp := make([]byte, tunnel.UDPBufSize)
+	resp := make([]byte, common.UDPBufSize)
 	n, err := conn.Read(resp)
 	if err != nil {
 		return
@@ -450,7 +451,7 @@ func (r *SFURelay) Close() {
 
 func (r *SFURelay) readTrack(track *webrtc.TrackRemote) {
 	if track.Codec().MimeType != webrtc.MimeTypeVP8 {
-		buf := make([]byte, tunnel.UDPBufSize)
+		buf := make([]byte, common.UDPBufSize)
 		for {
 			if _, _, err := track.Read(buf); err != nil {
 				return
@@ -463,7 +464,7 @@ func (r *SFURelay) readTrack(track *webrtc.TrackRemote) {
 	var dataCount, recvCount int
 	bufSz := r.readBufSize
 	if bufSz <= 0 {
-		bufSz = tunnel.RTPBufSize
+		bufSz = common.RTPBufSize
 	}
 	buf := make([]byte, bufSz)
 	for {

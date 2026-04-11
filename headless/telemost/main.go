@@ -16,7 +16,8 @@ import (
 	"github.com/google/uuid"
 	"github.com/gorilla/websocket"
 	"github.com/pion/webrtc/v4"
-	"headless-creator/tunnel"
+	"whitelist-bypass/relay/common"
+	"whitelist-bypass/relay/tunnel"
 )
 
 const (
@@ -87,7 +88,7 @@ func tmRequest(method, path string, body interface{}, cookieStr string, cfg TMCo
 	if err != nil {
 		return nil, 0, err
 	}
-	req.Header.Set("User-Agent", tunnel.UserAgent)
+	req.Header.Set("User-Agent", common.UserAgent)
 	req.Header.Set("Origin", tmOrigin)
 	req.Header.Set("Referer", tmOrigin+"/")
 	req.Header.Set("Cookie", cookieStr)
@@ -217,7 +218,7 @@ func (b *Bridge) sendHello() {
 			"participantId": b.connInfo.PeerID, "roomId": b.connInfo.RoomID,
 			"serviceName": b.connInfo.ServiceName, "credentials": b.connInfo.Credentials,
 			"capabilitiesOffer": capabilitiesOffer,
-			"sdkInfo":           map[string]interface{}{"implementation": "browser", "version": b.config.SDKVersion, "userAgent": tunnel.UserAgent, "hwConcurrency": 8},
+			"sdkInfo":           map[string]interface{}{"implementation": "browser", "version": b.config.SDKVersion, "userAgent": common.UserAgent, "hwConcurrency": 8},
 			"sdkInitializationId": uuid.New().String(),
 			"disablePublisher": false, "disableSubscriber": false, "disableSubscriberAudio": false,
 		},
@@ -505,7 +506,7 @@ func (b *Bridge) initRelay() {
 	relay.readBufSize = b.readBuf
 	relay.maxDCBuf = b.maxDCBuf
 	relay.OnConnected = func(tun *tunnel.VP8DataTunnel) {
-		tunnel.NewRelayBridge(tun, "creator", log.Printf)
+		tunnel.NewRelayBridge(tun, "creator", b.readBuf, log.Printf)
 		fmt.Println("\n  TUNNEL CONNECTED\n")
 	}
 	relay.OnPubICE = func(cand *webrtc.ICECandidate) {
@@ -533,7 +534,7 @@ func (b *Bridge) run() {
 	fmt.Printf("  protocol:  sdk %s app %s\n\n", b.config.SDKVersion, b.config.AppVersion)
 
 	wsHeader := http.Header{}
-	wsHeader.Set("User-Agent", tunnel.UserAgent)
+	wsHeader.Set("User-Agent", common.UserAgent)
 	wsHeader.Set("Origin", tmOrigin)
 
 	for {
@@ -644,7 +645,7 @@ func main() {
 		maxDCBuf = 4 << 20
 		memLimit = 128 << 20
 	case "unlimited":
-		readBuf = tunnel.RTPBufSize
+		readBuf = common.RTPBufSize
 		maxDCBuf = 8 << 20
 		memLimit = 256 << 20
 	default:
@@ -659,7 +660,7 @@ func main() {
 	if *cookieString != "" {
 		cookieStr = *cookieString
 	} else if *cookiesPath != "" {
-		cookieStr = tunnel.LoadCookies(*cookiesPath)
+		cookieStr = common.LoadCookies(*cookiesPath)
 	} else {
 		log.Fatal("Either --cookies or --cookie-string is required")
 	}

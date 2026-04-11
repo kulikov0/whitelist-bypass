@@ -11,7 +11,8 @@ import (
 	"github.com/pion/rtp"
 	"github.com/pion/rtp/codecs"
 	"github.com/pion/webrtc/v4"
-	"headless-creator/tunnel"
+	"whitelist-bypass/relay/common"
+	"whitelist-bypass/relay/tunnel"
 )
 
 type dcConn struct {
@@ -262,7 +263,7 @@ func (u *TunnelRelay) sendDCFrame(connID uint32, mt byte, payload []byte) {
 }
 
 func (u *TunnelRelay) connectTCP(connID uint32, addr string) {
-	log.Printf("[dc] CONNECT %d -> %s", connID, tunnel.MaskAddr(addr))
+	log.Printf("[dc] CONNECT %d -> %s", connID, common.MaskAddr(addr))
 	conn, err := net.DialTimeout("tcp", addr, 10*time.Second)
 	if err != nil {
 		log.Printf("[dc] CONNECT %d failed: %v", connID, err)
@@ -272,7 +273,7 @@ func (u *TunnelRelay) connectTCP(connID uint32, addr string) {
 	dc := &dcConn{conn: conn, ch: make(chan []byte, 256)}
 	u.conns.Store(connID, dc)
 	u.sendDCFrame(connID, tunnel.MsgConnectOK, nil)
-	log.Printf("[dc] CONNECTED %d -> %s", connID, tunnel.MaskAddr(addr))
+	log.Printf("[dc] CONNECTED %d -> %s", connID, common.MaskAddr(addr))
 
 	go func() {
 		for data := range dc.ch {
@@ -283,7 +284,7 @@ func (u *TunnelRelay) connectTCP(connID uint32, addr string) {
 
 	bufSz := u.readBufSize
 	if bufSz <= 0 {
-		bufSz = tunnel.RTPBufSize
+		bufSz = common.RTPBufSize
 	}
 	buf := make([]byte, bufSz)
 	sent := 0
@@ -336,7 +337,7 @@ func (u *TunnelRelay) handleUDP(connID uint32, payload []byte) {
 	defer conn.Close()
 	conn.SetDeadline(time.Now().Add(5 * time.Second))
 	conn.Write(data)
-	resp := make([]byte, tunnel.UDPBufSize)
+	resp := make([]byte, common.UDPBufSize)
 	n, err := conn.Read(resp)
 	if err != nil {
 		return
@@ -355,7 +356,7 @@ func (u *TunnelRelay) closeAllConns() {
 
 func (u *TunnelRelay) readTrack(track *webrtc.TrackRemote) {
 	if track.Codec().MimeType != webrtc.MimeTypeVP8 {
-		buf := make([]byte, tunnel.UDPBufSize)
+		buf := make([]byte, common.UDPBufSize)
 		for {
 			if _, _, err := track.Read(buf); err != nil {
 				return
@@ -366,7 +367,7 @@ func (u *TunnelRelay) readTrack(track *webrtc.TrackRemote) {
 	var vp8Pkt codecs.VP8Packet
 	var frameBuf []byte
 	var dataCount, recvCount int
-	buf := make([]byte, tunnel.RTPBufSize)
+	buf := make([]byte, common.RTPBufSize)
 	for {
 		n, _, err := track.Read(buf)
 		if err != nil {

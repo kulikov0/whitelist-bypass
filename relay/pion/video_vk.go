@@ -7,17 +7,18 @@ import (
 
 	"github.com/pion/webrtc/v4"
 	"whitelist-bypass/relay/common"
+	"whitelist-bypass/relay/tunnel"
 )
 
 type VKClient struct {
 	WSHelper
 	pc              *webrtc.PeerConnection
 	sampleTrack     *webrtc.TrackLocalStaticSample
-	tunnel          *VP8DataTunnel
+	vp8tunnel       *tunnel.VP8DataTunnel
 	logFn           func(string, ...any)
 	remoteSet       bool
 	pending         []webrtc.ICECandidateInit
-	OnConnected     func(DataTunnel)
+	OnConnected     func(tunnel.DataTunnel)
 	dcProducerNotif *webrtc.DataChannel
 	dcProducerCmd   *webrtc.DataChannel
 }
@@ -135,14 +136,14 @@ func (c *VKClient) createPC(config webrtc.Configuration) error {
 	pc.OnConnectionStateChange(func(state webrtc.PeerConnectionState) {
 		c.logFn("vk: connection state: %s", state.String())
 		c.SendToHook("connection-state", state.String())
-		if state == webrtc.PeerConnectionStateConnected && c.tunnel == nil {
+		if state == webrtc.PeerConnectionStateConnected && c.vp8tunnel == nil {
 			c.logFn("vk: === CONNECTED - starting VP8 tunnel ===")
 			c.logFn("vk: sampleTrack id=%s kind=%s", sampleTrack.ID(), sampleTrack.Kind().String())
 			c.logFn("vk: PC senders=%d receivers=%d signalingState=%s", len(pc.GetSenders()), len(pc.GetReceivers()), pc.SignalingState().String())
-			c.tunnel = NewVP8DataTunnel(sampleTrack, c.logFn)
-			c.tunnel.Start(25)
+			c.vp8tunnel = tunnel.NewVP8DataTunnel(sampleTrack, c.logFn)
+			c.vp8tunnel.Start(25)
 			if c.OnConnected != nil {
-				c.OnConnected(c.tunnel)
+				c.OnConnected(c.vp8tunnel)
 			}
 		}
 	})
@@ -292,14 +293,14 @@ func (c *VKClient) handleICECandidate(data json.RawMessage) {
 }
 
 func (c *VKClient) readTrack(track *webrtc.TrackRemote) {
-	ReadTrack(track, c.tunnel, c.logFn, "vk")
+	ReadTrack(track, c.vp8tunnel, c.logFn, "vk")
 }
 
 func (c *VKClient) handleReset(id int) {
 	c.logFn("vk: reset - closing PC for reconnection")
-	if c.tunnel != nil {
-		c.tunnel.Stop()
-		c.tunnel = nil
+	if c.vp8tunnel != nil {
+		c.vp8tunnel.Stop()
+		c.vp8tunnel = nil
 	}
 	if c.pc != nil {
 		// Remove callbacks before Close() to prevent stale state events
@@ -341,9 +342,9 @@ func splitLines(s string) []string {
 }
 
 func (c *VKClient) cleanup() {
-	if c.tunnel != nil {
-		c.tunnel.Stop()
-		c.tunnel = nil
+	if c.vp8tunnel != nil {
+		c.vp8tunnel.Stop()
+		c.vp8tunnel = nil
 	}
 	if c.pc != nil {
 		c.pc.Close()

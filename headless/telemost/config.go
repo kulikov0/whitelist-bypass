@@ -6,7 +6,7 @@ import (
 	"log"
 	"regexp"
 
-	"headless-creator/tunnel"
+	"whitelist-bypass/relay/common"
 )
 
 type TMConfig struct {
@@ -17,7 +17,7 @@ type TMConfig struct {
 func fetchConfig() (TMConfig, error) {
 	var cfg TMConfig
 
-	page, err := tunnel.HttpGet("https://telemost.yandex.ru/")
+	page, err := common.HttpGet("https://telemost.yandex.ru/")
 	if err != nil {
 		return cfg, fmt.Errorf("failed to fetch telemost.yandex.ru: %w", err)
 	}
@@ -52,7 +52,7 @@ func fetchConfig() (TMConfig, error) {
 	}
 	log.Printf("[config] Found bundle: %s", bundleURL)
 
-	bundle, err := tunnel.HttpGet(bundleURL)
+	bundle, err := common.HttpGet(bundleURL)
 	if err != nil {
 		return cfg, fmt.Errorf("failed to fetch bundle: %w", err)
 	}
