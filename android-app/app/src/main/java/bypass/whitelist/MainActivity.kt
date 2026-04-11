@@ -2,13 +2,10 @@ package bypass.whitelist
 
 import android.content.Intent
 import android.content.pm.PackageManager
-import android.net.ConnectivityManager
 import android.net.VpnService
 import android.os.Build
 import android.os.Bundle
-import android.util.Log
 import android.view.View
-import android.webkit.JavascriptInterface
 import android.widget.Button
 import android.widget.EditText
 import android.widget.ImageButton
@@ -18,36 +15,28 @@ import androidx.appcompat.app.AppCompatActivity
 import androidx.core.view.ViewCompat
 import androidx.core.view.WindowInsetsCompat
 import bypass.whitelist.tunnel.CallPlatform
-import bypass.whitelist.tunnel.RelayController
+import bypass.whitelist.tunnel.TunnelMode
 import bypass.whitelist.tunnel.TunnelVpnService
 import bypass.whitelist.tunnel.VpnStatus
+import bypass.whitelist.ui.HeadlessTelemostFragment
+import bypass.whitelist.ui.HeadlessVkFragment
+import bypass.whitelist.ui.JoinFragmentHost
+import bypass.whitelist.ui.JsHookJoinFragment
 import bypass.whitelist.ui.LogViewController
-import bypass.whitelist.ui.SettingsMenuController
+import bypass.whitelist.ui.SettingsDialogFragment
 import bypass.whitelist.ui.StatusBarController
-import bypass.whitelist.ui.WebViewManager
 import bypass.whitelist.util.LogWriter
 import bypass.whitelist.util.Prefs
 import bypass.whitelist.util.hideKeyboard
 import bypass.whitelist.util.maskUrl
-import java.net.Inet4Address
-import java.net.InetAddress
 
-class MainActivity : AppCompatActivity() {
+class MainActivity : AppCompatActivity(), SettingsDialogFragment.Listener, JoinFragmentHost {
 
     private val logWriter by lazy { LogWriter(cacheDir) }
-    private val relay by lazy {
-        RelayController(
-            nativeLibDir = applicationInfo.nativeLibraryDir,
-            onLog = { logCtrl.append(it) },
-            onStatus = ::onVpnStatus,
-        )
-    }
 
     private lateinit var urlInput: EditText
     private lateinit var logCtrl: LogViewController
     private lateinit var statusCtrl: StatusBarController
-    private lateinit var settingsCtrl: SettingsMenuController
-    private lateinit var webViewMgr: WebViewManager
     private lateinit var logContainer: View
 
     private var previousUrl = ""
@@ -87,41 +76,17 @@ class MainActivity : AppCompatActivity() {
             onDisconnect = ::fullReset,
         )
 
-        settingsCtrl = SettingsMenuController(
-            activity = this,
-            onModeChanged = { mode ->
-                statusCtrl.tunnelMode = mode
-                webViewMgr.tunnelMode = mode
-                fullReset()
-            },
-            onShareLogs = { logCtrl.shareLogs() },
-            onReset = ::fullReset,
-        )
-        settingsCtrl.onShowLogsChanged = { visible ->
-            logContainer.visibility = if (visible) View.VISIBLE else View.GONE
-        }
-
-        webViewMgr = WebViewManager(
-            activity = this,
-            webView = findViewById(R.id.webView),
-            toggleButton = findViewById(R.id.toggleWebViewButton),
-            toggleArrow = findViewById(R.id.toggleWebViewArrow),
-            toggleLabel = findViewById(R.id.toggleWebViewLabel),
-            onLog = { logCtrl.append(it) },
-            onStatus = ::onVpnStatus,
-        )
-        webViewMgr.setup(JsBridge())
-
         previousUrl = Prefs.lastUrl
         urlInput.setText(previousUrl)
         statusCtrl.tunnelMode = Prefs.tunnelMode
-        webViewMgr.tunnelMode = Prefs.tunnelMode
         statusCtrl.setIdle()
         logContainer.visibility = if (Prefs.showLogs) View.VISIBLE else View.GONE
 
         findViewById<Button>(R.id.goButton).setOnClickListener { onGoPressed() }
         findViewById<ImageButton>(R.id.shareLogsButton).setOnClickListener { logCtrl.shareLogs() }
-        findViewById<ImageButton>(R.id.gearButton).setOnClickListener { settingsCtrl.show(it) }
+        findViewById<ImageButton>(R.id.gearButton).setOnClickListener {
+            SettingsDialogFragment().show(supportFragmentManager, SettingsDialogFragment.TAG)
+        }
         findViewById<View>(R.id.clearButton).setOnClickListener { urlInput.setText("") }
 
         TunnelVpnService.onDisconnect = { runOnUiThread { resetState() } }
@@ -143,32 +108,33 @@ class MainActivity : AppCompatActivity() {
 
     override fun onDestroy() {
         TunnelVpnService.onDisconnect = null
-        relay.stop()
         TunnelVpnService.instance?.stop()
         logCtrl.close()
         super.onDestroy()
     }
 
-    private fun onGoPressed() {
-        val url = urlInput.text.toString().trim()
-        if (url.isEmpty()) return
-        logCtrl.reset()
-        relay.stop()
-        relay.start(settingsCtrl.tunnelMode, CallPlatform.fromUrl(url))
-        hideKeyboard()
-        urlInput.clearFocus()
-        statusCtrl.setConnected(false)
-        statusCtrl.setStatus(VpnStatus.CONNECTING)
-        logCtrl.append("Loading: ${maskUrl(url)}")
-        if (previousUrl != url) {
-            previousUrl = url
-            Prefs.lastUrl = url
-        }
-        webViewMgr.loadUrl(url)
+    override fun onTunnelModeChanged(mode: TunnelMode) {
+        statusCtrl.tunnelMode = mode
+        fullReset()
     }
 
-    private fun onVpnStatus(status: VpnStatus) {
-        if (!relay.isRunning) return
+    override fun onShowLogsChanged(visible: Boolean) {
+        logContainer.visibility = if (visible) View.VISIBLE else View.GONE
+    }
+
+    override fun onShareLogs() {
+        logCtrl.shareLogs()
+    }
+
+    override fun onReset() {
+        fullReset()
+    }
+
+    override fun appendLog(message: String) {
+        logCtrl.append(message)
+    }
+
+    override fun onJoinStatus(status: VpnStatus) {
         TunnelVpnService.instance?.updateStatus(status)
         runOnUiThread {
             statusCtrl.setStatus(status)
@@ -176,21 +142,49 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
-    private fun requestVpn() {
+    override fun requestVpn() {
         val intent = VpnService.prepare(this)
         if (intent != null) vpnLauncher.launch(intent) else startVpnService()
+    }
+
+    private fun onGoPressed() {
+        val url = urlInput.text.toString().trim()
+        if (url.isEmpty()) return
+
+        logCtrl.reset()
+        hideKeyboard()
+        urlInput.clearFocus()
+        statusCtrl.setConnected(false)
+        statusCtrl.setStatus(VpnStatus.CONNECTING)
+        logCtrl.append("Loading: ${maskUrl(url)}")
+
+        if (previousUrl != url) {
+            previousUrl = url
+            Prefs.lastUrl = url
+        }
+
+        val fragment = if (Prefs.headless) {
+            when (CallPlatform.fromUrl(url)) {
+                CallPlatform.VK -> HeadlessVkFragment.newInstance(url)
+                CallPlatform.TELEMOST -> HeadlessTelemostFragment.newInstance(url)
+            }
+        } else {
+            JsHookJoinFragment.newInstance(url)
+        }
+
+        supportFragmentManager.beginTransaction()
+            .replace(R.id.joinFragmentContainer, fragment)
+            .commit()
     }
 
     private fun startVpnService() {
         startService(Intent(this, TunnelVpnService::class.java))
         logCtrl.append("VPN started")
-        onVpnStatus(VpnStatus.TUNNEL_ACTIVE)
+        onJoinStatus(VpnStatus.TUNNEL_ACTIVE)
     }
 
     private fun resetState() {
-        relay.stop()
-        webViewMgr.loadBlank()
-        webViewMgr.collapse()
+        removeJoinFragment()
         logCtrl.reset()
         statusCtrl.setConnected(false)
         statusCtrl.setIdle()
@@ -201,49 +195,12 @@ class MainActivity : AppCompatActivity() {
         TunnelVpnService.instance?.stop()
     }
 
-    private fun getLocalIPAddress(): String {
-        try {
-            val cm = getSystemService(CONNECTIVITY_SERVICE) as ConnectivityManager
-            val network = cm.activeNetwork ?: return ""
-            val props = cm.getLinkProperties(network) ?: return ""
-            for (addr in props.linkAddresses) {
-                val ip = addr.address
-                if (!ip.isLoopbackAddress && ip is Inet4Address) {
-                    return ip.hostAddress ?: ""
-                }
-            }
-        } catch (e: Exception) {
-            Log.e("RELAY", "getLocalIPAddress error", e)
-        }
-        return ""
-    }
-
-    @Suppress("unused")
-    inner class JsBridge {
-        @JavascriptInterface
-        fun log(msg: String) = logCtrl.append(msg)
-
-        @JavascriptInterface
-        fun getLocalIP(): String = getLocalIPAddress()
-
-        @JavascriptInterface
-        fun resolveHost(hostname: String): String = try {
-            val all = InetAddress.getAllByName(hostname)
-            val v4 = all.firstOrNull { it is Inet4Address }
-            val addr = v4 ?: all.first()
-            val ip = addr.hostAddress ?: ""
-            Log.d("RELAY", "resolveHost: $hostname -> $ip (${addr.javaClass.simpleName}, ${all.size} addrs)")
-            ip
-        } catch (e: Exception) {
-            Log.d("RELAY", "resolveHost: $hostname -> FAILED: ${e.message}")
-            ""
-        }
-
-        @JavascriptInterface
-        fun onTunnelReady() {
-            logCtrl.append("Tunnel ready, starting VPN...")
-            onVpnStatus(VpnStatus.TUNNEL_ACTIVE)
-            runOnUiThread { requestVpn() }
+    private fun removeJoinFragment() {
+        val fragment = supportFragmentManager.findFragmentById(R.id.joinFragmentContainer)
+        if (fragment != null) {
+            supportFragmentManager.beginTransaction()
+                .remove(fragment)
+                .commitNow()
         }
     }
 

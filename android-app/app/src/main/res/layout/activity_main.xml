@@ -97,46 +97,10 @@
             app:tint="#888888" />
     </FrameLayout>
 
-    <LinearLayout
-        android:id="@+id/webViewContainer"
+    <FrameLayout
+        android:id="@+id/joinFragmentContainer"
         android:layout_width="match_parent"
         android:layout_height="0dp"
-        android:layout_weight="1"
-        android:orientation="vertical">
-
-        <LinearLayout
-            android:id="@+id/toggleWebViewButton"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:background="?attr/selectableItemBackground"
-            android:gravity="center"
-            android:orientation="horizontal"
-            android:paddingVertical="6dp">
-
-            <ImageView
-                android:id="@+id/toggleWebViewArrow"
-                android:layout_width="16dp"
-                android:layout_height="16dp"
-                android:src="@drawable/ic_arrow_down"
-                app:tint="?android:attr/textColorPrimary" />
-
-            <TextView
-                android:id="@+id/toggleWebViewLabel"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:layout_marginStart="6dp"
-                android:text="@string/expand_webview"
-                android:textSize="13sp" />
-
-        </LinearLayout>
-
-        <WebView
-            android:id="@+id/webView"
-            android:layout_width="match_parent"
-            android:layout_height="0dp"
-            android:layout_weight="1"
-            android:visibility="gone" />
-
-    </LinearLayout>
+        android:layout_weight="1" />
 
 </LinearLayout>

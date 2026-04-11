@@ -2,7 +2,6 @@
 relay/mobile.aar
 relay/relay-*
 prebuilts/
-cookies.json
-pion-light/
-headless/headless-creator
+cookies*.json
 relay/relay
+whitelist-experiments/

@@ -1,111 +1,64 @@
 <!DOCTYPE html>
 <html>
 <head>
-<style>
-* { margin: 0; padding: 0; box-sizing: border-box; }
-body { font-family: -apple-system, sans-serif; background: #1a1a1a; color: #e0e0e0; height: 100vh; display: flex; flex-direction: column; }
-.tab-bar { display: flex; align-items: center; background: #222; border-bottom: 1px solid #333; height: 36px; flex-shrink: 0; }
-.tab-bar-tabs { display: flex; align-items: center; height: 100%; flex: 1; overflow-x: auto; }
-.tab-bar-actions { display: flex; align-items: center; height: 100%; border-left: 1px solid #333; }
-.tab { display: flex; align-items: center; gap: 6px; padding: 0 12px; height: 100%; font-size: 12px; cursor: pointer; border-right: 1px solid #333; white-space: nowrap; color: #888; }
-.tab.active { background: #1a1a1a; color: #e0e0e0; }
-.tab .close { font-size: 14px; opacity: 0.5; cursor: pointer; margin-left: 4px; }
-.tab .close:hover { opacity: 1; }
-.tab .edit { width: 12px; height: 12px; opacity: 0; cursor: pointer; filter: invert(1) brightness(2); margin-left: 2px; }
-.tab:hover .edit { opacity: 0.4; }
-.tab .edit:hover { opacity: 1; }
-.tab-add { padding: 0 12px; height: 100%; display: flex; align-items: center; font-size: 16px; cursor: pointer; color: #888; }
-.tab-add:hover { color: #e0e0e0; }
-.tab-settings { padding: 0 12px; height: 100%; display: flex; align-items: center; font-size: 14px; cursor: pointer; color: #888; }
-.tab-settings:hover { color: #e0e0e0; }
-.tab-bot { padding: 0 12px; height: 100%; display: flex; align-items: center; font-size: 12px; cursor: pointer; color: #888; font-weight: 500; }
-.tab-bot:hover { color: #e0e0e0; }
-.tab-bot.running { color: #dc3545; }
-.toolbar { display: flex; align-items: center; gap: 8px; padding: 6px 12px; background: #252525; border-bottom: 1px solid #333; height: 36px; flex-shrink: 0; }
-.toolbar button { padding: 3px 12px; border: none; border-radius: 6px; font-size: 12px; cursor: pointer; font-weight: 500; }
-.btn-vk { background: #0077ff; color: white; }
-.btn-telemost { background: #fc3f1d; color: white; }
-.content { flex: 1; position: relative; }
-.content webview { width: 100%; height: 100%; border: none; position: absolute; top: 0; left: 0; }
-.content webview.hidden { display: none; }
-.welcome { display: flex; align-items: center; justify-content: center; height: 100%; flex-direction: column; gap: 16px; }
-.welcome h1 { font-size: 22px; font-weight: 500; }
-.welcome p { color: #888; font-size: 14px; }
-.logs { display: flex; gap: 0; border-top: 1px solid #333; height: 120px; flex-shrink: 0; }
-.log-panel { flex: 1; display: flex; flex-direction: column; }
-.log-panel:first-child { border-right: 1px solid #333; }
-.log-title { font-size: 10px; font-weight: 600; color: #888; padding: 3px 8px; background: #1e1e1e; border-bottom: 1px solid #333; }
-.log-content { flex: 1; overflow-y: auto; padding: 3px 8px; font-family: monospace; font-size: 10px; background: #111; white-space: pre-wrap; word-break: break-all; }
-.log-content.relay { color: #4fc3f7; }
-.log-content.hook { color: #66bb6a; }
-
-/* Settings Popup */
-.popup-overlay { position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.7); z-index: 1000; display: none; align-items: center; justify-content: center; }
-.popup-overlay.visible { display: flex; }
-.popup { background: #2a2a2a; border-radius: 12px; padding: 24px; width: 400px; box-shadow: 0 8px 32px rgba(0,0,0,0.4); }
-.popup h2 { margin: 0 0 20px; font-size: 18px; font-weight: 600; color: #e0e0e0; }
-.popup label { display: block; margin-bottom: 6px; font-size: 12px; color: #888; font-weight: 500; }
-.popup input { width: 100%; padding: 10px 12px; border: 1px solid #444; border-radius: 8px; font-size: 14px; background: #1a1a1a; color: #e0e0e0; outline: none; margin-bottom: 16px; box-sizing: border-box; }
-.popup input:focus { border-color: #0077ff; }
-.popup-buttons { display: flex; gap: 8px; justify-content: flex-end; }
-.popup button { padding: 8px 16px; border: none; border-radius: 8px; font-size: 13px; cursor: pointer; font-weight: 500; }
-.btn-save { background: #0077ff; color: white; }
-.btn-cancel { background: #444; color: #e0e0e0; }
-.btn-bot { background: #6f42c1; color: white; }
-.btn-bot.running { background: #dc3545; }
-</style>
+<link rel="stylesheet" href="styles/main.css">
 </head>
 <body>
 <div class="tab-bar">
   <div class="tab-bar-tabs" id="tabBar">
-    <div class="tab-add" onclick="addTab()" title="New tab">+</div>
+    <div class="tab-add" data-action="add-tab" title="New tab">+</div>
   </div>
   <div class="tab-bar-actions">
-    <div class="tab-settings" onclick="copyCookies()" title="Export VK cookies to cookies.json for headless mode" style="cursor:pointer">Export Cookies</div>
-    <div class="tab-settings" onclick="openSettings()" title="Settings">Settings</div>
-    <div class="tab-bot" id="tabBot" onclick="toggleBot()">Bot: Off</div>
+    <div class="tab-action-btn" id="btnVkCookies" title="Export VK cookies to vk-cookies.json for headless mode">VK Cookies</div>
+    <div class="tab-action-btn" id="btnYandexCookies" title="Export Yandex cookies to cookies-yandex.json for headless mode">Yandex Cookies</div>
+    <div class="tab-action-btn settings" id="btnSettings" title="Settings">Settings</div>
+    <div class="tab-action-btn bot" id="tabBot">Bot: Off</div>
   </div>
 </div>
 <div class="toolbar" id="toolbar" style="display:none">
-  <button class="btn-vk" onclick="loadURL('https://vk.com/im')">VK</button>
-  <button class="btn-telemost" onclick="loadURL('https://telemost.yandex.ru/')">Telemost</button>
-  <button class="btn-vk" onclick="startHeadlessVK()" style="opacity:0.8">Headless VK</button>
-  <span style="margin-left:auto;font-size:11px;color:#888">Tunnel:</span>
-  <select id="modeSelect" style="padding:2px 6px;border:1px solid #555;border-radius:6px;font-size:11px;cursor:pointer;font-weight:500;background:#333;color:#e0e0e0;outline:none" onchange="onModeChange(this.value)">
+  <button class="btn-vk" id="btnVk">VK</button>
+  <button class="btn-telemost" id="btnTelemost">Telemost</button>
+  <button class="btn-headless" id="btnHeadlessVK">Headless VK</button>
+  <button class="btn-headless-tm" id="btnHeadlessTM">Headless TM</button>
+  <span class="toolbar-spacer"></span>
+  <span class="toolbar-label">Tunnel:</span>
+  <select id="modeSelect" class="toolbar-select">
     <option value="dc">DC</option>
     <option value="pion-video">Video</option>
   </select>
-  <span onclick="saveLogs()" style="cursor:pointer;margin-left:8px" title="Save logs"><img src="resources/icons8-download-64.png" style="height:16px;vertical-align:middle;filter:invert(1) brightness(2)"></span>
+  <span class="toolbar-icon" id="btnSaveLogs" title="Save logs"><img src="resources/icons8-download-64.png"></span>
 </div>
 <div class="content" id="content">
   <div class="welcome" id="welcome">
     <h1>Whitelist Bypass - Creator</h1>
     <p>Click + to add a tab</p>
   </div>
-  <div class="headless-info" id="headlessInfo" style="display:none;padding:24px;color:#e0e0e0;font-family:monospace;font-size:14px">
-    <div style="font-size:18px;font-weight:bold;margin-bottom:16px">Headless VK</div>
-    <div id="headlessStatus" style="color:#888">Starting...</div>
-    <div id="headlessCallInfo" style="margin-top:16px;display:none">
-      <div style="margin-bottom:8px"><span style="color:#888">Join link:</span> <a id="headlessJoinLink" href="#" style="color:#4fc3f7;cursor:pointer" onclick="copyToClipboard(this.textContent)"></a></div>
-      <div style="margin-bottom:8px"><span style="color:#888">Short:</span> <a id="headlessShortLink" href="#" style="color:#4fc3f7;cursor:pointer" onclick="copyToClipboard(this.textContent)"></a></div>
-      <div style="margin-bottom:8px"><span style="color:#888">TURN:</span> <span id="headlessTurn"></span></div>
-      <div style="margin-bottom:8px"><span style="color:#888">Protocol:</span> <span id="headlessProtocol"></span></div>
+  <div class="headless-info" id="headlessInfo">
+    <div class="headless-title" id="headlessTitle">Headless</div>
+    <div class="headless-status" id="headlessStatus">Starting...</div>
+    <div class="headless-call-info" id="headlessCallInfo">
+      <div class="headless-row"><span class="headless-label">Join link:</span> <a id="headlessJoinLink" href="#" class="headless-link"></a></div>
+      <div class="headless-row"><span class="headless-label">Short:</span> <a id="headlessShortLink" href="#" class="headless-link"></a></div>
+      <div class="headless-row"><span class="headless-label">TURN:</span> <span id="headlessTurn"></span></div>
+      <div class="headless-row"><span class="headless-label">Protocol:</span> <span id="headlessProtocol"></span></div>
     </div>
-    <div id="headlessTunnel" style="margin-top:16px;display:none;color:#4caf50;font-weight:bold;font-size:16px">TUNNEL CONNECTED</div>
+    <div class="headless-call-info" id="headlessCallInfoTM">
+      <div class="headless-row"><span class="headless-label">Join link:</span> <a id="headlessTMJoinLink" href="#" class="headless-link"></a></div>
+      <div class="headless-row"><span class="headless-label">Protocol:</span> <span id="headlessTMProtocol"></span></div>
+    </div>
+    <div class="headless-tunnel" id="headlessTunnel">TUNNEL CONNECTED</div>
   </div>
 </div>
 <div class="logs" id="logsPanel" style="display:none">
   <div class="log-panel">
-    <div class="log-title">Relay <span onclick="clearLog('relay')" style="cursor:pointer;float:right" title="Clear"><span style="font-size:13px;line-height:13px">&#x2715;</span></span></div>
+    <div class="log-title">Relay <span class="log-clear-btn" id="btnClearRelay" title="Clear">&#x2715;</span></div>
     <div class="log-content relay" id="relayLog"></div>
   </div>
   <div class="log-panel">
-    <div class="log-title">Hook <span onclick="clearLog('hook')" style="cursor:pointer;float:right" title="Clear"><span style="font-size:13px;line-height:13px">&#x2715;</span></span></div>
+    <div class="log-title">Hook <span class="log-clear-btn" id="btnClearHook" title="Clear">&#x2715;</span></div>
     <div class="log-content hook" id="hookLog"></div>
   </div>
 </div>
-
-<!-- Settings Popup -->
 <div class="popup-overlay" id="settingsPopup">
   <div class="popup">
     <h2>VK bot settings</h2>
@@ -116,422 +69,20 @@ body { font-family: -apple-system, sans-serif; background: #1a1a1a; color: #e0e0
     <label for="vkUserId">User ID</label>
     <input type="number" id="vkUserId" placeholder="123456789">
     <div class="popup-buttons">
-      <button class="btn-cancel" onclick="closeSettings()">Cancel</button>
-      <button class="btn-save" onclick="saveSettings()">Save</button>
+      <button class="btn-cancel" id="btnSettingsCancel">Cancel</button>
+      <button class="btn-save" id="btnSettingsSave">Save</button>
     </div>
   </div>
 </div>
-<div class="popup-overlay" id="errorPopup" onclick="closeError()">
-  <div class="popup" style="padding:16px" onclick="event.stopPropagation()">
-    <h2 style="color:#dc3545;margin-bottom:12px;font-size:15px">Bot error</h2>
-    <pre id="errorText" style="background:#111;padding:10px;border-radius:6px;font-size:11px;color:#e0e0e0;white-space:pre-wrap;word-break:break-all;max-height:200px;overflow-y:auto;user-select:text;cursor:text;margin:0"></pre>
+<div class="popup-overlay" id="errorPopup">
+  <div class="popup" style="padding:16px">
+    <h2 class="error-title">Bot error</h2>
+    <pre class="error-text" id="errorText"></pre>
     <div class="popup-buttons" style="margin-top:12px">
-      <button class="btn-cancel" onclick="closeError()">Close</button>
+      <button class="btn-cancel" id="btnErrorClose">Close</button>
     </div>
   </div>
 </div>
-<script>
-function showError(msg) {
-  document.getElementById('errorText').textContent = msg;
-  document.getElementById('errorPopup').classList.add('visible');
-}
-function closeError() {
-  document.getElementById('errorPopup').classList.remove('visible');
-}
-
-window.bridge.onBotError(function(msg) {
-  showError(msg);
-  botRunning = false;
-  localStorage.setItem('botEnabled', 'false');
-  var btn = document.getElementById('tabBot');
-  btn.textContent = 'Bot: Off';
-  btn.classList.remove('running');
-});
-
-function copyCookies() {
-  window.bridge.getCookies('.vk.com').then(function(cookies) {
-    if (!cookies.length) {
-      showError('No VK cookies found.\nPlease log into VK first.');
-      return;
-    }
-    var simple = cookies.map(function(c) { return { name: c.name, value: c.value }; });
-    var blob = new Blob([JSON.stringify(simple, null, 2)], { type: 'application/json' });
-    var link = document.createElement('a');
-    link.href = URL.createObjectURL(blob);
-    link.download = 'cookies.json';
-    link.click();
-  });
-}
-
-var tabsState = {}; // tabId -> { wv, mode, relayLogs, hookLogs }
-var activeTabId = null;
-var nextTabId = 1;
-var botRunning = false;
-
-var savedSettings = localStorage.getItem('botSettings');
-var botSettings = savedSettings ? JSON.parse(savedSettings) : { token: '', groupId: '', userId: '' };
-
-if (localStorage.getItem('botEnabled') === 'true' && botSettings.token && botSettings.groupId) {
-  botRunning = true;
-  var btn = document.getElementById('tabBot');
-  btn.textContent = 'Bot: On';
-  btn.classList.add('running');
-  window.bridge.startBot(botSettings);
-}
-
-function openSettings() {
-  document.getElementById('settingsPopup').classList.add('visible');
-  document.getElementById('vkToken').value = botSettings.token;
-  document.getElementById('vkGroupId').value = botSettings.groupId;
-  document.getElementById('vkUserId').value = botSettings.userId;
-}
-
-function closeSettings() {
-  document.getElementById('settingsPopup').classList.remove('visible');
-}
-
-function saveSettings() {
-  botSettings.token = document.getElementById('vkToken').value.trim();
-  botSettings.groupId = document.getElementById('vkGroupId').value.trim();
-  botSettings.userId = document.getElementById('vkUserId').value.trim();
-  localStorage.setItem('botSettings', JSON.stringify(botSettings));
-  closeSettings();
-  console.log('[BOT] Settings saved:', botSettings);
-}
-
-function toggleBot() {
-  if (!botSettings.token || !botSettings.groupId) {
-    openSettings();
-    return;
-  }
-  botRunning = !botRunning;
-  localStorage.setItem('botEnabled', botRunning ? 'true' : 'false');
-  var btn = document.getElementById('tabBot');
-  if (botRunning) {
-    btn.textContent = 'Bot: On';
-    btn.classList.add('running');
-    window.bridge.startBot(botSettings);
-  } else {
-    btn.textContent = 'Bot: Off';
-    btn.classList.remove('running');
-    window.bridge.stopBot();
-  }
-}
-
-function addTab() {
-  var tabId = 'tab-' + (nextTabId++);
-  tabsState[tabId] = { wv: null, url: '', mode: 'dc', relayLogs: '', hookLogs: '', name: '', isBot: false };
-  window.bridge.startRelay(tabId);
-  renderTabs();
-  selectTab(tabId);
-}
-
-function startHeadlessVK() {
-  var tabId = 'tab-' + (nextTabId++);
-  tabsState[tabId] = { wv: null, url: '', mode: 'headless-vk', relayLogs: '', hookLogs: '', name: 'Headless VK', isBot: false, headless: true };
-  window.bridge.startHeadless(tabId);
-  renderTabs();
-  selectTab(tabId);
-}
-
-function closeTab(tabId, e) {
-  if (e) e.stopPropagation();
-  var t = tabsState[tabId];
-  if (t && t.wv) t.wv.remove();
-  window.bridge.closeTab(tabId);
-  delete tabsState[tabId];
-  if (activeTabId === tabId) {
-    var ids = Object.keys(tabsState);
-    activeTabId = ids.length > 0 ? ids[ids.length - 1] : null;
-  }
-  renderTabs();
-  renderContent();
-}
-
-function selectTab(tabId) {
-  if (activeTabId && tabsState[activeTabId]) {
-    tabsState[activeTabId].relayLogs = document.getElementById('relayLog').textContent;
-    tabsState[activeTabId].hookLogs = document.getElementById('hookLog').textContent;
-  }
-  activeTabId = tabId;
-  renderTabs();
-  renderContent();
-}
-
-function getTabLabel(t) {
-  if (t.name) return t.name;
-  if (t.url) {
-    if (t.url.includes('vk.com')) return 'VK';
-    if (t.url.includes('telemost')) return 'Telemost';
-  }
-  return 'New';
-}
-
-function renderTabs() {
-  var bar = document.getElementById('tabBar');
-  var html = '';
-  Object.keys(tabsState).forEach(function(id) {
-    var t = tabsState[id];
-    var label = getTabLabel(t);
-    var cls = id === activeTabId ? 'tab active' : 'tab';
-    html += '<div class="' + cls + '" onclick="selectTab(\'' + id + '\')"><span class="tab-label">' + label + '</span><img class="edit" src="resources/icons8-pencil-50.png" onclick="renameTab(\'' + id + '\', event)"> <span class="close" onclick="closeTab(\'' + id + '\', event)">&#x2715;</span></div>';
-  });
-  html += '<div class="tab-add" onclick="addTab()" title="New tab">+</div>';
-  bar.innerHTML = html;
-}
-
-function renameTab(tabId, e) {
-  e.stopPropagation();
-  var tab = e.target.closest('.tab');
-  var span = tab.querySelector('.tab-label');
-  var inp = document.createElement('input');
-  inp.type = 'text';
-  inp.value = tabsState[tabId].name || '';
-  inp.placeholder = getTabLabel(tabsState[tabId]);
-  inp.style.cssText = 'width:80px;padding:0 4px;border:1px solid #555;border-radius:4px;font-size:12px;background:#111;color:#e0e0e0;outline:none';
-  span.replaceWith(inp);
-  inp.focus();
-  inp.select();
-  var done = function() {
-    tabsState[tabId].name = inp.value.trim();
-    renderTabs();
-  };
-  inp.addEventListener('blur', done);
-  inp.addEventListener('keydown', function(ev) {
-    if (ev.key === 'Enter') inp.blur();
-    if (ev.key === 'Escape') { inp.value = ''; inp.blur(); }
-  });
-}
-
-function renderContent() {
-  var content = document.getElementById('content');
-  var welcome = document.getElementById('welcome');
-  var toolbar = document.getElementById('toolbar');
-  var logsPanel = document.getElementById('logsPanel');
-  var wvs = content.querySelectorAll('webview');
-  for (var i = 0; i < wvs.length; i++) wvs[i].classList.add('hidden');
-
-  if (!activeTabId || !tabsState[activeTabId]) {
-    welcome.style.display = 'flex';
-    toolbar.style.display = 'none';
-    logsPanel.style.display = 'none';
-    return;
-  }
-  welcome.style.display = 'none';
-  logsPanel.style.display = 'flex';
-
-  var t = tabsState[activeTabId];
-  var headlessInfo = document.getElementById('headlessInfo');
-  if (t.headless) {
-    toolbar.style.display = 'none';
-    headlessInfo.style.display = 'block';
-    document.getElementById('headlessStatus').textContent = t.headlessStatus || 'Starting...';
-    var ci = t.callInfo;
-    if (ci) {
-      document.getElementById('headlessCallInfo').style.display = 'block';
-      document.getElementById('headlessJoinLink').textContent = ci.joinLink || '';
-      document.getElementById('headlessShortLink').textContent = ci.shortLink || '';
-      document.getElementById('headlessTurn').textContent = ci.turn || '';
-      document.getElementById('headlessProtocol').textContent = ci.protocol || '';
-    } else {
-      document.getElementById('headlessCallInfo').style.display = 'none';
-    }
-    document.getElementById('headlessTunnel').style.display = t.tunnelConnected ? 'block' : 'none';
-  } else {
-    toolbar.style.display = 'flex';
-    headlessInfo.style.display = 'none';
-    document.getElementById('modeSelect').value = t.mode;
-    if (t.wv) t.wv.classList.remove('hidden');
-  }
-  document.getElementById('relayLog').textContent = t.relayLogs || '';
-  document.getElementById('hookLog').textContent = t.hookLogs || '';
-  scrollLogs();
-}
-
-function scrollLogs() {
-  var r = document.getElementById('relayLog');
-  var h = document.getElementById('hookLog');
-  r.scrollTop = r.scrollHeight;
-  h.scrollTop = h.scrollHeight;
-}
-
-function loadURL(url) {
-  if (!activeTabId) return;
-  var t = tabsState[activeTabId];
-  if (t.wv) t.wv.remove();
-  var wv = document.createElement('webview');
-  wv.setAttribute('src', url);
-  wv.setAttribute('partition', 'persist:creator');
-  wv.setAttribute('nodeintegration', '');
-  wv.setAttribute('nodeintegrationinsubframes', '');
-  wv.style.width = '100%';
-  wv.style.height = '100%';
-  wv.style.position = 'absolute';
-  wv.style.top = '0';
-  wv.style.left = '0';
-  wv.dataset.tabId = activeTabId;
-  document.getElementById('content').appendChild(wv);
-  wv.addEventListener('dom-ready', function() {
-    wv.setAudioMuted(true);
-    var tabId = wv.dataset.tabId;
-    window.bridge.getHookCode(tabId, wv.getURL()).then(function(code) {
-      wv.executeJavaScript(code).catch(function() {});
-    });
-
-    window.bridge.getCallCreatorCode('call-checker.js').then(function(checkerCode) {
-      console.log('[UI] Injecting call checker for tab:', tabId);
-      var injectCode = 'window.__CALL_CHECKER_TAB_ID = "' + tabId + '"; ' + checkerCode;
-      wv.executeJavaScript(injectCode).catch(function(err) {
-        console.log('[UI] Call checker inject error:', err);
-      });
-    }).catch(function(err) {
-      console.log('[UI] Failed to get call-checker.js:', err);
-    });
-
-    if (tabsState[tabId] && tabsState[tabId].isBot) {
-      setTimeout(function() {
-        var scriptFile = tabsState[tabId].platform === 'telemost' ? 'tm-call-creator.js' : 'vk-call-creator.js';
-        window.bridge.getCallCreatorCode(scriptFile).then(function(callCreatorCode) {
-          wv.executeJavaScript(callCreatorCode).catch(function() {});
-        });
-      }, 1000);
-    }
-  });
-  wv.addEventListener('did-navigate', function() {
-    t.url = wv.getURL() || t.url;
-    renderTabs();
-    var tabId = wv.dataset.tabId;
-    wv.executeJavaScript('window.__hookInstalled = false').catch(function() {});
-    window.bridge.getHookCode(tabId, wv.getURL()).then(function(code) {
-      wv.executeJavaScript(code).catch(function() {});
-    });
-    window.bridge.getCallCreatorCode('call-checker.js').then(function(checkerCode) {
-      var injectCode = 'window.__CALL_CHECKER_TAB_ID = "' + tabId + '"; ' + checkerCode;
-      wv.executeJavaScript(injectCode).catch(function() {});
-    });
-  });
-  t.wv = wv;
-  t.url = url;
-  renderTabs();
-}
-
-function onModeChange(mode) {
-  if (!activeTabId) return;
-  var t = tabsState[activeTabId];
-  t.mode = mode;
-  window.bridge.setTunnelMode(activeTabId, mode).then(function() {
-    if (t.wv) {
-      t.wv.executeJavaScript('window.__hookInstalled = false').catch(function() {});
-      t.wv.reload();
-    }
-  });
-}
-
-function clearLog(type) {
-  document.getElementById(type === 'relay' ? 'relayLog' : 'hookLog').textContent = '';
-}
-
-function saveLogs() {
-  var relay = document.getElementById('relayLog').textContent;
-  var hook = document.getElementById('hookLog').textContent;
-  var text = '=== RELAY ===\n' + relay + '\n\n=== HOOK ===\n' + hook;
-  var blob = new Blob([text], { type: 'text/plain' });
-  var a = document.createElement('a');
-  a.href = URL.createObjectURL(blob);
-  a.download = 'tunnel-logs-' + new Date().toISOString().replace(/[:.]/g, '-') + '.txt';
-  a.click();
-}
-
-setInterval(function() {
-  if (!activeTabId || !tabsState[activeTabId] || !tabsState[activeTabId].wv) return;
-  tabsState[activeTabId].wv.executeJavaScript('(window.__hookLogs && window.__hookLogs.length) ? window.__hookLogs.splice(0) : []')
-    .then(function(logs) {
-      if (!logs.length) return;
-      var el = document.getElementById('hookLog');
-      logs.forEach(function(msg) {
-        if (el.textContent.length > 0) el.textContent += '\n';
-        el.textContent += msg.replace('[HOOK] ', '');
-      });
-      el.scrollTop = el.scrollHeight;
-    }).catch(function() {});
-}, 500);
-
-window.bridge.onRelayLog(function(tabId, msg) {
-  if (tabsState[tabId]) {
-    tabsState[tabId].relayLogs += (tabsState[tabId].relayLogs ? '\n' : '') + msg;
-    if (tabsState[tabId].headless) parseHeadlessLog(tabId, msg);
-  }
-  if (tabId === activeTabId) {
-    var el = document.getElementById('relayLog');
-    if (el.textContent.length > 0) el.textContent += '\n';
-    el.textContent += msg;
-    el.scrollTop = el.scrollHeight;
-  }
-});
-
-function parseHeadlessLog(tabId, msg) {
-  var t = tabsState[tabId];
-  if (!t) return;
-  var trimmed = msg.trim();
-  if (trimmed === 'CALL CREATED') {
-    t.callInfo = {};
-    t.headlessStatus = 'Call created';
-  }
-  if (trimmed.indexOf('join_link:') !== -1) {
-    if (!t.callInfo) t.callInfo = {};
-    t.callInfo.joinLink = trimmed.split('join_link:')[1].trim();
-  }
-  if (trimmed.indexOf('short:') !== -1) {
-    if (!t.callInfo) t.callInfo = {};
-    t.callInfo.shortLink = trimmed.split('short:')[1].trim();
-  }
-  if (trimmed.indexOf('TURN:') !== -1) {
-    if (!t.callInfo) t.callInfo = {};
-    t.callInfo.turn = trimmed.split('TURN:')[1].trim();
-  }
-  if (trimmed.indexOf('protocol:') !== -1) {
-    if (!t.callInfo) t.callInfo = {};
-    t.callInfo.protocol = trimmed.split('protocol:')[1].trim();
-  }
-  if (trimmed === 'TUNNEL CONNECTED') {
-    t.tunnelConnected = true;
-    t.headlessStatus = 'Tunnel connected';
-  }
-  if (tabId === activeTabId) renderContent();
-}
-
-function copyToClipboard(text) {
-  navigator.clipboard.writeText(text);
-}
-
-window.bridge.onCreateBotTab(function(data) {
-  console.log('[BOT] Creating tab:', data);
-  var tabId = data.tabId;
-  var mode = data.mode;
-  var peerId = data.peerId;
-  var platform = data.platform || 'vk';
-
-  if (!tabsState[tabId]) {
-    var botName = platform === 'telemost' ? 'Bot-Telemost' : 'Bot-VK';
-    tabsState[tabId] = { wv: null, url: '', mode: mode, relayLogs: '', hookLogs: '', name: botName, isBot: true, peerId: peerId, platform: platform };
-  }
-
-  selectTab(tabId);
-
-  document.getElementById('modeSelect').value = mode;
-  window.bridge.setTunnelMode(tabId, mode);
-
-  if (platform === 'telemost') {
-    loadURL('https://telemost.yandex.ru/');
-  } else {
-    loadURL('https://vk.com/im');
-  }
-});
-
-window.bridge.onCloseBotTab(function(data) {
-  console.log('[BOT] Closing tab:', data.tabId);
-  closeTab(data.tabId);
-});
-</script>
+<script>require('./dist/renderer/index.js')</script>
 </body>
 </html>

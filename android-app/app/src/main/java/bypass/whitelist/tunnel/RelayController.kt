@@ -4,7 +4,11 @@ import android.util.Log
 import bypass.whitelist.util.Ports
 import mobile.LogCallback
 import mobile.Mobile
+import java.io.BufferedWriter
 import java.io.File
+import java.io.OutputStreamWriter
+import java.net.Inet4Address
+import java.net.InetAddress
 
 class RelayController(
     private val nativeLibDir: String,
@@ -78,11 +82,30 @@ class RelayController(
                 val proc = pb.start()
                 synchronized(this) { pionProcess = proc }
                 onLog("Pion relay started mode=$relayMode (signaling :${Ports.PION_SIGNALING}, SOCKS5 :${Ports.SOCKS})")
+                val stdinWriter = BufferedWriter(OutputStreamWriter(proc.outputStream))
                 proc.inputStream.bufferedReader().forEachLine { line ->
-                    Log.d("RELAY", line)
-                    onLog(line)
-                    if (line.contains("CONNECTED")) onStatus(VpnStatus.TUNNEL_ACTIVE)
-                    else if (line.contains("session cleaned up")) onStatus(VpnStatus.TUNNEL_LOST)
+                    if (line.startsWith("RESOLVE:")) {
+                        val hostname = line.removePrefix("RESOLVE:")
+                        try {
+                            val all = InetAddress.getAllByName(hostname)
+                            val address = all.firstOrNull { it is Inet4Address } ?: all.first()
+                            val resolvedIP = address.hostAddress ?: ""
+                            Log.d("RELAY", "Resolved $hostname -> $resolvedIP")
+                            stdinWriter.write(resolvedIP)
+                            stdinWriter.newLine()
+                            stdinWriter.flush()
+                        } catch (e: Exception) {
+                            Log.e("RELAY", "DNS resolve failed for $hostname", e)
+                            stdinWriter.write("")
+                            stdinWriter.newLine()
+                            stdinWriter.flush()
+                        }
+                    } else {
+                        Log.d("RELAY", line)
+                        onLog(line)
+                        if (line.contains("CONNECTED")) onStatus(VpnStatus.TUNNEL_ACTIVE)
+                        else if (line.contains("session cleaned up")) onStatus(VpnStatus.TUNNEL_LOST)
+                    }
                 }
                 onLog("Pion relay exited: ${proc.exitValue()}")
             } catch (e: Exception) {

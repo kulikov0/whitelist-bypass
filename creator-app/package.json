@@ -1,17 +1,21 @@
 {
   "name": "whitelist-bypass-creator",
-  "version": "0.1.9",
-  "main": "main.js",
+  "version": "0.2.0",
+  "main": "dist/main/index.js",
   "scripts": {
-    "start": "electron .",
-    "build": "electron-builder"
+    "build": "tsc",
+    "start": "tsc && electron .",
+    "start:dev": "electron ."
   },
   "dependencies": {
     "node-fetch": "^2.7.0"
   },
   "devDependencies": {
+    "@types/node": "^22.0.0",
+    "@types/node-fetch": "^2.6.13",
     "electron": "^33.0.0",
-    "electron-builder": "^25.0.0"
+    "electron-builder": "^25.0.0",
+    "typescript": "^5.6.0"
   },
   "build": {
     "appId": "whitelist.bypass.creator",
@@ -19,18 +23,47 @@
     "directories": {
       "output": "../prebuilts"
     },
+    "files": [
+      "dist/**/*",
+      "index.html",
+      "styles/**/*",
+      "scripts/**/*",
+      "resources/**/*"
+    ],
     "extraResources": [
-      { "from": "../hooks/dc-creator-vk.js", "to": "hooks/dc-creator-vk.js" },
-      { "from": "../hooks/dc-creator-telemost.js", "to": "hooks/dc-creator-telemost.js" },
-      { "from": "../hooks/video-vk.js", "to": "hooks/video-vk.js" },
-      { "from": "../hooks/video-telemost.js", "to": "hooks/video-telemost.js" }
+      {
+        "from": "../hooks/dc-creator-vk.js",
+        "to": "hooks/dc-creator-vk.js"
+      },
+      {
+        "from": "../hooks/dc-creator-telemost.js",
+        "to": "hooks/dc-creator-telemost.js"
+      },
+      {
+        "from": "../hooks/video-vk.js",
+        "to": "hooks/video-vk.js"
+      },
+      {
+        "from": "../hooks/video-telemost.js",
+        "to": "hooks/video-telemost.js"
+      }
     ],
     "mac": {
       "target": "dmg",
       "icon": "resources/icon.icns",
       "extraResources": [
-        { "from": "../relay/relay-darwin", "to": "relay" },
-        { "from": "../headless/headless-darwin", "to": "headless-creator" }
+        {
+          "from": "../relay/relay-darwin",
+          "to": "relay"
+        },
+        {
+          "from": "../headless/headless-vk-darwin",
+          "to": "headless-vk-creator"
+        },
+        {
+          "from": "../headless/headless-telemost-darwin",
+          "to": "headless-telemost-creator"
+        }
       ]
     },
     "win": {
@@ -38,16 +71,36 @@
       "artifactName": "${productName}-${version}-${arch}.${ext}",
       "icon": "resources/icon.ico",
       "extraResources": [
-        { "from": "../relay/relay-bundle.exe", "to": "relay.exe" },
-        { "from": "../headless/headless-bundle.exe", "to": "headless-creator.exe" }
+        {
+          "from": "../relay/relay-bundle.exe",
+          "to": "relay.exe"
+        },
+        {
+          "from": "../headless/headless-vk-bundle.exe",
+          "to": "headless-vk-creator.exe"
+        },
+        {
+          "from": "../headless/headless-telemost-bundle.exe",
+          "to": "headless-telemost-creator.exe"
+        }
       ]
     },
     "linux": {
       "target": "AppImage",
       "icon": "resources/icon.png",
       "extraResources": [
-        { "from": "../relay/relay-bundle", "to": "relay" },
-        { "from": "../headless/headless-bundle", "to": "headless-creator" }
+        {
+          "from": "../relay/relay-bundle",
+          "to": "relay"
+        },
+        {
+          "from": "../headless/headless-vk-bundle",
+          "to": "headless-vk-creator"
+        },
+        {
+          "from": "../headless/headless-telemost-bundle",
+          "to": "headless-telemost-creator"
+        }
       ]
     }
   }
