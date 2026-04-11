@@ -15,6 +15,7 @@ object PrefsKeys {
     const val SPLIT_TUNNELING_PACKAGES = "split_tunneling_packages"
     const val AUTOCLICK_ENABLED = "autoclick_enabled"
     const val AUTOCLICK_NAME = "autoclick_name"
+    const val HEADLESS = "headless"
 }
 
 object Vpn {

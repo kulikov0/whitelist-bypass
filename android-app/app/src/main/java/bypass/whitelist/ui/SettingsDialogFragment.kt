@@ -57,6 +57,7 @@ class SettingsDialogFragment : DialogFragment() {
         val splitTunnelingItem = view.findViewById<TextView>(R.id.splitTunnelingItem)
         val splitTunnelingAppsItem = view.findViewById<TextView>(R.id.splitTunnelingAppsItem)
         val autoclickItem = view.findViewById<TextView>(R.id.autoclickItem)
+        val headlessCheckbox = view.findViewById<CheckBox>(R.id.headlessCheckbox)
         val reconnectCheckbox = view.findViewById<CheckBox>(R.id.reconnectOnStartCheckbox)
         val showLogsCheckbox = view.findViewById<CheckBox>(R.id.showLogsCheckbox)
         val shareLogsItem = view.findViewById<TextView>(R.id.shareLogsItem)
@@ -67,6 +68,7 @@ class SettingsDialogFragment : DialogFragment() {
         updateSplitTunnelingLabel(splitTunnelingItem)
         updateSplitTunnelingAppsEnabled(splitTunnelingAppsItem)
 
+        headlessCheckbox.isChecked = Prefs.headless
         reconnectCheckbox.isChecked = Prefs.connectOnStart
         showLogsCheckbox.isChecked = Prefs.showLogs
 
@@ -86,6 +88,10 @@ class SettingsDialogFragment : DialogFragment() {
 
         autoclickItem.setOnClickListener {
             showAutoclickSettingsDialog()
+        }
+
+        headlessCheckbox.setOnCheckedChangeListener { _, checked ->
+            Prefs.headless = checked
         }
 
         reconnectCheckbox.setOnCheckedChangeListener { _, checked ->

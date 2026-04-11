@@ -59,6 +59,17 @@
                 android:background="?android:attr/listDivider" />
 
             <CheckBox
+                android:id="@+id/headlessCheckbox"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginStart="20dp"
+                android:paddingStart="8dp"
+                android:paddingEnd="24dp"
+                android:paddingVertical="10dp"
+                android:text="@string/menu_headless"
+                android:textSize="16sp" />
+
+            <CheckBox
                 android:id="@+id/reconnectOnStartCheckbox"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"

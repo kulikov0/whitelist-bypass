@@ -59,4 +59,8 @@ object Prefs {
     var autoclickName: String
         get() = prefs.getString(PrefsKeys.AUTOCLICK_NAME, "Hello")!!
         set(value) = prefs.edit { putString(PrefsKeys.AUTOCLICK_NAME, value) }
+
+    var headless: Boolean
+        get() = prefs.getBoolean(PrefsKeys.HEADLESS, true)
+        set(value) = prefs.edit { putBoolean(PrefsKeys.HEADLESS, value) }
 }
