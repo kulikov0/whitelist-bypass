@@ -5,6 +5,7 @@ import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.app.PendingIntent
 import android.content.Intent
+import android.net.ConnectivityManager
 import android.net.VpnService
 import android.os.Build
 import android.os.ParcelFileDescriptor
@@ -80,9 +81,15 @@ class TunnelVpnService : VpnService() {
             .setSession(Vpn.SESSION_NAME)
             .addAddress(Vpn.ADDRESS, Vpn.PREFIX_LENGTH)
             .addRoute(Vpn.ROUTE, 0)
-            .addDnsServer(Vpn.DNS_PRIMARY)
-            .addDnsServer(Vpn.DNS_SECONDARY)
             .setMtu(Vpn.MTU)
+
+        val systemDns = getSystemDnsServers()
+        if (systemDns.isNotEmpty()) {
+            for (dns in systemDns) builder.addDnsServer(dns)
+        } else {
+            builder.addDnsServer(Vpn.DNS_PRIMARY)
+            builder.addDnsServer(Vpn.DNS_SECONDARY)
+        }
 
         try {
             when (Prefs.splitTunnelingMode) {
@@ -131,6 +138,13 @@ class TunnelVpnService : VpnService() {
                 isRunning = false
             }
         }.also { it.start() }
+    }
+
+    private fun getSystemDnsServers(): List<String> {
+        val connectivityManager = getSystemService(ConnectivityManager::class.java) ?: return emptyList()
+        val network = connectivityManager.activeNetwork ?: return emptyList()
+        val linkProperties = connectivityManager.getLinkProperties(network) ?: return emptyList()
+        return linkProperties.dnsServers.mapNotNull { it.hostAddress }
     }
 
     private fun startForegroundNotification() {

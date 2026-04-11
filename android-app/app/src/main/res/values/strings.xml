@@ -38,5 +38,6 @@
     <string name="vpn_call_failed">Call failed</string>
     <string name="action_required_captcha">Action required (captcha)</string>
     <string name="menu_headless">Headless</string>
+    <string name="headless_telemost_starting">Starting telemost headless joiner...</string>
     <string name="settings_close">Close</string>
 </resources>

@@ -11,7 +11,6 @@ import (
 
 	"github.com/pion/datachannel"
 	"github.com/pion/webrtc/v4"
-	"whitelist-bypass/relay/common"
 )
 
 // Telemost chunk size
@@ -31,7 +30,8 @@ type DCTunnel struct {
 	logFn    func(string, ...any)
 	onData   func([]byte)
 	onClose  func()
-	chunked  bool
+	chunked bool
+	readBuf int
 
 	recvBufs  sync.Map
 	sendMsgID uint32
@@ -42,8 +42,8 @@ type DCTunnel struct {
 	sendMsgs  atomic.Uint64
 }
 
-func NewDCTunnel(dc *webrtc.DataChannel, logFn func(string, ...any)) *DCTunnel {
-	t := &DCTunnel{dc: dc, logFn: logFn}
+func NewDCTunnel(dc *webrtc.DataChannel, readBuf int, logFn func(string, ...any)) *DCTunnel {
+	t := &DCTunnel{dc: dc, readBuf: readBuf, logFn: logFn}
 
 	raw, err := dc.Detach()
 	if err != nil {
@@ -73,27 +73,27 @@ func NewDCTunnel(dc *webrtc.DataChannel, logFn func(string, ...any)) *DCTunnel {
 	return t
 }
 
-func NewDCTunnelFromRaw(dc *webrtc.DataChannel, raw datachannel.ReadWriteCloser, logFn func(string, ...any)) *DCTunnel {
-	t := &DCTunnel{dc: dc, raw: raw, logFn: logFn}
+func NewDCTunnelFromRaw(dc *webrtc.DataChannel, raw datachannel.ReadWriteCloser, readBuf int, logFn func(string, ...any)) *DCTunnel {
+	t := &DCTunnel{dc: dc, raw: raw, readBuf: readBuf, logFn: logFn}
 	go t.readLoop()
 	go t.statsLoop()
 	return t
 }
 
-func NewChunkedDCTunnel(readRaw datachannel.ReadWriteCloser, writeDC *webrtc.DataChannel, logFn func(string, ...any)) *DCTunnel {
+func NewChunkedDCTunnel(readRaw datachannel.ReadWriteCloser, writeDC *webrtc.DataChannel, readBuf int, logFn func(string, ...any)) *DCTunnel {
 	writeRaw, err := writeDC.Detach()
 	if err != nil {
 		logFn("dctunnel: write DC detach failed: %v", err)
 		return nil
 	}
-	t := &DCTunnel{raw: readRaw, writeRaw: writeRaw, logFn: logFn, chunked: true}
+	t := &DCTunnel{raw: readRaw, writeRaw: writeRaw, readBuf: readBuf, logFn: logFn, chunked: true}
 	go t.readLoop()
 	go t.statsLoop()
 	return t
 }
 
 func (t *DCTunnel) readLoop() {
-	buf := make([]byte, common.DCBufSize)
+	buf := make([]byte, t.readBuf)
 	for {
 		n, isString, err := t.raw.ReadDataChannel(buf)
 		if err != nil {

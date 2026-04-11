@@ -18,6 +18,10 @@ object PrefsKeys {
     const val HEADLESS = "headless"
 }
 
+const val BLANK_URL = "about:blank"
+
+const val DESKTOP_USER_AGENT = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+
 object Vpn {
     const val ADDRESS = "10.0.0.2"
     const val PREFIX_LENGTH = 32

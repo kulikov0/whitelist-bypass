@@ -29,16 +29,6 @@
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
         </activity>
-        <activity
-            android:name=".HeadlessJoinActivity"
-            android:screenOrientation="portrait"
-            android:exported="true">
-        </activity>
-        <activity
-            android:name=".TelemostHeadlessJoinActivity"
-            android:screenOrientation="portrait"
-            android:exported="true">
-        </activity>
         <service
             android:name=".tunnel.TunnelVpnService"
             android:permission="android.permission.BIND_VPN_SERVICE"

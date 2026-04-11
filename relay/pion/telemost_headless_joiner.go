@@ -318,6 +318,7 @@ func (j *TelemostHeadlessJoiner) initPC() {
 	config := webrtc.Configuration{ICEServers: j.iceServers}
 
 	settingEngine := webrtc.SettingEngine{}
+	settingEngine.SetNet(&AndroidNet{})
 	settingEngine.DetachDataChannels()
 	api := webrtc.NewAPI(webrtc.WithSettingEngine(settingEngine))
 
@@ -472,7 +473,7 @@ func (j *TelemostHeadlessJoiner) waitForPong(dc *webrtc.DataChannel) {
 				close(j.dcReady)
 				j.logFn("telemost-joiner: === DC TUNNEL CONNECTED ===")
 				common.EmitStatus(common.StatusTunnelConnected)
-				dcTunnel := tunnel.NewChunkedDCTunnel(raw, j.pubDC, j.logFn)
+				dcTunnel := tunnel.NewChunkedDCTunnel(raw, j.pubDC, common.DCBufSize, j.logFn)
 				if j.OnConnected != nil {
 					j.OnConnected(dcTunnel)
 				}
@@ -709,7 +710,7 @@ func (j *TelemostHeadlessJoiner) parseICEServersFromHello(sh map[string]interfac
 		if u, ok := sm["urls"].([]interface{}); ok {
 			for _, v := range u {
 				if vs, ok := v.(string); ok {
-					urls = append(urls, vs)
+					urls = append(urls, fixICEURL(vs))
 				}
 			}
 		}
@@ -720,7 +721,31 @@ func (j *TelemostHeadlessJoiner) parseICEServersFromHello(sh map[string]interfac
 		}
 		iceServers = append(iceServers, ice)
 	}
+	resolved := make(map[string]string)
+	for i, s := range iceServers {
+		for k, u := range s.URLs {
+			host := extractICEHost(u)
+			if host == "" || net.ParseIP(host) != nil {
+				continue
+			}
+			ip, ok := resolved[host]
+			if !ok {
+				var err error
+				ip, err = requestResolve(host)
+				if err != nil {
+					j.logFn("telemost-joiner: resolve ICE host %s failed: %v", host, err)
+					continue
+				}
+				resolved[host] = ip
+				j.logFn("telemost-joiner: resolved ICE host %s -> %s", host, ip)
+			}
+			iceServers[i].URLs[k] = strings.Replace(u, host, ip, 1)
+		}
+	}
 	j.iceServers = iceServers
+	for i, s := range iceServers {
+		j.logFn("telemost-joiner: ICE server %d: urls=%v", i, s.URLs)
+	}
 	j.logFn("telemost-joiner: %d ICE servers from serverHello", len(iceServers))
 }
 
@@ -779,6 +804,23 @@ func (j *TelemostHeadlessJoiner) connectAndRun() {
 		j.pubPC.Close()
 	}
 	j.logFn("telemost-joiner: disconnected")
+}
+
+func extractICEHost(iceURL string) string {
+	idx := strings.Index(iceURL, ":")
+	if idx < 0 {
+		return ""
+	}
+	rest := iceURL[idx+1:]
+	params := strings.Index(rest, "?")
+	if params >= 0 {
+		rest = rest[:params]
+	}
+	host, _, err := net.SplitHostPort(rest)
+	if err != nil {
+		return rest
+	}
+	return host
 }
 
 func tmParseMids(sdp string) (audioMid, videoMid string) {

@@ -121,7 +121,7 @@ Download and run the Electron app from [GitHub Releases](../../releases). It bun
 
 ### Requirements
 
-- Go 1.21+
+- Go 1.26+
 - gomobile (`go install golang.org/x/mobile/cmd/gomobile@latest`)
 - gobind (`go install golang.org/x/mobile/cmd/gobind@latest`)
 - Android SDK + NDK 29

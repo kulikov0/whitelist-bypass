@@ -92,6 +92,7 @@ class SettingsDialogFragment : DialogFragment() {
 
         headlessCheckbox.setOnCheckedChangeListener { _, checked ->
             Prefs.headless = checked
+            listener?.onReset()
         }
 
         reconnectCheckbox.setOnCheckedChangeListener { _, checked ->
