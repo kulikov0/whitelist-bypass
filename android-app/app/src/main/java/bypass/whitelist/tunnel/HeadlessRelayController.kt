@@ -5,10 +5,12 @@ import bypass.whitelist.util.Ports
 import java.io.BufferedWriter
 import java.io.File
 import java.io.OutputStreamWriter
+import java.net.Inet4Address
 import java.net.InetAddress
 
 class HeadlessRelayController(
     private val nativeLibDir: String,
+    private val relayMode: String = "vk-headless-joiner",
     private val onLog: (String) -> Unit,
     private val onStatus: (VpnStatus) -> Unit,
 ) {
@@ -34,7 +36,7 @@ class HeadlessRelayController(
             try {
                 val processBuilder = ProcessBuilder(
                     relayBin.absolutePath,
-                    "--mode", "vk-headless-joiner",
+                    "--mode", relayMode,
                     "--ws-port", "${Ports.PION_SIGNALING}",
                     "--socks-port", "${Ports.SOCKS}"
                 )
@@ -50,7 +52,8 @@ class HeadlessRelayController(
                     if (line.startsWith("RESOLVE:")) {
                         val hostname = line.removePrefix("RESOLVE:")
                         try {
-                            val address = InetAddress.getByName(hostname)
+                            val all = InetAddress.getAllByName(hostname)
+                            val address = all.firstOrNull { it is Inet4Address } ?: all.first()
                             val resolvedIP = address.hostAddress ?: ""
                             Log.d("RELAY", "Resolved $hostname -> $resolvedIP")
                             writeStdin(resolvedIP)
@@ -58,11 +61,19 @@ class HeadlessRelayController(
                             Log.e("RELAY", "DNS resolve failed for $hostname", e)
                             writeStdin("")
                         }
+                    } else if (line.startsWith("STATUS:")) {
+                        val status = line.removePrefix("STATUS:")
+                        Log.d("RELAY", "status: $status")
+                        when {
+                            status == "READY" -> onStatus(VpnStatus.STARTING)
+                            status == "CONNECTING" -> onStatus(VpnStatus.CONNECTING)
+                            status == "TUNNEL_CONNECTED" -> onStatus(VpnStatus.TUNNEL_ACTIVE)
+                            status == "TUNNEL_LOST" -> onStatus(VpnStatus.TUNNEL_LOST)
+                            status.startsWith("ERROR:") -> onStatus(VpnStatus.CALL_FAILED)
+                        }
                     } else {
                         Log.d("RELAY", line)
                         onLog(line)
-                        if (line.contains("TUNNEL CONNECTED")) onStatus(VpnStatus.TUNNEL_ACTIVE)
-                        else if (line.contains("ERROR:")) onStatus(VpnStatus.CALL_FAILED)
                     }
                 }
                 proc.waitFor()

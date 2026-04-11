@@ -6,6 +6,7 @@ import (
 	"net/http"
 
 	"github.com/pion/webrtc/v4"
+	"whitelist-bypass/relay/common"
 )
 
 type VKClient struct {
@@ -127,7 +128,7 @@ func (c *VKClient) createPC(config webrtc.Configuration) error {
 			c.logFn("vk: ICE gathering complete (nil candidate)")
 			return
 		}
-		c.logFn("vk: ICE candidate: type=%s protocol=%s address=%s", cand.Typ.String(), cand.Protocol.String(), maskAddr(cand.Address))
+		c.logFn("vk: ICE candidate: type=%s protocol=%s address=%s", cand.Typ.String(), cand.Protocol.String(), common.MaskAddr(cand.Address))
 		c.SendToHook("ice-candidate", cand.ToJSON())
 	})
 

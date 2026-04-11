@@ -17,6 +17,7 @@ import (
 
 	"github.com/gorilla/websocket"
 	"github.com/pion/webrtc/v4"
+	"whitelist-bypass/relay/common"
 )
 
 func init() {
@@ -113,6 +114,7 @@ func requestResolve(hostname string) (string, error) {
 
 func (h *VKHeadlessJoiner) Run() {
 	h.logFn("headless: waiting for auth params on stdin...")
+	common.EmitStatus(common.StatusReady)
 	for {
 		line, err := readStdinLine()
 		if err != nil {
@@ -129,9 +131,11 @@ func (h *VKHeadlessJoiner) Run() {
 			h.authParams = &params
 			h.logFn("headless: auth params received")
 			h.logFn("headless:   appVersion=%s protocolVersion=%s", params.AppVersion, params.ProtocolVersion)
+			common.EmitStatus(common.StatusConnecting)
 
 			if err := h.joinCall(); err != nil {
 				h.logFn("headless: joinCall failed: %v", err)
+				common.EmitStatusError(err.Error())
 				return
 			}
 			h.connectSFU()
@@ -360,6 +364,7 @@ func (h *VKHeadlessJoiner) handleVKMessage(raw []byte) {
 		case "hungup":
 			h.logFn("headless: <- %s: %s", notif, string(raw))
 			h.logFn("headless: ERROR: call ended (hungup)")
+			common.EmitStatusError("call ended")
 		}
 
 	case "response":
@@ -450,6 +455,7 @@ func (h *VKHeadlessJoiner) initPC() {
 			h.logFn("headless: tunnel DC open")
 			if mode == "dc" {
 				h.logFn("headless: === DC TUNNEL CONNECTED ===")
+				common.EmitStatus(common.StatusTunnelConnected)
 				if h.OnConnected != nil {
 					h.OnConnected(NewDCTunnel(dc, h.logFn))
 				}
@@ -470,11 +476,14 @@ func (h *VKHeadlessJoiner) initPC() {
 		h.logFn("headless: PC state: %s", state.String())
 		if state == webrtc.PeerConnectionStateFailed {
 			h.logFn("headless: ERROR: connection failed")
+			common.EmitStatusError("connection failed")
 		} else if state == webrtc.PeerConnectionStateDisconnected {
 			h.logFn("headless: ERROR: connection lost")
+			common.EmitStatus(common.StatusTunnelLost)
 		}
 		if mode == "video" && state == webrtc.PeerConnectionStateConnected && h.tunnel == nil {
 			h.logFn("headless: === TUNNEL CONNECTED ===")
+			common.EmitStatus(common.StatusTunnelConnected)
 			h.tunnel = NewVP8DataTunnel(h.sampleTrack, h.logFn)
 			h.tunnel.Start(25)
 			if h.OnConnected != nil {

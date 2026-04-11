@@ -10,7 +10,7 @@ import (
 	"sync/atomic"
 	"time"
 
-	"whitelist-bypass/relay/socks"
+	"whitelist-bypass/relay/common"
 )
 
 const (
@@ -196,7 +196,7 @@ func (rb *RelayBridge) handleUDP(connID uint32, payload []byte) {
 	defer conn.Close()
 	conn.SetDeadline(time.Now().Add(5 * time.Second))
 	conn.Write(data)
-	buf := make([]byte, socks.UDPBufSize)
+	buf := make([]byte, common.UDPBufSize)
 	n, err := conn.Read(buf)
 	if err != nil {
 		return
@@ -205,7 +205,7 @@ func (rb *RelayBridge) handleUDP(connID uint32, payload []byte) {
 }
 
 func (rb *RelayBridge) connectTCP(connID uint32, addr string) {
-	rb.logFn("relay: CONNECT %d -> %s", connID, maskAddr(addr))
+	rb.logFn("relay: CONNECT %d -> %s", connID, common.MaskAddr(addr))
 	conn, err := net.DialTimeout("tcp", addr, 10e9)
 	if err != nil {
 		rb.logFn("relay: CONNECT %d failed: %v", connID, err)
@@ -214,7 +214,7 @@ func (rb *RelayBridge) connectTCP(connID uint32, addr string) {
 	}
 	rb.conns.Store(connID, conn)
 	rb.send(connID, msgConnectOK, nil)
-	rb.logFn("relay: CONNECTED %d -> %s", connID, maskAddr(addr))
+	rb.logFn("relay: CONNECTED %d -> %s", connID, common.MaskAddr(addr))
 
 	buf := make([]byte, rb.readBuf)
 	for {
@@ -259,31 +259,31 @@ func (rb *RelayBridge) ListenSOCKS(addr string) error {
 
 func (rb *RelayBridge) handleSOCKS(conn net.Conn) {
 	<-rb.ready
-	buf := make([]byte, socks.HandshakeBuf)
+	buf := make([]byte, common.HandshakeBuf)
 	n, err := conn.Read(buf)
-	if err != nil || n < 2 || buf[0] != socks.Ver {
+	if err != nil || n < 2 || buf[0] != common.Ver {
 		conn.Close()
 		return
 	}
-	conn.Write(socks.NoAuth)
+	conn.Write(common.NoAuth)
 	n, err = conn.Read(buf)
-	if err != nil || n < 7 || buf[0] != socks.Ver {
+	if err != nil || n < 7 || buf[0] != common.Ver {
 		conn.Close()
 		return
 	}
 	cmd := buf[1]
-	if cmd == socks.CmdUDP {
+	if cmd == common.CmdUDP {
 		rb.handleUDPAssociate(conn)
 		return
 	}
-	if cmd != socks.CmdTCP {
-		conn.Write(socks.CmdErr)
+	if cmd != common.CmdTCP {
+		conn.Write(common.CmdErr)
 		conn.Close()
 		return
 	}
-	host, _, err := socks.ParseAddress(buf, n)
+	host, _, err := common.ParseAddress(buf, n)
 	if err != nil {
-		conn.Write(socks.AddrErr)
+		conn.Write(common.AddrErr)
 		conn.Close()
 		return
 	}
@@ -291,18 +291,18 @@ func (rb *RelayBridge) handleSOCKS(conn net.Conn) {
 	id := rb.nextID.Add(1)
 	sc := &socksConn{id: id, conn: conn, rb: rb, rdy: make(chan error, 1)}
 	rb.conns.Store(id, sc)
-	rb.logFn("relay: SOCKS CONNECT %d -> %s", id, maskAddr(host))
+	rb.logFn("relay: SOCKS CONNECT %d -> %s", id, common.MaskAddr(host))
 	rb.send(id, msgConnect, []byte(host))
 
 	if err := <-sc.rdy; err != nil {
 		rb.logFn("relay: SOCKS CONNECT %d failed: %v", id, err)
-		conn.Write(socks.ConnFail)
+		conn.Write(common.ConnFail)
 		conn.Close()
 		rb.conns.Delete(id)
 		return
 	}
-	conn.Write(socks.OK)
-	rb.logFn("relay: SOCKS CONNECTED %d -> %s", id, maskAddr(host))
+	conn.Write(common.OK)
+	rb.logFn("relay: SOCKS CONNECTED %d -> %s", id, common.MaskAddr(host))
 
 	go func() {
 		readBuf := make([]byte, rb.readBuf)
@@ -323,18 +323,18 @@ func (rb *RelayBridge) handleSOCKS(conn net.Conn) {
 func (rb *RelayBridge) handleUDPAssociate(tcpConn net.Conn) {
 	udpAddr, err := net.ResolveUDPAddr("udp", "127.0.0.1:0")
 	if err != nil {
-		tcpConn.Write(socks.GenFail)
+		tcpConn.Write(common.GenFail)
 		tcpConn.Close()
 		return
 	}
 	udpConn, err := net.ListenUDP("udp", udpAddr)
 	if err != nil {
-		tcpConn.Write(socks.GenFail)
+		tcpConn.Write(common.GenFail)
 		tcpConn.Close()
 		return
 	}
 	localAddr := udpConn.LocalAddr().(*net.UDPAddr)
-	reply := []byte{socks.Ver, 0x00, 0x00, socks.AtypIPv4, 127, 0, 0, 1, 0, 0}
+	reply := []byte{common.Ver, 0x00, 0x00, common.AtypIPv4, 127, 0, 0, 1, 0, 0}
 	binary.BigEndian.PutUint16(reply[8:10], uint16(localAddr.Port))
 	tcpConn.Write(reply)
 
@@ -347,7 +347,7 @@ func (rb *RelayBridge) handleUDPAssociate(tcpConn net.Conn) {
 	go func() {
 		defer udpConn.Close()
 		defer tcpConn.Close()
-		buf := make([]byte, socks.UDPBufSize)
+		buf := make([]byte, common.UDPBufSize)
 		for {
 			n, addr, err := udpConn.ReadFromUDP(buf)
 			if err != nil {
@@ -360,7 +360,7 @@ func (rb *RelayBridge) handleUDPAssociate(tcpConn net.Conn) {
 			if frag != 0 {
 				continue
 			}
-			dstAddr, headerLen, addrErr := socks.ParseAddress(buf, n)
+			dstAddr, headerLen, addrErr := common.ParseAddress(buf, n)
 			if addrErr != nil {
 				continue
 			}

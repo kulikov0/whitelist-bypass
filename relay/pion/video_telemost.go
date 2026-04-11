@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/pion/webrtc/v4"
+	"whitelist-bypass/relay/common"
 )
 
 type tmPCState struct {
@@ -67,7 +68,7 @@ func (c *TelemostClient) handleMessage(raw []byte) {
 		var ip string
 		json.Unmarshal(msg.Data, &ip)
 		c.LocalIP = ip
-		c.logFn("telemost: local IP set to %s", maskAddr(ip))
+		c.logFn("telemost: local IP set to %s", common.MaskAddr(ip))
 		c.ipOnce.Do(func() { close(c.ipReady) })
 	case "ice-servers":
 		go c.handleICEServers(msg.Data, role)
@@ -152,7 +153,7 @@ func (c *TelemostClient) handleICEServers(data json.RawMessage, role string) {
 			c.logFn("telemost [%s]: ICE gathering complete", role)
 			return
 		}
-		c.logFn("telemost [%s]: ICE candidate: type=%s protocol=%s address=%s", role, cand.Typ.String(), cand.Protocol.String(), maskAddr(cand.Address))
+		c.logFn("telemost [%s]: ICE candidate: type=%s protocol=%s address=%s", role, cand.Typ.String(), cand.Protocol.String(), common.MaskAddr(cand.Address))
 		c.SendToHookWithRole("ice-candidate", cand.ToJSON(), role)
 	})
 

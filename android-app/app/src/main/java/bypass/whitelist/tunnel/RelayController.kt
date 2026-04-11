@@ -7,6 +7,7 @@ import mobile.Mobile
 import java.io.BufferedWriter
 import java.io.File
 import java.io.OutputStreamWriter
+import java.net.Inet4Address
 import java.net.InetAddress
 
 class RelayController(
@@ -86,7 +87,8 @@ class RelayController(
                     if (line.startsWith("RESOLVE:")) {
                         val hostname = line.removePrefix("RESOLVE:")
                         try {
-                            val address = InetAddress.getByName(hostname)
+                            val all = InetAddress.getAllByName(hostname)
+                            val address = all.firstOrNull { it is Inet4Address } ?: all.first()
                             val resolvedIP = address.hostAddress ?: ""
                             Log.d("RELAY", "Resolved $hostname -> $resolvedIP")
                             stdinWriter.write(resolvedIP)
