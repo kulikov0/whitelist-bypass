@@ -74,10 +74,9 @@ class HeadlessVkFragment : Fragment() {
     }
 
     override fun onDestroyView() {
-        if (webView.parent != null) {
-            webView.stopLoading()
-            webView.loadUrl(BLANK_URL)
-        }
+        webView.stopLoading()
+        webView.loadUrl(BLANK_URL)
+
         webView.destroy()
         relay.stop()
         super.onDestroyView()
