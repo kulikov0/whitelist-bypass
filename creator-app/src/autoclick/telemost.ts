@@ -30,7 +30,7 @@ export class TelemostAutoclick {
             var admitBtn = null;
             for (var i = 0; i < buttons.length; i++) {
               var txt = buttons[i].textContent.replace(/\\s+/g, ' ').trim();
-              if (txt.indexOf('\\u0412\\u043f\\u0443\\u0441\\u0442\\u0438\\u0442\\u044c') !== -1) {
+              if (txt.indexOf('Впустить') !== -1) {
                 admitBtn = buttons[i];
                 break;
               }
@@ -65,7 +65,7 @@ export class TelemostAutoclick {
     (frame
       .executeJavaScript(
         `(function() {
-        var el = document.querySelector('[title="\\u0423\\u0434\\u0430\\u043b\\u0438\\u0442\\u044c \\u0441\\u043e \\u0432\\u0441\\u0442\\u0440\\u0435\\u0447\\u0438"]');
+        var el = document.querySelector('[title="Удалить со встречи"]');
         if (el) { el.click(); return true; }
         return false;
       })()`,
@@ -85,7 +85,7 @@ export class TelemostAutoclick {
         var btns = modal.querySelectorAll('button');
         for (var i = 0; i < btns.length; i++) {
           var txt = btns[i].textContent.replace(/\\s+/g, ' ').trim();
-          if (txt === '\\u0423\\u0434\\u0430\\u043b\\u0438\\u0442\\u044c') {
+          if (txt === 'Удалить') {
             btns[i].click();
             return true;
           }

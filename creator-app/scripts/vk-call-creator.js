@@ -3,7 +3,7 @@
   window.__callCreatorStarted = true;
 
   var CALL_MENU_TRIGGER_ID = 'call-menu-trigger';
-  var CREATE_CALL_TEXT = '\u0421\u043e\u0437\u0434\u0430\u0442\u044c \u0437\u0432\u043e\u043d\u043e\u043a \u043f\u043e';
+  var CREATE_CALL_TEXT = 'Создать звонок по';
   var CALL_IN_PROGRESS_KEY = 'call_in_progress';
   var VK_CALL_BASE = 'https://vk.com/call/join/';
 
