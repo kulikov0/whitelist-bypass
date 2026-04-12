@@ -185,16 +185,17 @@ Pure Go creators that create calls via API without a browser. No Electron, no JS
 ```sh
 # VK
 cd headless/vk && go build -o headless-vk-creator .
-./headless-vk-creator --cookies cookies.json [--peer-id <vk_peer_id>] [--resources <mode>]
+./headless-vk-creator --cookies cookies.json [--peer-id <vk_peer_id>] [--resources <mode>] [--write-file call-vk]
 
 # Telemost
 cd headless/telemost && go build -o headless-telemost .
-./headless-telemost --cookies cookies-yandex.json [--resources <mode>]
+./headless-telemost --cookies cookies-yandex.json [--resources <mode>] [--write-file call-telemost]
 ```
 
 - `--cookies` - path to cookies exported as JSON (`[{"name":"..","value":".."},...]`)
 - `--peer-id` - VK peer_id for the call (VK only, optional)
 - `--resources` - resource mode (see below)
+- `--write-file` - path to file where the active call link is appended (one link per line, created if missing)
 
 **Resource modes:**
 

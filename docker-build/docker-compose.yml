@@ -1,5 +1,6 @@
 services:
   build-all:
+    platform: linux/amd64
     build:
       context: ..
       dockerfile: docker-build/Dockerfile

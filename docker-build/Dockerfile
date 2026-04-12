@@ -1,6 +1,6 @@
 FROM eclipse-temurin:17-jdk-jammy
 
-ARG GO_VERSION=1.24.3
+ARG GO_VERSION=1.26.1
 ARG ANDROID_CMDLINE_TOOLS=13114758
 ARG ANDROID_NDK_VERSION=29.0.14206865
 ARG ANDROID_PLATFORM=android-36
@@ -21,7 +21,7 @@ RUN dpkg --add-architecture i386 \
     libc6-dev pkg-config python3 rsync \
     gcc-multilib g++-multilib \
     unzip wget zip gnupg \
-    wine64 wine32 wine mono-complete \
+    wine64 wine32 wine \
     && apt clean \
     && rm -rf /var/lib/apt/lists/*
 

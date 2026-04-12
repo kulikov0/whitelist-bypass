@@ -8,6 +8,7 @@ import (
 	"log"
 	"net/http"
 	"net/url"
+	"os"
 	"runtime/debug"
 	"strings"
 	"sync"
@@ -630,6 +631,7 @@ func main() {
 	cookiesPath := flag.String("cookies", "", "path to cookies-yandex.json")
 	cookieString := flag.String("cookie-string", "", "raw cookie string")
 	resources := flag.String("resources", "default", "resource mode: default, moderate, unlimited")
+	writeFile := flag.String("write-file", "", "path to file where active call link is appended")
 	flag.Parse()
 
 	var readBuf int
@@ -674,6 +676,16 @@ func main() {
 	connInfo, err := createAndJoinCall(cookieStr, cfg)
 	if err != nil {
 		log.Fatalf("Failed to create call: %v", err)
+	}
+
+	if *writeFile != "" {
+		f, err := os.OpenFile(*writeFile, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
+		if err != nil {
+			log.Fatalf("Failed to open write-file: %v", err)
+		}
+		fmt.Fprintln(f, connInfo.ConferenceURI)
+		f.Close()
+		log.Printf("[config] Wrote call link to %s", *writeFile)
 	}
 
 	bridge := &Bridge{

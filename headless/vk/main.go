@@ -536,6 +536,7 @@ func main() {
 	cookieString := flag.String("cookie-string", "", "raw cookie string (name=val; name=val)")
 	peerId := flag.String("peer-id", "", "VK peer_id for the call")
 	resources := flag.String("resources", "default", "resource mode: default, moderate, unlimited")
+	writeFile := flag.String("write-file", "", "path to file where active call link is appended")
 	flag.Parse()
 
 	var readBuf int
@@ -580,6 +581,16 @@ func main() {
 	callInfo, err := createAndJoinCall(cookieStr, *peerId, cfg)
 	if err != nil {
 		log.Fatalf("Failed to create call: %v", err)
+	}
+
+	if *writeFile != "" {
+		f, err := os.OpenFile(*writeFile, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
+		if err != nil {
+			log.Fatalf("Failed to open write-file: %v", err)
+		}
+		fmt.Fprintln(f, callInfo.JoinLink)
+		f.Close()
+		log.Printf("[config] Wrote call link to %s", *writeFile)
 	}
 
 	bridge := &Bridge{}
