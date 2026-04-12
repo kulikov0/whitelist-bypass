@@ -7,6 +7,7 @@ import android.view.View
 import android.view.ViewGroup
 import android.webkit.WebView
 import androidx.appcompat.app.AppCompatActivity
+import androidx.core.view.isVisible
 import androidx.fragment.app.Fragment
 import bypass.whitelist.R
 import bypass.whitelist.util.BLANK_URL
@@ -62,14 +63,21 @@ class HeadlessVkFragment : Fragment() {
             val params = JSONObject(joinJson)
             params.put("tunnelMode", Prefs.tunnelMode.relayArg)
             relay.sendJoinParams(params.toString())
+            activity?.runOnUiThread {
+                webView.stopLoading()
+                webView.loadUrl(BLANK_URL)
+                webView.isVisible = false
+            }
         }
         captchaView.setup()
         captchaView.start(url, displayName)
     }
 
     override fun onDestroyView() {
-        webView.stopLoading()
-        webView.loadUrl(BLANK_URL)
+        if (webView.parent != null) {
+            webView.stopLoading()
+            webView.loadUrl(BLANK_URL)
+        }
         webView.destroy()
         relay.stop()
         super.onDestroyView()
