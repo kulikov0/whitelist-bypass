@@ -2,6 +2,7 @@ package bypass.whitelist.tunnel
 
 import android.util.Log
 import bypass.whitelist.util.Ports
+import bypass.whitelist.util.Prefs
 import bypass.whitelist.util.SocksAuth
 import mobile.LogCallback
 import mobile.Mobile
@@ -55,13 +56,14 @@ class RelayController(
             else if (msg.contains("ws read error")) onStatus(VpnStatus.TUNNEL_LOST)
         }
         dcThread = Thread {
+            if (!checkPortOrAbort()) return@Thread
             try {
-                Mobile.startJoiner(Ports.DC_WS, Ports.SOCKS, SocksAuth.user, SocksAuth.pass, cb)
+                Mobile.startJoiner(Ports.DC_WS, Prefs.socksPort, SocksAuth.user, SocksAuth.pass, cb)
             } catch (e: Exception) {
                 if (isRunning) onLog("Relay error: ${e.message}")
             }
         }.also { it.start() }
-        onLog("Relay started DC mode (SOCKS5 ${SocksAuth.user}:${SocksAuth.pass}@127.0.0.1:${Ports.SOCKS}, WS :${Ports.DC_WS})")
+        onLog("Relay started DC mode (SOCKS5 ${SocksAuth.user}:${SocksAuth.pass}@127.0.0.1:${Prefs.socksPort}, WS :${Ports.DC_WS})")
     }
 
     private fun startPion(mode: TunnelMode, platform: CallPlatform) {
@@ -72,19 +74,20 @@ class RelayController(
         }
         val relayMode = mode.relayMode(platform)
         pionThread = Thread {
+            if (!checkPortOrAbort()) return@Thread
             try {
                 val pb = ProcessBuilder(
                     relayBin.absolutePath,
                     "--mode", relayMode,
                     "--ws-port", "${Ports.PION_SIGNALING}",
-                    "--socks-port", "${Ports.SOCKS}",
+                    "--socks-port", "${Prefs.socksPort}",
                     "--socks-user", SocksAuth.user,
                     "--socks-pass", SocksAuth.pass
                 )
                 pb.redirectErrorStream(true)
                 val proc = pb.start()
                 synchronized(this) { pionProcess = proc }
-                onLog("Pion relay started mode=$relayMode (signaling :${Ports.PION_SIGNALING}, SOCKS5 ${SocksAuth.user}:${SocksAuth.pass}@127.0.0.1:${Ports.SOCKS})")
+                onLog("Pion relay started mode=$relayMode (signaling :${Ports.PION_SIGNALING}, SOCKS5 ${SocksAuth.user}:${SocksAuth.pass}@127.0.0.1:${Prefs.socksPort})")
                 val stdinWriter = BufferedWriter(OutputStreamWriter(proc.outputStream))
                 proc.inputStream.bufferedReader().forEachLine { line ->
                     if (line.startsWith("RESOLVE:")) {
@@ -118,5 +121,14 @@ class RelayController(
                 }
             }
         }.also { it.start() }
+    }
+
+    private fun checkPortOrAbort(): Boolean {
+        val socksPort = Prefs.socksPort
+        if (PortGuard.ensurePortFree(socksPort)) return true
+        onLog("SOCKS5 port $socksPort is busy and could not be freed")
+        onStatus(VpnStatus.PORT_BUSY)
+        isRunning = false
+        return false
     }
 }

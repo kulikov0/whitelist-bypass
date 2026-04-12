@@ -63,4 +63,8 @@ object Prefs {
     var headless: Boolean
         get() = prefs.getBoolean(PrefsKeys.HEADLESS, true)
         set(value) = prefs.edit { putBoolean(PrefsKeys.HEADLESS, value) }
+
+    var socksPort: Long
+        get() = prefs.getLong(PrefsKeys.SOCKS_PORT, Ports.DEFAULT_SOCKS)
+        set(value) = prefs.edit { putLong(PrefsKeys.SOCKS_PORT, value) }
 }

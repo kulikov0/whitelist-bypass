@@ -128,12 +128,12 @@ class TunnelVpnService : VpnService() {
         isRunning = true
         val fd = vpnFd!!.detachFd()
         vpnFd = null
-        Log.i(TAG, "VPN established, fd=$fd, SOCKS5 ${SocksAuth.user}:${SocksAuth.pass}@127.0.0.1:${Ports.SOCKS}")
+        Log.i(TAG, "VPN established, fd=$fd, SOCKS5 ${SocksAuth.user}:${SocksAuth.pass}@127.0.0.1:${Prefs.socksPort}")
         updateStatus(VpnStatus.TUNNEL_ACTIVE)
 
         tun2socksThread = Thread {
             try {
-                Mobile.startTun2Socks(fd.toLong(), Vpn.MTU.toLong(), Ports.SOCKS, SocksAuth.user, SocksAuth.pass)
+                Mobile.startTun2Socks(fd.toLong(), Vpn.MTU.toLong(), Prefs.socksPort, SocksAuth.user, SocksAuth.pass)
             } catch (e: Exception) {
                 Log.e(TAG, "tun2socks error: ${e.message}")
                 isRunning = false

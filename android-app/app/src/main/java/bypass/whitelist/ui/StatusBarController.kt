@@ -7,6 +7,7 @@ import bypass.whitelist.R
 import bypass.whitelist.tunnel.TunnelMode
 import bypass.whitelist.tunnel.VpnStatus
 import bypass.whitelist.util.Callback
+import bypass.whitelist.util.Prefs
 
 class StatusBarController(
     private val activity: AppCompatActivity,
@@ -29,7 +30,12 @@ class StatusBarController(
     }
 
     fun setStatus(status: VpnStatus) {
-        statusBar.text = activity.getString(R.string.status_format, tunnelMode.label, activity.getString(status.labelRes))
+        val label = if (status == VpnStatus.PORT_BUSY) {
+            activity.getString(status.labelRes, Prefs.socksPort)
+        } else {
+            activity.getString(status.labelRes)
+        }
+        statusBar.text = activity.getString(R.string.status_format, tunnelMode.label, label)
         val colorRes = when (status) {
             VpnStatus.TUNNEL_ACTIVE -> R.color.status_active
             VpnStatus.CONNECTING,
@@ -39,7 +45,8 @@ class StatusBarController(
             VpnStatus.DATACHANNEL_LOST,
             VpnStatus.ACTION_REQUIRED_CAPTCHA -> R.color.status_warning
             VpnStatus.CALL_DISCONNECTED,
-            VpnStatus.CALL_FAILED -> R.color.status_error
+            VpnStatus.CALL_FAILED,
+            VpnStatus.PORT_BUSY -> R.color.status_error
             VpnStatus.STARTING -> R.color.status_idle
         }
         statusBar.setBackgroundColor(activity.getColor(colorRes))

@@ -25,6 +25,7 @@ import bypass.whitelist.tunnel.RelayController
 import bypass.whitelist.tunnel.TunnelMode
 import bypass.whitelist.tunnel.VpnStatus
 import bypass.whitelist.util.BLANK_URL
+import bypass.whitelist.util.Ports
 import bypass.whitelist.util.DESKTOP_USER_AGENT
 import bypass.whitelist.util.Prefs
 import bypass.whitelist.util.maskUrl
@@ -160,6 +161,7 @@ class JsHookJoinFragment : Fragment() {
                     val platform = CallPlatform.fromUrl(url)
                     host?.appendLog("Page loaded, injecting hook for ${maskUrl(url)}")
                     view.evaluateJavascript("window.WS_PORT=${mobile.Mobile.activeWsPort()}", null)
+                    view.evaluateJavascript("window.PION_PORT=${Ports.PION_SIGNALING}", null)
                     view.evaluateJavascript(hookForPlatform(platform), null)
                     if (Prefs.autoclickEnabled) {
                         host?.appendLog("Injecting autoclick for ${maskUrl(url)}")

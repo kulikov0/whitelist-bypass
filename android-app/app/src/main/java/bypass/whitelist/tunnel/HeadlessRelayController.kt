@@ -2,6 +2,7 @@ package bypass.whitelist.tunnel
 
 import android.util.Log
 import bypass.whitelist.util.Ports
+import bypass.whitelist.util.Prefs
 import bypass.whitelist.util.SocksAuth
 import java.io.BufferedWriter
 import java.io.File
@@ -34,12 +35,19 @@ class HeadlessRelayController(
         }
 
         thread = Thread {
+            val socksPort = Prefs.socksPort
+            if (!PortGuard.ensurePortFree(socksPort)) {
+                onLog("SOCKS5 port $socksPort is busy and could not be freed")
+                onStatus(VpnStatus.PORT_BUSY)
+                isRunning = false
+                return@Thread
+            }
             try {
                 val processBuilder = ProcessBuilder(
                     relayBin.absolutePath,
                     "--mode", relayMode,
                     "--ws-port", "${Ports.PION_SIGNALING}",
-                    "--socks-port", "${Ports.SOCKS}",
+                    "--socks-port", "${Prefs.socksPort}",
                     "--socks-user", SocksAuth.user,
                     "--socks-pass", SocksAuth.pass
                 )
@@ -49,7 +57,7 @@ class HeadlessRelayController(
                     process = proc
                     stdinWriter = BufferedWriter(OutputStreamWriter(proc.outputStream))
                 }
-                onLog("Headless relay started (signaling :${Ports.PION_SIGNALING}, SOCKS5 ${SocksAuth.user}:${SocksAuth.pass}@127.0.0.1:${Ports.SOCKS})")
+                onLog("Headless relay started (signaling :${Ports.PION_SIGNALING}, SOCKS5 ${SocksAuth.user}:${SocksAuth.pass}@127.0.0.1:${Prefs.socksPort})")
 
                 proc.inputStream.bufferedReader().forEachLine { line ->
                     if (line.startsWith("RESOLVE:")) {

@@ -3,7 +3,7 @@ package bypass.whitelist.util
 import java.security.SecureRandom
 
 object Ports {
-    const val SOCKS = 1080L
+    const val DEFAULT_SOCKS = 1080L
     const val DC_WS = 9000L
     const val PION_SIGNALING = 9001L
 }
@@ -33,6 +33,7 @@ object PrefsKeys {
     const val AUTOCLICK_ENABLED = "autoclick_enabled"
     const val AUTOCLICK_NAME = "autoclick_name"
     const val HEADLESS = "headless"
+    const val SOCKS_PORT = "socks_port"
 }
 
 const val BLANK_URL = "about:blank"

@@ -145,17 +145,6 @@ func StopJoiner() {
 	logMsg("dc-joiner: stopped")
 }
 
-func listenWithRetry(port int, maxAttempts int) (net.Listener, int, error) {
-	for i := 0; i < maxAttempts; i++ {
-		addr := fmt.Sprintf("127.0.0.1:%d", port+i)
-		ln, err := net.Listen("tcp", addr)
-		if err == nil {
-			return ln, port + i, nil
-		}
-	}
-	return nil, 0, fmt.Errorf("no free port found starting from %d", port)
-}
-
 func StartJoiner(wsPort, socksPort int, socksUser, socksPass string, cb LogCallback) error {
 	StopJoiner()
 	logCb = cb
@@ -168,31 +157,33 @@ func StartJoiner(wsPort, socksPort int, socksUser, socksPass string, cb LogCallb
 	mux := http.NewServeMux()
 	mux.HandleFunc("/ws", j.handleWS)
 
-	wsLn, actualWsPort, err := listenWithRetry(wsPort, 10)
+	wsAddr := fmt.Sprintf("127.0.0.1:%d", wsPort)
+	wsLn, err := net.Listen("tcp", wsAddr)
 	if err != nil {
-		return fmt.Errorf("dc-joiner: %w", err)
+		return fmt.Errorf("dc-joiner: ws listen %s: %w", wsAddr, err)
 	}
 	wsSrv := &http.Server{Handler: mux}
 	go func() {
-		logMsg("dc-joiner: WebSocket on 127.0.0.1:%d", actualWsPort)
+		logMsg("dc-joiner: WebSocket on %s", wsAddr)
 		if err := wsSrv.Serve(wsLn); err != nil && err != http.ErrServerClosed {
 			logMsg("dc-joiner: ws server error: %v", err)
 		}
 	}()
 
-	socksLn, actualSocksPort, err := listenWithRetry(socksPort, 10)
+	socksAddr := fmt.Sprintf("127.0.0.1:%d", socksPort)
+	socksLn, err := net.Listen("tcp", socksAddr)
 	if err != nil {
 		wsSrv.Close()
-		return fmt.Errorf("dc-joiner: %w", err)
+		return fmt.Errorf("dc-joiner: socks listen %s: %w", socksAddr, err)
 	}
-	logMsg("dc-joiner: SOCKS5 on 127.0.0.1:%d", actualSocksPort)
+	logMsg("dc-joiner: SOCKS5 on %s", socksAddr)
 
 	activeJoiner.Lock()
 	activeJoiner.j = j
 	activeJoiner.ws = wsSrv
 	activeJoiner.socksLn = socksLn
-	activeJoiner.wsPort = actualWsPort
-	activeJoiner.socksPort = actualSocksPort
+	activeJoiner.wsPort = wsPort
+	activeJoiner.socksPort = socksPort
 	activeJoiner.Unlock()
 
 	return j.listenSOCKS(socksLn)
@@ -206,11 +197,12 @@ func StartCreator(wsPort int, cb LogCallback) error {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/ws", c.handleWS)
 
-	ln, actualPort, err := listenWithRetry(wsPort, 10)
+	wsAddr := fmt.Sprintf("127.0.0.1:%d", wsPort)
+	ln, err := net.Listen("tcp", wsAddr)
 	if err != nil {
-		return fmt.Errorf("dc-creator: %w", err)
+		return fmt.Errorf("dc-creator: ws listen %s: %w", wsAddr, err)
 	}
-	logMsg("dc-creator: WebSocket on 127.0.0.1:%d", actualPort)
+	logMsg("dc-creator: WebSocket on %s", wsAddr)
 	return http.Serve(ln, mux)
 }
 

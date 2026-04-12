@@ -36,6 +36,7 @@
     <string name="vpn_tunnel_lost">Tunnel lost, reconnecting…</string>
     <string name="vpn_call_disconnected">Call disconnected</string>
     <string name="vpn_call_failed">Call failed</string>
+    <string name="vpn_port_busy">Port %1$d busy</string>
     <string name="action_required_captcha">Action required (captcha)</string>
     <string name="menu_headless">Headless</string>
     <string name="settings_close">Close</string>
