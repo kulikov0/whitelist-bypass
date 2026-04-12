@@ -8,9 +8,11 @@ object Ports {
     const val PION_SIGNALING = 9001L
 }
 
+enum class SocksAuthMode { AUTO, MANUAL }
+
 object SocksAuth {
-    val user: String
-    val pass: String
+    private val autoUser: String
+    private val autoPass: String
 
     init {
         val random = SecureRandom()
@@ -18,9 +20,15 @@ object SocksAuth {
         fun randomString(length: Int) = buildString {
             repeat(length) { append(chars[random.nextInt(chars.length)]) }
         }
-        user = randomString(16)
-        pass = randomString(24)
+        autoUser = randomString(16)
+        autoPass = randomString(24)
     }
+
+    val user: String
+        get() = if (Prefs.socksAuthMode == SocksAuthMode.MANUAL) Prefs.socksUser else autoUser
+
+    val pass: String
+        get() = if (Prefs.socksAuthMode == SocksAuthMode.MANUAL) Prefs.socksPass else autoPass
 }
 
 object PrefsKeys {
@@ -34,6 +42,10 @@ object PrefsKeys {
     const val AUTOCLICK_NAME = "autoclick_name"
     const val HEADLESS = "headless"
     const val SOCKS_PORT = "socks_port"
+    const val SOCKS_AUTH_MODE = "socks_auth_mode"
+    const val SOCKS_USER = "socks_user"
+    const val SOCKS_PASS = "socks_pass"
+    const val PROXY_ONLY = "proxy_only"
 }
 
 const val BLANK_URL = "about:blank"

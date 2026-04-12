@@ -2,6 +2,8 @@ package bypass.whitelist.ui
 
 import android.app.Dialog
 import android.content.pm.ApplicationInfo
+import android.text.Editable
+import android.text.TextWatcher
 import android.content.pm.PackageManager
 import android.os.Bundle
 import android.view.LayoutInflater
@@ -56,6 +58,7 @@ class SettingsDialogFragment : DialogFragment() {
         val tunnelModeItem = view.findViewById<TextView>(R.id.tunnelModeItem)
         val splitTunnelingItem = view.findViewById<TextView>(R.id.splitTunnelingItem)
         val splitTunnelingAppsItem = view.findViewById<TextView>(R.id.splitTunnelingAppsItem)
+        val proxyItem = view.findViewById<TextView>(R.id.proxyItem)
         val autoclickItem = view.findViewById<TextView>(R.id.autoclickItem)
         val headlessCheckbox = view.findViewById<CheckBox>(R.id.headlessCheckbox)
         val reconnectCheckbox = view.findViewById<CheckBox>(R.id.reconnectOnStartCheckbox)
@@ -84,6 +87,13 @@ class SettingsDialogFragment : DialogFragment() {
             if (splitTunnelingMode != SplitTunnelingMode.NONE) {
                 showSplitTunnelingAppSelection()
             }
+        }
+
+        proxyItem.setOnClickListener {
+            ProxySettingsDialogFragment {
+                listener?.onReset()
+                dismiss()
+            }.show(childFragmentManager, ProxySettingsDialogFragment.TAG)
         }
 
         autoclickItem.setOnClickListener {
@@ -250,12 +260,12 @@ class SettingsDialogFragment : DialogFragment() {
                     adapter.items = buildAppList(searchEditText.text.toString(), includeSystemApps)
                 }
 
-                searchEditText.addTextChangedListener(object : android.text.TextWatcher {
+                searchEditText.addTextChangedListener(object : TextWatcher {
                     override fun beforeTextChanged(s: CharSequence?, start: Int, count: Int, after: Int) {}
                     override fun onTextChanged(s: CharSequence?, start: Int, before: Int, count: Int) {
                         adapter.items = buildAppList(s.toString(), includeSystemApps)
                     }
-                    override fun afterTextChanged(s: android.text.Editable?) {}
+                    override fun afterTextChanged(s: Editable?) {}
                 })
             }
         }.start()

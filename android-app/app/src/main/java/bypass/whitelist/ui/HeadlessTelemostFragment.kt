@@ -10,6 +10,7 @@ import bypass.whitelist.R
 import bypass.whitelist.tunnel.HeadlessRelayController
 import bypass.whitelist.tunnel.VpnStatus
 import bypass.whitelist.util.Prefs
+import org.json.JSONObject
 
 class HeadlessTelemostFragment : Fragment() {
 
@@ -38,7 +39,7 @@ class HeadlessTelemostFragment : Fragment() {
                 host?.onJoinStatus(status)
                 when (status) {
                     VpnStatus.STARTING -> {
-                        val params = org.json.JSONObject().apply {
+                        val params = JSONObject().apply {
                             put("joinLink", joinLink)
                             put("displayName", displayName)
                             put("tunnelMode", tunnelMode)

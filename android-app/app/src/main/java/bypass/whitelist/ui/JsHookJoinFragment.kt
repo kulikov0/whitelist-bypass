@@ -29,8 +29,10 @@ import bypass.whitelist.util.Ports
 import bypass.whitelist.util.DESKTOP_USER_AGENT
 import bypass.whitelist.util.Prefs
 import bypass.whitelist.util.maskUrl
+import java.net.HttpURLConnection
 import java.net.Inet4Address
 import java.net.InetAddress
+import java.net.URL
 
 private data class HookKey(val isPion: Boolean, val platform: CallPlatform)
 
@@ -203,7 +205,7 @@ class JsHookJoinFragment : Fragment() {
 
     private fun stripCsp(url: String, request: WebResourceRequest): WebResourceResponse? {
         return try {
-            val conn = java.net.URL(url).openConnection() as java.net.HttpURLConnection
+            val conn = URL(url).openConnection() as HttpURLConnection
             conn.requestMethod = "GET"
             request.requestHeaders?.forEach { (key, value) -> conn.setRequestProperty(key, value) }
             val headers = mutableMapOf<String, String>()

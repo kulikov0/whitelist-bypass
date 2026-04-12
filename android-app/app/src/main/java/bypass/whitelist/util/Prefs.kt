@@ -67,4 +67,27 @@ object Prefs {
     var socksPort: Long
         get() = prefs.getLong(PrefsKeys.SOCKS_PORT, Ports.DEFAULT_SOCKS)
         set(value) = prefs.edit { putLong(PrefsKeys.SOCKS_PORT, value) }
+
+    var socksAuthMode: SocksAuthMode
+        get() {
+            val name = prefs.getString(PrefsKeys.SOCKS_AUTH_MODE, SocksAuthMode.AUTO.name)!!
+            return try {
+                SocksAuthMode.valueOf(name)
+            } catch (_: IllegalArgumentException) {
+                SocksAuthMode.AUTO
+            }
+        }
+        set(value) = prefs.edit { putString(PrefsKeys.SOCKS_AUTH_MODE, value.name) }
+
+    var socksUser: String
+        get() = prefs.getString(PrefsKeys.SOCKS_USER, "")!!
+        set(value) = prefs.edit { putString(PrefsKeys.SOCKS_USER, value) }
+
+    var socksPass: String
+        get() = prefs.getString(PrefsKeys.SOCKS_PASS, "")!!
+        set(value) = prefs.edit { putString(PrefsKeys.SOCKS_PASS, value) }
+
+    var proxyOnly: Boolean
+        get() = prefs.getBoolean(PrefsKeys.PROXY_ONLY, false)
+        set(value) = prefs.edit { putBoolean(PrefsKeys.PROXY_ONLY, value) }
 }

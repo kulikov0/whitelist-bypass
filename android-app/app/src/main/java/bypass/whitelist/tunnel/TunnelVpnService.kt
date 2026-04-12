@@ -11,7 +11,9 @@ import android.os.Build
 import android.os.ParcelFileDescriptor
 import android.util.Log
 import bypass.whitelist.MainActivity
+import bypass.whitelist.R
 import bypass.whitelist.util.Ports
+import bypass.whitelist.util.Callback
 import bypass.whitelist.util.Prefs
 import bypass.whitelist.util.SocksAuth
 import bypass.whitelist.util.Vpn
@@ -24,11 +26,11 @@ class TunnelVpnService : VpnService() {
         const val CHANNEL_ID = "vpn_channel"
         const val NOTIFICATION_ID = 1
         const val ACTION_STOP = "bypass.whitelist.STOP_VPN"
-        var instance: TunnelVpnService? = null
-        var onDisconnect: (() -> Unit)? = null
+        @Volatile var instance: TunnelVpnService? = null
+        @Volatile var onDisconnect: Callback? = null
     }
 
-    var isRunning: Boolean = false
+    @Volatile var isRunning: Boolean = false
     private var vpnFd: ParcelFileDescriptor? = null
     private var tun2socksThread: Thread? = null
 
@@ -56,6 +58,7 @@ class TunnelVpnService : VpnService() {
         nm.notify(NOTIFICATION_ID, buildNotification(getString(status.labelRes)))
     }
 
+    @Synchronized
     fun stop() {
         if (!isRunning) return
         isRunning = false
@@ -180,12 +183,12 @@ class TunnelVpnService : VpnService() {
             Notification.Builder(this)
         }
         return builder
-            .setContentTitle("VPN active")
+            .setContentTitle(getString(R.string.notification_vpn_title))
             .setContentText(text)
             .setSmallIcon(android.R.drawable.ic_lock_lock)
             .setOngoing(true)
             .setContentIntent(openPending)
-            .addAction(Notification.Action.Builder(null, "Disconnect", stopPending).build())
+            .addAction(Notification.Action.Builder(null, getString(R.string.notification_disconnect), stopPending).build())
             .build()
     }
 }

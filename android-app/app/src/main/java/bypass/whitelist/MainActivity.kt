@@ -16,6 +16,7 @@ import androidx.core.view.ViewCompat
 import androidx.core.view.WindowInsetsCompat
 import bypass.whitelist.tunnel.CallPlatform
 import bypass.whitelist.tunnel.TunnelMode
+import bypass.whitelist.tunnel.ProxyService
 import bypass.whitelist.tunnel.TunnelVpnService
 import bypass.whitelist.tunnel.VpnStatus
 import bypass.whitelist.ui.HeadlessTelemostFragment
@@ -90,6 +91,7 @@ class MainActivity : AppCompatActivity(), SettingsDialogFragment.Listener, JoinF
         findViewById<View>(R.id.clearButton).setOnClickListener { urlInput.setText("") }
 
         TunnelVpnService.onDisconnect = { runOnUiThread { resetState() } }
+        ProxyService.onDisconnect = { runOnUiThread { resetState() } }
 
         VpnService.prepare(this)?.let { vpnPrepLauncher.launch(it) }
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
@@ -109,6 +111,8 @@ class MainActivity : AppCompatActivity(), SettingsDialogFragment.Listener, JoinF
     override fun onDestroy() {
         TunnelVpnService.onDisconnect = null
         TunnelVpnService.instance?.stop()
+        ProxyService.onDisconnect = null
+        ProxyService.instance?.stop()
         logCtrl.close()
         super.onDestroy()
     }
@@ -140,6 +144,7 @@ class MainActivity : AppCompatActivity(), SettingsDialogFragment.Listener, JoinF
 
     override fun onJoinStatus(status: VpnStatus) {
         TunnelVpnService.instance?.updateStatus(status)
+        ProxyService.instance?.updateStatus(status)
         runOnUiThread {
             statusCtrl.setStatus(status)
             if (status == VpnStatus.TUNNEL_ACTIVE) statusCtrl.setConnected(true)
@@ -147,6 +152,12 @@ class MainActivity : AppCompatActivity(), SettingsDialogFragment.Listener, JoinF
     }
 
     override fun requestVpn() {
+        if (Prefs.proxyOnly) {
+            logCtrl.append("Proxy only mode, skipping VPN")
+            startService(Intent(this, ProxyService::class.java))
+            onJoinStatus(VpnStatus.TUNNEL_ACTIVE)
+            return
+        }
         val intent = VpnService.prepare(this)
         if (intent != null) vpnLauncher.launch(intent) else startVpnService()
     }
@@ -197,6 +208,7 @@ class MainActivity : AppCompatActivity(), SettingsDialogFragment.Listener, JoinF
     private fun fullReset() {
         resetState()
         TunnelVpnService.instance?.stop()
+        ProxyService.instance?.stop()
     }
 
     private fun removeJoinFragment() {
@@ -204,7 +216,7 @@ class MainActivity : AppCompatActivity(), SettingsDialogFragment.Listener, JoinF
         if (fragment != null) {
             supportFragmentManager.beginTransaction()
                 .remove(fragment)
-                .commitNow()
+                .commitNowAllowingStateLoss()
         }
     }
 

@@ -43,6 +43,16 @@
                 android:textSize="16sp" />
 
             <TextView
+                android:id="@+id/proxyItem"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:background="?attr/selectableItemBackground"
+                android:paddingHorizontal="24dp"
+                android:paddingVertical="14dp"
+                android:text="@string/menu_proxy_settings"
+                android:textSize="16sp" />
+
+            <TextView
                 android:id="@+id/autoclickItem"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"

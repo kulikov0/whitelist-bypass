@@ -10,13 +10,18 @@ import android.webkit.WebResourceResponse
 import android.webkit.WebView
 import android.webkit.WebViewClient
 import androidx.appcompat.app.AppCompatActivity
+import bypass.whitelist.util.DESKTOP_USER_AGENT
+import bypass.whitelist.util.ParamCallback
+import org.json.JSONObject
+import java.net.HttpURLConnection
+import java.net.URL
 
 @SuppressLint("SetJavaScriptEnabled")
 class VkCaptchaWebView(
     private val activity: AppCompatActivity,
     private val webView: WebView,
-    private val onStatus: (String) -> Unit,
-    private val onToken: (String) -> Unit,
+    private val onStatus: ParamCallback<String>,
+    private val onToken: ParamCallback<String>,
 ) {
 
     private val authScript by lazy {
@@ -41,7 +46,7 @@ class VkCaptchaWebView(
             javaScriptEnabled = true
             domStorageEnabled = true
             allowContentAccess = true
-            userAgentString = bypass.whitelist.util.DESKTOP_USER_AGENT
+            userAgentString = DESKTOP_USER_AGENT
         }
 
         webView.addJavascriptInterface(CaptchaBridge(), "AndroidBridge")
@@ -112,7 +117,7 @@ class VkCaptchaWebView(
         fun VKCaptchaGetResult(json: String) {
             Log.d("CAPTCHA", "VKCaptchaGetResult: ${json.take(200)}")
             val token = try {
-                org.json.JSONObject(json).getString("token")
+                JSONObject(json).getString("token")
             } catch (e: Exception) { json }
             webView.post {
                 webView.evaluateJavascript("if(typeof retryCaptcha==='function')retryCaptcha('${token.replace("'", "\\'")}');", null)
@@ -130,7 +135,7 @@ class VkCaptchaWebView(
 
     private fun stripHeaders(url: String, request: WebResourceRequest): WebResourceResponse? {
         return try {
-            val conn = java.net.URL(url).openConnection() as java.net.HttpURLConnection
+            val conn = URL(url).openConnection() as HttpURLConnection
             conn.requestMethod = request.method ?: "GET"
             request.requestHeaders?.forEach { (key, value) -> conn.setRequestProperty(key, value) }
             val headers = mutableMapOf<String, String>()

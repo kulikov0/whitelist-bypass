@@ -39,5 +39,19 @@
     <string name="vpn_port_busy">Port %1$d busy</string>
     <string name="action_required_captcha">Action required (captcha)</string>
     <string name="menu_headless">Headless</string>
+    <string name="menu_proxy_settings">Proxy settings</string>
+    <string name="proxy_settings_title">Proxy</string>
+    <string name="proxy_port_label">SOCKS5 port</string>
+    <string name="proxy_auth_mode_label">Authentication</string>
+    <string name="proxy_auth_auto">Auto</string>
+    <string name="proxy_auth_manual">Manual</string>
+    <string name="proxy_username_hint">Username</string>
+    <string name="proxy_password_hint">Password</string>
+    <string name="proxy_copy">Copy proxy URL</string>
+    <string name="proxy_copied">Copied to clipboard</string>
+    <string name="proxy_only_label">Proxy only (no VPN)</string>
+    <string name="notification_vpn_title">VPN active</string>
+    <string name="notification_proxy_title">Proxy active</string>
+    <string name="notification_disconnect">Disconnect</string>
     <string name="settings_close">Close</string>
 </resources>

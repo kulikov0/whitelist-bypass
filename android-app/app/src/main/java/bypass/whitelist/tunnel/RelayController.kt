@@ -1,6 +1,7 @@
 package bypass.whitelist.tunnel
 
 import android.util.Log
+import bypass.whitelist.util.ParamCallback
 import bypass.whitelist.util.Ports
 import bypass.whitelist.util.Prefs
 import bypass.whitelist.util.SocksAuth
@@ -14,8 +15,8 @@ import java.net.InetAddress
 
 class RelayController(
     private val nativeLibDir: String,
-    private val onLog: (String) -> Unit,
-    private val onStatus: (VpnStatus) -> Unit,
+    private val onLog: ParamCallback<String>,
+    private val onStatus: ParamCallback<VpnStatus>,
 ) {
     private var dcThread: Thread? = null
     private var pionThread: Thread? = null

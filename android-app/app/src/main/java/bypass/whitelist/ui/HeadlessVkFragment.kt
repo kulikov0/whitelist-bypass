@@ -6,6 +6,7 @@ import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
 import android.webkit.WebView
+import androidx.appcompat.app.AppCompatActivity
 import androidx.fragment.app.Fragment
 import bypass.whitelist.R
 import bypass.whitelist.util.BLANK_URL
@@ -53,7 +54,7 @@ class HeadlessVkFragment : Fragment() {
         relay.start()
 
         captchaView = VkCaptchaWebView(
-            requireActivity() as androidx.appcompat.app.AppCompatActivity,
+            requireActivity() as AppCompatActivity,
             webView,
             onStatus = { message -> host?.onJoinStatusText(message) },
         ) { joinJson ->
