@@ -118,8 +118,9 @@ export class RendererTabManager {
     const tab = this.tabs[tabId];
     if (!tab) return;
     tab.relayLogs += (tab.relayLogs ? '\n' : '') + msg;
-    if (tab.headless) this.parseHeadlessLog(tabId, msg);
-    if (tabId === this.activeTabId) {
+    let rendered = false;
+    if (tab.headless) rendered = this.parseHeadlessLog(tabId, msg);
+    if (tabId === this.activeTabId && !rendered) {
       const el = document.getElementById('relayLog');
       if (el) {
         if (el.textContent!.length > 0) el.textContent += '\n';
@@ -129,41 +130,45 @@ export class RendererTabManager {
     }
   }
 
-  private parseHeadlessLog(tabId: string, msg: string): void {
+  private parseHeadlessLog(tabId: string, msg: string): boolean {
     const tab = this.tabs[tabId];
-    if (!tab) return;
+    if (!tab) return false;
     const trimmed = msg.trim();
+    let changed = false;
 
     if (trimmed === HeadlessLogMarker.CALL_CREATED) {
       tab.callInfo = {};
       tab.headlessStatus = 'Call created';
+      changed = true;
     }
     if (trimmed.includes(HeadlessLogMarker.JOIN_LINK)) {
       if (!tab.callInfo) tab.callInfo = {};
       tab.callInfo.joinLink = trimmed.split(HeadlessLogMarker.JOIN_LINK)[1].trim();
+      changed = true;
     }
     if (trimmed.includes(HeadlessLogMarker.SHORT_LINK)) {
       if (!tab.callInfo) tab.callInfo = {};
       tab.callInfo.shortLink = trimmed.split(HeadlessLogMarker.SHORT_LINK)[1].trim();
+      changed = true;
     }
     if (trimmed.includes(HeadlessLogMarker.TURN)) {
       if (!tab.callInfo) tab.callInfo = {};
       tab.callInfo.turn = trimmed.split(HeadlessLogMarker.TURN)[1].trim();
+      changed = true;
     }
     if (trimmed.includes(HeadlessLogMarker.PROTOCOL)) {
       if (!tab.callInfo) tab.callInfo = {};
       tab.callInfo.protocol = trimmed.split(HeadlessLogMarker.PROTOCOL)[1].trim();
-    }
-    if (trimmed === HeadlessLogMarker.TUNNEL_CONNECTED) {
-      tab.tunnelConnected = true;
-      tab.headlessStatus = 'Tunnel connected';
+      changed = true;
     }
     if (trimmed.includes('[FATAL]')) {
       const fatalMessage = trimmed.split('[FATAL]')[1]?.trim() || 'fatal error';
       tab.headlessStatus = 'Disconnected: ' + fatalMessage;
       tab.tunnelConnected = false;
+      changed = true;
     }
-    if (tabId === this.activeTabId) this.onRender();
+    if (changed && tabId === this.activeTabId) this.onRender();
+    return changed;
   }
 
   setTunnelMode(mode: string): void {
