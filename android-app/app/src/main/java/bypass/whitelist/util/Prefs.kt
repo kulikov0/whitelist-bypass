@@ -90,4 +90,23 @@ object Prefs {
     var proxyOnly: Boolean
         get() = prefs.getBoolean(PrefsKeys.PROXY_ONLY, false)
         set(value) = prefs.edit { putBoolean(PrefsKeys.PROXY_ONLY, value) }
+
+    var dnsMode: DnsMode
+        get() {
+            val name = prefs.getString(PrefsKeys.DNS_MODE, DnsMode.SYSTEM.name)!!
+            return try {
+                DnsMode.valueOf(name)
+            } catch (_: IllegalArgumentException) {
+                DnsMode.SYSTEM
+            }
+        }
+        set(value) = prefs.edit { putString(PrefsKeys.DNS_MODE, value.name) }
+
+    var dnsPrimary: String
+        get() = prefs.getString(PrefsKeys.DNS_PRIMARY, Vpn.DNS_PRIMARY)!!
+        set(value) = prefs.edit { putString(PrefsKeys.DNS_PRIMARY, value) }
+
+    var dnsSecondary: String
+        get() = prefs.getString(PrefsKeys.DNS_SECONDARY, Vpn.DNS_SECONDARY)!!
+        set(value) = prefs.edit { putString(PrefsKeys.DNS_SECONDARY, value) }
 }

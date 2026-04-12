@@ -106,6 +106,7 @@ class VkCaptchaWebView(
 
         @JavascriptInterface
         fun setStatus(message: String) {
+            if (message.startsWith("ortc ERROR")) return
             Log.d("CAPTCHA", "status: $message")
             activity.runOnUiThread { onStatus(message) }
         }

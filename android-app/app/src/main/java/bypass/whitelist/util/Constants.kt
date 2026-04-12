@@ -31,6 +31,11 @@ object SocksAuth {
         get() = if (Prefs.socksAuthMode == SocksAuthMode.MANUAL) Prefs.socksPass else autoPass
 }
 
+enum class DnsMode(val label: String) {
+    SYSTEM("System"),
+    CUSTOM("Custom"),
+}
+
 object PrefsKeys {
     const val CONNECT_ON_START = "connect_on_start"
     const val URL = "url"
@@ -46,6 +51,9 @@ object PrefsKeys {
     const val SOCKS_USER = "socks_user"
     const val SOCKS_PASS = "socks_pass"
     const val PROXY_ONLY = "proxy_only"
+    const val DNS_MODE = "dns_mode"
+    const val DNS_PRIMARY = "dns_primary"
+    const val DNS_SECONDARY = "dns_secondary"
 }
 
 const val BLANK_URL = "about:blank"

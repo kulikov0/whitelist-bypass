@@ -50,6 +50,13 @@
     <string name="proxy_copy">Copy proxy URL</string>
     <string name="proxy_copied">Copied to clipboard</string>
     <string name="proxy_only_label">Proxy only (no VPN)</string>
+    <string name="menu_dns_settings">DNS settings</string>
+    <string name="dns_settings_title">DNS</string>
+    <string name="dns_mode_label">DNS mode</string>
+    <string name="dns_mode_system">System</string>
+    <string name="dns_mode_custom">Custom</string>
+    <string name="dns_primary_hint">Primary DNS</string>
+    <string name="dns_secondary_hint">Secondary DNS</string>
     <string name="notification_vpn_title">VPN active</string>
     <string name="notification_proxy_title">Proxy active</string>
     <string name="notification_disconnect">Disconnect</string>

@@ -59,6 +59,7 @@ class SettingsDialogFragment : DialogFragment() {
         val splitTunnelingItem = view.findViewById<TextView>(R.id.splitTunnelingItem)
         val splitTunnelingAppsItem = view.findViewById<TextView>(R.id.splitTunnelingAppsItem)
         val proxyItem = view.findViewById<TextView>(R.id.proxyItem)
+        val dnsItem = view.findViewById<TextView>(R.id.dnsItem)
         val autoclickItem = view.findViewById<TextView>(R.id.autoclickItem)
         val headlessCheckbox = view.findViewById<CheckBox>(R.id.headlessCheckbox)
         val reconnectCheckbox = view.findViewById<CheckBox>(R.id.reconnectOnStartCheckbox)
@@ -94,6 +95,10 @@ class SettingsDialogFragment : DialogFragment() {
                 listener?.onReset()
                 dismiss()
             }.show(childFragmentManager, ProxySettingsDialogFragment.TAG)
+        }
+
+        dnsItem.setOnClickListener {
+            DnsSettingsDialogFragment().show(childFragmentManager, DnsSettingsDialogFragment.TAG)
         }
 
         autoclickItem.setOnClickListener {

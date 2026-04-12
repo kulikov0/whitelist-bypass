@@ -13,6 +13,7 @@ import android.util.Log
 import bypass.whitelist.MainActivity
 import bypass.whitelist.R
 import bypass.whitelist.util.Callback
+import bypass.whitelist.util.DnsMode
 import bypass.whitelist.util.Prefs
 import bypass.whitelist.util.SocksAuth
 import bypass.whitelist.util.Vpn
@@ -86,12 +87,26 @@ class TunnelVpnService : VpnService() {
             .addRoute(Vpn.ROUTE, 0)
             .setMtu(Vpn.MTU)
 
-        val systemDns = getSystemDnsServers()
-        if (systemDns.isNotEmpty()) {
-            for (dns in systemDns) builder.addDnsServer(dns)
-        } else {
-            builder.addDnsServer(Vpn.DNS_PRIMARY)
-            builder.addDnsServer(Vpn.DNS_SECONDARY)
+        when (Prefs.dnsMode) {
+            DnsMode.SYSTEM -> {
+                val systemDns = getSystemDnsServers()
+                if (systemDns.isNotEmpty()) {
+                    for (dns in systemDns) builder.addDnsServer(dns)
+                } else {
+                    builder.addDnsServer(Vpn.DNS_PRIMARY)
+                    builder.addDnsServer(Vpn.DNS_SECONDARY)
+                }
+            }
+            DnsMode.CUSTOM -> {
+                val primary = Prefs.dnsPrimary.trim()
+                val secondary = Prefs.dnsSecondary.trim()
+                if (primary.isNotEmpty()) builder.addDnsServer(primary)
+                if (secondary.isNotEmpty()) builder.addDnsServer(secondary)
+                if (primary.isEmpty() && secondary.isEmpty()) {
+                    builder.addDnsServer(Vpn.DNS_PRIMARY)
+                    builder.addDnsServer(Vpn.DNS_SECONDARY)
+                }
+            }
         }
 
         try {

@@ -1,0 +1,58 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:orientation="vertical"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:padding="12dp">
+
+    <TextView
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="@string/dns_mode_label"
+        android:textSize="14sp" />
+
+    <RadioGroup
+        android:id="@+id/dnsModeGroup"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal">
+
+        <RadioButton
+            android:id="@+id/dnsModeSystem"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="@string/dns_mode_system" />
+
+        <RadioButton
+            android:id="@+id/dnsModeCustom"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginStart="16dp"
+            android:text="@string/dns_mode_custom" />
+
+    </RadioGroup>
+
+    <LinearLayout
+        android:id="@+id/customDnsContainer"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="vertical"
+        android:visibility="gone">
+
+        <EditText
+            android:id="@+id/dnsPrimaryInput"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:hint="@string/dns_primary_hint"
+            android:inputType="text" />
+
+        <EditText
+            android:id="@+id/dnsSecondaryInput"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:hint="@string/dns_secondary_hint"
+            android:inputType="text" />
+
+    </LinearLayout>
+
+</LinearLayout>
