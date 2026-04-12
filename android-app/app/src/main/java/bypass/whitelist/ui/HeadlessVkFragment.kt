@@ -38,11 +38,7 @@ class HeadlessVkFragment : Fragment() {
             requireContext().applicationInfo.nativeLibraryDir,
             onLog = { message ->
                 if (message.contains("ERROR:")) {
-                    activity?.runOnUiThread {
-                        webView.evaluateJavascript(
-                            "document.getElementById('status').textContent='${message.replace("'", "\\'")}'", null
-                        )
-                    }
+                    host?.onJoinStatusText(message)
                 }
                 host?.appendLog(message)
             },
@@ -56,7 +52,11 @@ class HeadlessVkFragment : Fragment() {
         )
         relay.start()
 
-        captchaView = VkCaptchaWebView(requireActivity() as androidx.appcompat.app.AppCompatActivity, webView) { joinJson ->
+        captchaView = VkCaptchaWebView(
+            requireActivity() as androidx.appcompat.app.AppCompatActivity,
+            webView,
+            onStatus = { message -> host?.onJoinStatusText(message) },
+        ) { joinJson ->
             Log.d("HEADLESS-VK", "Auth complete, sending join params to relay")
             val params = JSONObject(joinJson)
             params.put("tunnelMode", Prefs.tunnelMode.relayArg)

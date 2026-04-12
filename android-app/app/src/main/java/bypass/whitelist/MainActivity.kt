@@ -134,6 +134,10 @@ class MainActivity : AppCompatActivity(), SettingsDialogFragment.Listener, JoinF
         logCtrl.append(message)
     }
 
+    override fun onJoinStatusText(text: String) {
+        runOnUiThread { statusCtrl.setStatusText(text) }
+    }
+
     override fun onJoinStatus(status: VpnStatus) {
         TunnelVpnService.instance?.updateStatus(status)
         runOnUiThread {

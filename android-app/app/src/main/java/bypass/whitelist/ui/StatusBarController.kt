@@ -45,6 +45,11 @@ class StatusBarController(
         statusBar.setBackgroundColor(activity.getColor(colorRes))
     }
 
+    fun setStatusText(text: String) {
+        statusBar.text = text
+        statusBar.setBackgroundColor(activity.getColor(R.color.status_connecting))
+    }
+
     fun setIdle() {
         statusBar.text = activity.getString(R.string.status_format, tunnelMode.label, activity.getString(R.string.status_idle))
         statusBar.setBackgroundColor(activity.getColor(R.color.status_idle))

@@ -5,7 +5,11 @@
   var ANON_NAME = window.ANON_NAME || 'Guest';
 
   function log(msg) { console.log('[AUTH] ' + msg); }
-  function setStatus(msg) { document.getElementById('status').textContent = msg; }
+  function setStatus(msg) {
+    if (typeof AndroidCaptchaBridge !== 'undefined' && AndroidCaptchaBridge.setStatus) {
+      AndroidCaptchaBridge.setStatus(msg);
+    }
+  }
 
   async function getText(url) {
     try {

@@ -5,7 +5,6 @@ import android.util.Log
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
-import android.widget.TextView
 import androidx.fragment.app.Fragment
 import bypass.whitelist.R
 import bypass.whitelist.tunnel.HeadlessRelayController
@@ -15,7 +14,6 @@ import bypass.whitelist.util.Prefs
 class HeadlessTelemostFragment : Fragment() {
 
     private lateinit var relay: HeadlessRelayController
-    private lateinit var statusText: TextView
 
     private val host: JoinFragmentHost?
         get() = activity as? JoinFragmentHost
@@ -27,9 +25,6 @@ class HeadlessTelemostFragment : Fragment() {
     ): View = inflater.inflate(R.layout.fragment_headless_telemost, container, false)
 
     override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
-        statusText = view.findViewById(R.id.statusText)
-        statusText.setText(R.string.headless_telemost_starting)
-
         val joinLink = requireArguments().getString(ARG_URL, "")
         val displayName = Prefs.autoclickName
         val tunnelMode = Prefs.tunnelMode.relayArg
@@ -40,7 +35,6 @@ class HeadlessTelemostFragment : Fragment() {
             onLog = { host?.appendLog(it) },
             onStatus = { status ->
                 Log.d("TM-HEADLESS", "status: $status")
-                activity?.runOnUiThread { statusText.text = status.name }
                 host?.onJoinStatus(status)
                 when (status) {
                     VpnStatus.STARTING -> {

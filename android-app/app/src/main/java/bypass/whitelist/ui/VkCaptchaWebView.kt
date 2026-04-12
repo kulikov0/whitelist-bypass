@@ -15,6 +15,7 @@ import androidx.appcompat.app.AppCompatActivity
 class VkCaptchaWebView(
     private val activity: AppCompatActivity,
     private val webView: WebView,
+    private val onStatus: (String) -> Unit,
     private val onToken: (String) -> Unit,
 ) {
 
@@ -26,7 +27,6 @@ class VkCaptchaWebView(
         <!DOCTYPE html>
         <html>
         <body>
-        <div id="status" style="text-align:center;padding:20px;font-family:sans-serif;font-size:16px;">Initializing...</div>
         <iframe id="captcha" style="width:100%;height:100vh;border:none;display:none;"></iframe>
         </body>
         </html>
@@ -97,6 +97,12 @@ class VkCaptchaWebView(
         fun onJoined(json: String) {
             Log.d("CAPTCHA", "onJoined: ${json.take(200)}")
             onToken(json)
+        }
+
+        @JavascriptInterface
+        fun setStatus(message: String) {
+            Log.d("CAPTCHA", "status: $message")
+            activity.runOnUiThread { onStatus(message) }
         }
     }
 

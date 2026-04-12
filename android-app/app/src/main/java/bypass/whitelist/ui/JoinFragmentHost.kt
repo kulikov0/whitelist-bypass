@@ -5,5 +5,6 @@ import bypass.whitelist.tunnel.VpnStatus
 interface JoinFragmentHost {
     fun appendLog(message: String)
     fun onJoinStatus(status: VpnStatus)
+    fun onJoinStatusText(text: String)
     fun requestVpn()
 }
