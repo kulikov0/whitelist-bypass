@@ -111,6 +111,14 @@ function bindHeadlessEvents(): void {
   document.getElementById('headlessShortLink')!.addEventListener('click', (event) => {
     copyToClipboard((event.target as HTMLElement).textContent || '');
   });
+  document.getElementById('headlessInfo')!.addEventListener('click', (event) => {
+    const target = event.target as HTMLElement;
+    const copyTarget = target.dataset.copy;
+    if (copyTarget) {
+      const sourceEl = document.getElementById(copyTarget);
+      if (sourceEl) copyToClipboard(sourceEl.textContent || '');
+    }
+  });
 }
 
 function openSettings(): void {

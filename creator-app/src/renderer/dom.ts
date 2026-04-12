@@ -68,7 +68,6 @@ export function renderContent(tm: RendererTabManager): void {
       callInfoVK.style.display = 'none';
       callInfoTM.style.display = 'none';
     }
-    document.getElementById('headlessTunnel')!.style.display = activeTab.tunnelConnected ? 'block' : 'none';
   } else {
     toolbar.style.display = 'flex';
     headlessInfo.style.display = 'none';

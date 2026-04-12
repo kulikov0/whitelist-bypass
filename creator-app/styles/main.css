@@ -289,6 +289,19 @@ body {
   cursor: pointer;
 }
 
+.headless-copy {
+  width: 16px;
+  height: 16px;
+  margin-left: 6px;
+  cursor: pointer;
+  vertical-align: middle;
+  filter: invert(0.53);
+}
+
+.headless-copy:hover {
+  filter: invert(0.88);
+}
+
 .headless-tunnel {
   margin-top: 16px;
   display: none;

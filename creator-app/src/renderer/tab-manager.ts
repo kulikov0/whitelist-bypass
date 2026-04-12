@@ -158,6 +158,11 @@ export class RendererTabManager {
       tab.tunnelConnected = true;
       tab.headlessStatus = 'Tunnel connected';
     }
+    if (trimmed.includes('[FATAL]')) {
+      const fatalMessage = trimmed.split('[FATAL]')[1]?.trim() || 'fatal error';
+      tab.headlessStatus = 'Disconnected: ' + fatalMessage;
+      tab.tunnelConnected = false;
+    }
     if (tabId === this.activeTabId) this.onRender();
   }
 
