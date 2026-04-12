@@ -12,7 +12,6 @@ import android.os.ParcelFileDescriptor
 import android.util.Log
 import bypass.whitelist.MainActivity
 import bypass.whitelist.R
-import bypass.whitelist.util.Ports
 import bypass.whitelist.util.Callback
 import bypass.whitelist.util.Prefs
 import bypass.whitelist.util.SocksAuth

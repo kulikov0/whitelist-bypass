@@ -494,7 +494,7 @@ func (b *Bridge) run(callInfo *CallInfo, cookieStr string, cfg VKConfig) {
 
 		log.Println("[vk-ws] Connecting...")
 		if err := b.connectVKWs(makeWSURL(wsEndpoint)); err != nil {
-			log.Printf("[vk-ws] Connect failed: %v, retrying in 5s...", err)
+			log.Printf("[vk-ws] Connect failed: %s, retrying in 5s...", common.MaskError(err))
 			time.Sleep(5 * time.Second)
 			continue
 		}
@@ -509,7 +509,7 @@ func (b *Bridge) run(callInfo *CallInfo, cookieStr string, cfg VKConfig) {
 		})
 
 		err := b.readLoop()
-		log.Printf("[vk-ws] Closed: %v", err)
+		log.Printf("[vk-ws] Closed: %s", common.MaskError(err))
 
 		b.mu.Lock()
 		b.vkWs = nil

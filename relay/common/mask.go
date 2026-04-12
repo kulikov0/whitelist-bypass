@@ -5,6 +5,30 @@ import (
 	"net"
 )
 
+func MaskError(err error) string {
+	if err == nil {
+		return ""
+	}
+	if opErr, ok := err.(*net.OpError); ok {
+		msg := opErr.Op
+		if opErr.Net != "" {
+			msg += " " + opErr.Net
+		}
+		if opErr.Source != nil {
+			msg += " " + MaskAddr(opErr.Source.String())
+		}
+		if opErr.Source != nil && opErr.Addr != nil {
+			msg += "->"
+		}
+		if opErr.Addr != nil {
+			msg += MaskAddr(opErr.Addr.String())
+		}
+		msg += ": " + opErr.Err.Error()
+		return msg
+	}
+	return err.Error()
+}
+
 // MaskAddr masks the sensitive portion of an address for logging.
 func MaskAddr(addr string) string {
 	host, port, err := net.SplitHostPort(addr)

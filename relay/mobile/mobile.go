@@ -463,7 +463,7 @@ func (j *joinerRelay) handleSOCKS(conn net.Conn) {
 	logMsg("dc-joiner: CONNECT %d -> %s", id, common.MaskAddr(host))
 	j.send(id, msgConnect, []byte(host))
 	if err := <-sc.rdy; err != nil {
-		logMsg("dc-joiner: CONNECT %d failed: %v", id, err)
+		logMsg("dc-joiner: CONNECT %d failed: %s", id, common.MaskError(err))
 		conn.Write(common.ConnFail)
 		conn.Close()
 		j.conns.Delete(id)
@@ -557,12 +557,12 @@ func (c *creatorRelay) handleUDP(connID uint32, payload []byte) {
 
 	udpAddr, err := net.ResolveUDPAddr("udp", addr)
 	if err != nil {
-		logMsg("dc-creator: UDP resolve %s failed: %v", common.MaskAddr(addr), err)
+		logMsg("dc-creator: UDP resolve %s failed: %s", common.MaskAddr(addr), common.MaskError(err))
 		return
 	}
 	conn, err := net.DialUDP("udp", nil, udpAddr)
 	if err != nil {
-		logMsg("dc-creator: UDP dial %s failed: %v", common.MaskAddr(addr), err)
+		logMsg("dc-creator: UDP dial %s failed: %s", common.MaskAddr(addr), common.MaskError(err))
 		return
 	}
 	defer conn.Close()
@@ -583,8 +583,8 @@ func (c *creatorRelay) connect(connID uint32, addr string) {
 	logMsg("dc-creator: CONNECT %d -> %s", connID, common.MaskAddr(addr))
 	conn, err := net.DialTimeout("tcp", addr, 10e9)
 	if err != nil {
-		logMsg("dc-creator: CONNECT %d failed: %v", connID, err)
-		c.send(connID, msgConnectErr, []byte(err.Error()))
+		logMsg("dc-creator: CONNECT %d failed: %s", connID, common.MaskError(err))
+		c.send(connID, msgConnectErr, []byte(common.MaskError(err)))
 		return
 	}
 	c.conns.Store(connID, conn)
@@ -598,7 +598,7 @@ func (c *creatorRelay) connect(connID uint32, addr string) {
 		}
 		if err != nil {
 			if err != io.EOF {
-				logMsg("dc-creator: conn %d read error: %v", connID, err)
+				logMsg("dc-creator: conn %d read error: %s", connID, common.MaskError(err))
 			}
 			break
 		}

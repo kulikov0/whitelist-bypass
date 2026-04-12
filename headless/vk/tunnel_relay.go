@@ -266,8 +266,8 @@ func (u *TunnelRelay) connectTCP(connID uint32, addr string) {
 	log.Printf("[dc] CONNECT %d -> %s", connID, common.MaskAddr(addr))
 	conn, err := net.DialTimeout("tcp", addr, 10*time.Second)
 	if err != nil {
-		log.Printf("[dc] CONNECT %d failed: %v", connID, err)
-		u.sendDCFrame(connID, tunnel.MsgConnectErr, []byte(err.Error()))
+		log.Printf("[dc] CONNECT %d failed: %s", connID, common.MaskError(err))
+		u.sendDCFrame(connID, tunnel.MsgConnectErr, []byte(common.MaskError(err)))
 		return
 	}
 	dc := &dcConn{conn: conn, ch: make(chan []byte, 256)}
@@ -306,7 +306,7 @@ func (u *TunnelRelay) connectTCP(connID uint32, addr string) {
 		}
 		if err != nil {
 			if err != io.EOF {
-				log.Printf("[dc] conn %d read error: %v", connID, err)
+				log.Printf("[dc] conn %d read error: %s", connID, common.MaskError(err))
 			}
 			break
 		}

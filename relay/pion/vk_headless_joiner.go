@@ -210,17 +210,17 @@ func (h *VKHeadlessJoiner) joinCall() error {
 func (h *VKHeadlessJoiner) connectSFU() {
 	parsed, err := url.Parse(h.joinResp.Endpoint)
 	if err != nil {
-		h.logFn("headless: bad endpoint URL: %v", err)
+		h.logFn("headless: bad endpoint URL: %s", common.MaskError(err))
 		return
 	}
 
 	hostname := parsed.Hostname()
 	resolvedIP, err := requestResolve(hostname)
 	if err != nil {
-		h.logFn("headless: DNS resolve failed: %v", err)
+		h.logFn("headless: DNS resolve failed: %s", common.MaskError(err))
 		return
 	}
-	h.logFn("headless: resolved %s -> %s", hostname, resolvedIP)
+	h.logFn("headless: resolved %s -> %s", common.MaskAddr(hostname), common.MaskAddr(resolvedIP))
 
 	wsURL := h.joinResp.Endpoint +
 		"&platform=WEB" +
@@ -244,7 +244,7 @@ func (h *VKHeadlessJoiner) connectSFU() {
 
 	ws, _, err := dialer.Dial(wsURL, header)
 	if err != nil {
-		h.logFn("headless: WS connect failed: %v", err)
+		h.logFn("headless: WS connect failed: %s", common.MaskError(err))
 		return
 	}
 	h.vkMu.Lock()
@@ -314,7 +314,7 @@ func (h *VKHeadlessJoiner) readLoop() {
 	for {
 		_, msg, err := h.vkWs.ReadMessage()
 		if err != nil {
-			h.logFn("headless: WS closed: %v", err)
+			h.logFn("headless: WS closed: %s", common.MaskError(err))
 			return
 		}
 		if string(msg) == "ping" {

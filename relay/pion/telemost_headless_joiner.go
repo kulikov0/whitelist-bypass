@@ -733,7 +733,7 @@ func (j *TelemostHeadlessJoiner) parseICEServersFromHello(sh map[string]interfac
 				var err error
 				ip, err = requestResolve(host)
 				if err != nil {
-					j.logFn("telemost-joiner: resolve ICE host %s failed: %v", host, err)
+					j.logFn("telemost-joiner: resolve ICE host %s failed: %s", common.MaskAddr(host), common.MaskError(err))
 					continue
 				}
 				resolved[host] = ip
@@ -761,7 +761,7 @@ func (j *TelemostHeadlessJoiner) connectAndRun() {
 	}
 	ws, _, err := dialer.Dial(j.mediaURL, wsHeader)
 	if err != nil {
-		j.logFn("telemost-joiner: ERROR: ws connect: %v", err)
+		j.logFn("telemost-joiner: ERROR: ws connect: %s", common.MaskError(err))
 		common.EmitStatusError("ws connect failed")
 		return
 	}
@@ -787,7 +787,7 @@ func (j *TelemostHeadlessJoiner) connectAndRun() {
 	for {
 		_, raw, err := ws.ReadMessage()
 		if err != nil {
-			j.logFn("telemost-joiner: ws read error: %v", err)
+			j.logFn("telemost-joiner: ws read error: %s", common.MaskError(err))
 			break
 		}
 		j.handleMessage(raw)

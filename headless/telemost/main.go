@@ -541,7 +541,7 @@ func (b *Bridge) run() {
 		log.Println("[tm-ws] Connecting...")
 		ws, _, err := websocket.DefaultDialer.Dial(b.connInfo.MediaServerURL, wsHeader)
 		if err != nil {
-			log.Printf("[tm-ws] Connect failed: %v, retrying in 5s...", err)
+			log.Printf("[tm-ws] Connect failed: %s, retrying in 5s...", common.MaskError(err))
 			time.Sleep(5 * time.Second)
 			continue
 		}
@@ -569,7 +569,7 @@ func (b *Bridge) run() {
 		for {
 			_, raw, err := ws.ReadMessage()
 			if err != nil {
-				log.Printf("[tm-ws] Closed: %v", err)
+				log.Printf("[tm-ws] Closed: %s", common.MaskError(err))
 				break
 			}
 			b.handleMessage(raw)

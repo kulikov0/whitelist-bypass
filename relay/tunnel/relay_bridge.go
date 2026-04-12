@@ -176,8 +176,8 @@ func (rb *RelayBridge) connectTCP(connID uint32, addr string) {
 	rb.logFn("relay: CONNECT %d -> %s", connID, common.MaskAddr(addr))
 	conn, err := net.DialTimeout("tcp", addr, 10e9)
 	if err != nil {
-		rb.logFn("relay: CONNECT %d failed: %v", connID, err)
-		rb.send(connID, MsgConnectErr, []byte(err.Error()))
+		rb.logFn("relay: CONNECT %d failed: %s", connID, common.MaskError(err))
+		rb.send(connID, MsgConnectErr, []byte(common.MaskError(err)))
 		return
 	}
 	rb.conns.Store(connID, conn)
@@ -192,7 +192,7 @@ func (rb *RelayBridge) connectTCP(connID uint32, addr string) {
 		}
 		if err != nil {
 			if err != io.EOF {
-				rb.logFn("relay: conn %d read error: %v", connID, err)
+				rb.logFn("relay: conn %d read error: %s", connID, common.MaskError(err))
 			}
 			break
 		}
@@ -265,7 +265,7 @@ func (rb *RelayBridge) handleSOCKS(conn net.Conn) {
 	rb.send(id, MsgConnect, []byte(host))
 
 	if err := <-sc.rdy; err != nil {
-		rb.logFn("relay: SOCKS CONNECT %d failed: %v", id, err)
+		rb.logFn("relay: SOCKS CONNECT %d failed: %s", id, common.MaskError(err))
 		conn.Write(common.ConnFail)
 		conn.Close()
 		rb.conns.Delete(id)
