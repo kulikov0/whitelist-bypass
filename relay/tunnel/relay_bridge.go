@@ -29,6 +29,15 @@ type RelayBridge struct {
 	readBuf    int
 	ready      chan struct{}
 	once       sync.Once
+	socksUser  string
+	socksPass  string
+}
+
+func NewRelayBridgeWithAuth(tunnel DataTunnel, mode string, readBuf int, logFn func(string, ...any), socksUser, socksPass string) *RelayBridge {
+	rb := NewRelayBridge(tunnel, mode, readBuf, logFn)
+	rb.socksUser = socksUser
+	rb.socksPass = socksPass
+	return rb
 }
 
 func NewRelayBridge(tunnel DataTunnel, mode string, readBuf int, logFn func(string, ...any)) *RelayBridge {
@@ -223,7 +232,10 @@ func (rb *RelayBridge) handleSOCKS(conn net.Conn) {
 		conn.Close()
 		return
 	}
-	conn.Write(common.NoAuth)
+	if !common.NegotiateAuth(conn, buf, n, rb.socksUser, rb.socksPass) {
+		conn.Close()
+		return
+	}
 	n, err = conn.Read(buf)
 	if err != nil || n < 7 || buf[0] != common.Ver {
 		conn.Close()

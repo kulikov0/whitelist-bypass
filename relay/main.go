@@ -23,6 +23,8 @@ func main() {
 	mode := flag.String("mode", "", "joiner or creator")
 	wsPort := flag.Int("ws-port", 9000, "WebSocket port for browser connection")
 	socksPort := flag.Int("socks-port", 1080, "SOCKS5 proxy port (joiner mode only)")
+	socksUser := flag.String("socks-user", "", "SOCKS5 proxy username")
+	socksPass := flag.String("socks-pass", "", "SOCKS5 proxy password")
 	flag.String("local-ip", "", "local IP address (unused, passed via hook)")
 	flag.Parse()
 
@@ -46,7 +48,7 @@ func main() {
 	}
 
 	startJoinerBridge := func(tun tunnel.DataTunnel, readBuf int) {
-		rb := tunnel.NewRelayBridge(tun, "joiner", readBuf, log.Printf)
+		rb := tunnel.NewRelayBridgeWithAuth(tun, "joiner", readBuf, log.Printf, *socksUser, *socksPass)
 		rb.MarkReady()
 		go rb.ListenSOCKS(fmt.Sprintf("127.0.0.1:%d", *socksPort))
 	}
@@ -61,7 +63,7 @@ func main() {
 
 	switch *mode {
 	case "dc-joiner":
-		log.Fatal(mobile.StartJoiner(*wsPort, *socksPort, cb))
+		log.Fatal(mobile.StartJoiner(*wsPort, *socksPort, *socksUser, *socksPass, cb))
 	case "dc-creator":
 		log.Fatal(mobile.StartCreator(*wsPort, cb))
 	case "vk-video-joiner":

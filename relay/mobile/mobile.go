@@ -156,12 +156,14 @@ func listenWithRetry(port int, maxAttempts int) (net.Listener, int, error) {
 	return nil, 0, fmt.Errorf("no free port found starting from %d", port)
 }
 
-func StartJoiner(wsPort, socksPort int, cb LogCallback) error {
+func StartJoiner(wsPort, socksPort int, socksUser, socksPass string, cb LogCallback) error {
 	StopJoiner()
 	logCb = cb
 	j := &joinerRelay{
-		conns: sync.Map{},
-		ready: make(chan struct{}),
+		conns:     sync.Map{},
+		ready:     make(chan struct{}),
+		socksUser: socksUser,
+		socksPass: socksPass,
 	}
 	mux := http.NewServeMux()
 	mux.HandleFunc("/ws", j.handleWS)
@@ -219,6 +221,8 @@ type joinerRelay struct {
 	nextID     atomic.Uint32
 	ready      chan struct{}
 	once       sync.Once
+	socksUser  string
+	socksPass  string
 }
 
 func (j *joinerRelay) closeAll() {
@@ -411,7 +415,10 @@ func (j *joinerRelay) handleSOCKS(conn net.Conn) {
 		conn.Close()
 		return
 	}
-	conn.Write(common.NoAuth)
+	if !common.NegotiateAuth(conn, buf, n, j.socksUser, j.socksPass) {
+		conn.Close()
+		return
+	}
 	n, err = conn.Read(buf)
 	if err != nil || n < 7 || buf[0] != common.Ver {
 		conn.Write(common.GenFail)

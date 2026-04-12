@@ -2,6 +2,7 @@ package bypass.whitelist.tunnel
 
 import android.util.Log
 import bypass.whitelist.util.Ports
+import bypass.whitelist.util.SocksAuth
 import mobile.LogCallback
 import mobile.Mobile
 import java.io.BufferedWriter
@@ -55,12 +56,12 @@ class RelayController(
         }
         dcThread = Thread {
             try {
-                Mobile.startJoiner(Ports.DC_WS, Ports.SOCKS, cb)
+                Mobile.startJoiner(Ports.DC_WS, Ports.SOCKS, SocksAuth.user, SocksAuth.pass, cb)
             } catch (e: Exception) {
                 if (isRunning) onLog("Relay error: ${e.message}")
             }
         }.also { it.start() }
-        onLog("Relay started DC mode (SOCKS5 :${Ports.SOCKS}, WS :${Ports.DC_WS})")
+        onLog("Relay started DC mode (SOCKS5 ${SocksAuth.user}:${SocksAuth.pass}@127.0.0.1:${Ports.SOCKS}, WS :${Ports.DC_WS})")
     }
 
     private fun startPion(mode: TunnelMode, platform: CallPlatform) {
@@ -76,12 +77,14 @@ class RelayController(
                     relayBin.absolutePath,
                     "--mode", relayMode,
                     "--ws-port", "${Ports.PION_SIGNALING}",
-                    "--socks-port", "${Ports.SOCKS}"
+                    "--socks-port", "${Ports.SOCKS}",
+                    "--socks-user", SocksAuth.user,
+                    "--socks-pass", SocksAuth.pass
                 )
                 pb.redirectErrorStream(true)
                 val proc = pb.start()
                 synchronized(this) { pionProcess = proc }
-                onLog("Pion relay started mode=$relayMode (signaling :${Ports.PION_SIGNALING}, SOCKS5 :${Ports.SOCKS})")
+                onLog("Pion relay started mode=$relayMode (signaling :${Ports.PION_SIGNALING}, SOCKS5 ${SocksAuth.user}:${SocksAuth.pass}@127.0.0.1:${Ports.SOCKS})")
                 val stdinWriter = BufferedWriter(OutputStreamWriter(proc.outputStream))
                 proc.inputStream.bufferedReader().forEachLine { line ->
                     if (line.startsWith("RESOLVE:")) {

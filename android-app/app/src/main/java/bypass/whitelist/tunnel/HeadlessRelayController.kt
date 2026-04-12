@@ -2,6 +2,7 @@ package bypass.whitelist.tunnel
 
 import android.util.Log
 import bypass.whitelist.util.Ports
+import bypass.whitelist.util.SocksAuth
 import java.io.BufferedWriter
 import java.io.File
 import java.io.OutputStreamWriter
@@ -38,7 +39,9 @@ class HeadlessRelayController(
                     relayBin.absolutePath,
                     "--mode", relayMode,
                     "--ws-port", "${Ports.PION_SIGNALING}",
-                    "--socks-port", "${Ports.SOCKS}"
+                    "--socks-port", "${Ports.SOCKS}",
+                    "--socks-user", SocksAuth.user,
+                    "--socks-pass", SocksAuth.pass
                 )
                 processBuilder.redirectErrorStream(true)
                 val proc = processBuilder.start()
@@ -46,7 +49,7 @@ class HeadlessRelayController(
                     process = proc
                     stdinWriter = BufferedWriter(OutputStreamWriter(proc.outputStream))
                 }
-                onLog("Headless relay started (signaling :${Ports.PION_SIGNALING}, SOCKS5 :${Ports.SOCKS})")
+                onLog("Headless relay started (signaling :${Ports.PION_SIGNALING}, SOCKS5 ${SocksAuth.user}:${SocksAuth.pass}@127.0.0.1:${Ports.SOCKS})")
 
                 proc.inputStream.bufferedReader().forEachLine { line ->
                     if (line.startsWith("RESOLVE:")) {

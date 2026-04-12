@@ -13,6 +13,7 @@ import android.util.Log
 import bypass.whitelist.MainActivity
 import bypass.whitelist.util.Ports
 import bypass.whitelist.util.Prefs
+import bypass.whitelist.util.SocksAuth
 import bypass.whitelist.util.Vpn
 import mobile.Mobile
 
@@ -127,12 +128,12 @@ class TunnelVpnService : VpnService() {
         isRunning = true
         val fd = vpnFd!!.detachFd()
         vpnFd = null
-        Log.i(TAG, "VPN established, fd=$fd")
+        Log.i(TAG, "VPN established, fd=$fd, SOCKS5 ${SocksAuth.user}:${SocksAuth.pass}@127.0.0.1:${Ports.SOCKS}")
         updateStatus(VpnStatus.TUNNEL_ACTIVE)
 
         tun2socksThread = Thread {
             try {
-                Mobile.startTun2Socks(fd.toLong(), Vpn.MTU.toLong(), Ports.SOCKS)
+                Mobile.startTun2Socks(fd.toLong(), Vpn.MTU.toLong(), Ports.SOCKS, SocksAuth.user, SocksAuth.pass)
             } catch (e: Exception) {
                 Log.e(TAG, "tun2socks error: ${e.message}")
                 isRunning = false

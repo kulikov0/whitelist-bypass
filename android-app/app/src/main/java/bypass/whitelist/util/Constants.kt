@@ -1,9 +1,26 @@
 package bypass.whitelist.util
 
+import java.security.SecureRandom
+
 object Ports {
     const val SOCKS = 1080L
     const val DC_WS = 9000L
     const val PION_SIGNALING = 9001L
+}
+
+object SocksAuth {
+    val user: String
+    val pass: String
+
+    init {
+        val random = SecureRandom()
+        val chars = "abcdefghijklmnopqrstuvwxyz0123456789"
+        fun randomString(length: Int) = buildString {
+            repeat(length) { append(chars[random.nextInt(chars.length)]) }
+        }
+        user = randomString(16)
+        pass = randomString(24)
+    }
 }
 
 object PrefsKeys {

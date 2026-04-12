@@ -16,7 +16,7 @@ var (
 	tunOrigFd int = -1
 )
 
-func StartTun2Socks(fd, mtu, socksPort int) error {
+func StartTun2Socks(fd, mtu, socksPort int, socksUser, socksPass string) error {
 	// dup the fd: tun2socks will close the dup on Stop(),
 	// we keep the original open to prevent the kernel from
 	// recycling the fd number while gvisor goroutines drain
@@ -26,7 +26,12 @@ func StartTun2Socks(fd, mtu, socksPort int) error {
 	}
 	tunOrigFd = fd
 
-	proxy := fmt.Sprintf("socks5://127.0.0.1:%d", socksPort)
+	var proxy string
+	if socksUser != "" {
+		proxy = fmt.Sprintf("socks5://%s:%s@127.0.0.1:%d", socksUser, socksPass, socksPort)
+	} else {
+		proxy = fmt.Sprintf("socks5://127.0.0.1:%d", socksPort)
+	}
 	logMsg("tun2socks: starting fd=%d (dup=%d) mtu=%d proxy=%s", fd, dupFd, mtu, proxy)
 	os.Setenv("TUN2SOCKS_LOG_LEVEL", "info")
 	key := &engine.Key{
