@@ -2,6 +2,10 @@
 
 Tunnels internet traffic through video calling platforms (VK Call, Yandex Telemost) to bypass government whitelist censorship.
 
+## Setup
+
+Step-by-step setup guide (in Russian): [docs/SETUP.md](docs/SETUP.md)
+
 ## How it works
 
 Two tunnel modes are available: **DC** (DataChannel) and **Pion Video** (VP8 data encoding).
@@ -92,10 +96,6 @@ Traffic goes through the platform's SFU servers which are whitelisted. To the ne
 ## Download
 
 Prebuilt binaries are available on [GitHub Releases](../../releases).
-
-## Setup
-
-Step-by-step setup guide (in Russian): [telegra.ph](https://telegra.ph/Rabota-s-whitelist-bypass-03-29)
 
 ### Creator side (free internet, desktop)
 
