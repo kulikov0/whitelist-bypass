@@ -258,6 +258,40 @@ func (rb *RelayBridge) handleSOCKS(conn net.Conn) {
 		return
 	}
 
+	hostOnly, _, _ := net.SplitHostPort(host)
+	if ip := net.ParseIP(hostOnly); ip != nil && ip.IsUnspecified() {
+		conn.Write(common.ConnFail)
+		conn.Close()
+		return
+	}
+	// Dial local/private addresses directly instead of tunneling to the creator,
+	// which cannot reach the joiner's local network. Disabled for now until
+	// there is a real use case for local network access through the proxy. So idk if 
+	// this is a bug or a feature
+	// if ip := net.ParseIP(hostOnly); ip != nil && !ip.IsGlobalUnicast() {
+	// 	rb.logFn("relay: SOCKS local dial %s", common.MaskAddr(host))
+	// 	target, dialErr := net.DialTimeout("tcp", host, 10*time.Second)
+	// 	if dialErr != nil {
+	// 		rb.logFn("relay: SOCKS local dial failed: %s", common.MaskError(dialErr))
+	// 		conn.Write(common.ConnFail)
+	// 		conn.Close()
+	// 		return
+	// 	}
+	// 	conn.Write(common.OK)
+	// 	go func() {
+	// 		defer target.Close()
+	// 		defer conn.Close()
+	// 		done := make(chan struct{})
+	// 		go func() {
+	// 			io.Copy(target, conn)
+	// 			close(done)
+	// 		}()
+	// 		io.Copy(conn, target)
+	// 		<-done
+	// 	}()
+	// 	return
+	// }
+
 	id := rb.nextID.Add(1)
 	sc := &socksConn{id: id, conn: conn, rb: rb, rdy: make(chan error, 1)}
 	rb.conns.Store(id, sc)

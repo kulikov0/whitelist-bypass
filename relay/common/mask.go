@@ -9,6 +9,9 @@ func MaskError(err error) string {
 	if err == nil {
 		return ""
 	}
+	if !MaskingEnabled {
+		return err.Error()
+	}
 	if opErr, ok := err.(*net.OpError); ok {
 		msg := opErr.Op
 		if opErr.Net != "" {
@@ -29,8 +32,13 @@ func MaskError(err error) string {
 	return err.Error()
 }
 
+var MaskingEnabled = true
+
 // MaskAddr masks the sensitive portion of an address for logging.
 func MaskAddr(addr string) string {
+	if !MaskingEnabled {
+		return addr
+	}
 	host, port, err := net.SplitHostPort(addr)
 	if err != nil {
 		host = addr

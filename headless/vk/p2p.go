@@ -148,7 +148,7 @@ func (p *P2PHandler) OnConnectionState(state string) {
 	switch state {
 	case "connected":
 		p.connected = true
-		log.Println("\n  TUNNEL CONNECTED\n")
+		log.Print("\n  TUNNEL CONNECTED\n")
 	case "disconnected":
 		p.connected = false
 		log.Println("[p2p] Connection disconnected, waiting for peer to rejoin")

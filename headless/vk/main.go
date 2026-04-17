@@ -599,7 +599,7 @@ func main() {
 		ur.readBufSize = readBuf
 		ur.maxDCBuf = maxDCBuf
 		ur.OnConnected = func(tun *tunnel.VP8DataTunnel) {
-			tunnel.NewRelayBridge(tun, "creator", readBuf, log.Printf)
+			tunnel.NewRelayBridge(tun, "creator", common.VP8BufSize, log.Printf)
 		}
 		return ur
 	}

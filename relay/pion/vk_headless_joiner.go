@@ -29,7 +29,6 @@ func init() {
 	}
 }
 
-const headlessUA = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
 const sctpReceiveBufferSize = 4 * 1024 * 1024
 
 type VKHeadlessAuthParams struct {
@@ -185,7 +184,7 @@ func (h *VKHeadlessJoiner) joinCall() error {
 		return fmt.Errorf("new request: %w", err)
 	}
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
-	req.Header.Set("User-Agent", headlessUA)
+	req.Header.Set("User-Agent", common.UserAgent)
 
 	h.logFn("headless: calling joinConversationByLink...")
 	resp, err := client.Do(req)
@@ -239,7 +238,7 @@ func (h *VKHeadlessJoiner) connectSFU() {
 	}
 
 	header := http.Header{}
-	header.Set("User-Agent", headlessUA)
+	header.Set("User-Agent", common.UserAgent)
 	header.Set("Origin", "https://vk.com")
 
 	ws, _, err := dialer.Dial(wsURL, header)
@@ -315,6 +314,7 @@ func (h *VKHeadlessJoiner) readLoop() {
 		_, msg, err := h.vkWs.ReadMessage()
 		if err != nil {
 			h.logFn("headless: WS closed: %s", common.MaskError(err))
+			common.EmitStatus(common.StatusTunnelLost)
 			return
 		}
 		if string(msg) == "ping" {

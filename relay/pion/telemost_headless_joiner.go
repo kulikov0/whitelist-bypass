@@ -24,7 +24,6 @@ const (
 	tmAPIBase    = "https://cloud-api.yandex.ru/telemost_front/v2/telemost"
 	tmOrigin     = "https://telemost.yandex.ru"
 	tmPingPeriod = 5 * time.Second
-	tmUserAgent  = "Mozilla/5.0 (X11; Linux aarch64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
 )
 
 type TelemostHeadlessJoiner struct {
@@ -141,7 +140,7 @@ func (j *TelemostHeadlessJoiner) tmRequest(method, path string) ([]byte, int, er
 	if err != nil {
 		return nil, 0, err
 	}
-	req.Header.Set("User-Agent", tmUserAgent)
+	req.Header.Set("User-Agent", common.UserAgent)
 	req.Header.Set("Origin", tmOrigin)
 	req.Header.Set("Referer", tmOrigin+"/")
 	req.Header.Set("Client-Instance-Id", j.instanceID)
@@ -295,7 +294,7 @@ func (j *TelemostHeadlessJoiner) sendHello() {
 				"subscriberOfferAsyncAck":      {"SUBSCRIBER_OFFER_ASYNC_ACK_DISABLED", "SUBSCRIBER_OFFER_ASYNC_ACK_ENABLED"},
 				"subscriberDtlsPassiveMode":    {"SUBSCRIBER_DTLS_PASSIVE_MODE_DISABLED", "SUBSCRIBER_DTLS_PASSIVE_MODE_ENABLED"},
 			},
-			"sdkInfo":             map[string]interface{}{"implementation": "browser", "version": "5.27.0", "userAgent": tmUserAgent, "hwConcurrency": 8},
+			"sdkInfo":             map[string]interface{}{"implementation": "browser", "version": "5.27.0", "userAgent": common.UserAgent, "hwConcurrency": 8},
 			"sdkInitializationId": uuid.New().String(),
 			"disablePublisher": false, "disableSubscriber": false, "disableSubscriberAudio": false,
 		},
@@ -751,7 +750,7 @@ func (j *TelemostHeadlessJoiner) parseICEServersFromHello(sh map[string]interfac
 
 func (j *TelemostHeadlessJoiner) connectAndRun() {
 	wsHeader := http.Header{}
-	wsHeader.Set("User-Agent", tmUserAgent)
+	wsHeader.Set("User-Agent", common.UserAgent)
 	wsHeader.Set("Origin", tmOrigin)
 
 	j.logFn("telemost-joiner: connecting to %s", j.mediaURL)
@@ -804,6 +803,7 @@ func (j *TelemostHeadlessJoiner) connectAndRun() {
 		j.pubPC.Close()
 	}
 	j.logFn("telemost-joiner: disconnected")
+	common.EmitStatus(common.StatusTunnelLost)
 }
 
 func extractICEHost(iceURL string) string {

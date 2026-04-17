@@ -113,7 +113,7 @@ func (r *SFURelay) Init(iceServers []webrtc.ICEServer) error {
 						if r.dc != nil && r.dc.ReadyState() == webrtc.DataChannelStateOpen {
 							r.dc.SendText("tunnel:pong")
 							log.Println("[relay] === MODE: DC ===")
-							fmt.Println("\n  TUNNEL CONNECTED\n")
+							fmt.Print("\n  TUNNEL CONNECTED\n")
 						} else {
 							log.Println("[sub] tunnel:ping received but pub DC not ready")
 						}

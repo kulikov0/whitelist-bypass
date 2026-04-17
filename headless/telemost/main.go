@@ -507,8 +507,8 @@ func (b *Bridge) initRelay() {
 	relay.readBufSize = b.readBuf
 	relay.maxDCBuf = b.maxDCBuf
 	relay.OnConnected = func(tun *tunnel.VP8DataTunnel) {
-		tunnel.NewRelayBridge(tun, "creator", b.readBuf, log.Printf)
-		fmt.Println("\n  TUNNEL CONNECTED\n")
+		tunnel.NewRelayBridge(tun, "creator", common.VP8BufSize, log.Printf)
+		fmt.Print("\n  TUNNEL CONNECTED\n")
 	}
 	relay.OnPubICE = func(cand *webrtc.ICECandidate) {
 		if cand == nil {
@@ -656,6 +656,7 @@ func main() {
 	if memLimit > 0 {
 		debug.SetMemoryLimit(memLimit)
 	}
+	common.MaskingEnabled = true
 	log.Printf("[config] resources=%s read-buf=%d max-dc-buf=%d mem-limit=%d", *resources, readBuf, maxDCBuf, memLimit)
 
 	var cookieStr string

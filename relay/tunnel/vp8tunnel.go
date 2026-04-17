@@ -85,13 +85,14 @@ func (t *VP8DataTunnel) Start(fps int) {
 			case data := <-t.sendQueue:
 				now := time.Now()
 				elapsed := now.Sub(lastSend)
-				minInterval := 5 * time.Millisecond
+				// Most stable interval for burst mode, prevents congestion control
+				minInterval := 1250 * time.Microsecond
 				if elapsed < minInterval {
 					time.Sleep(minInterval - elapsed)
 				}
-				lastSend = time.Now()
 				frame := t.buildFrame(data)
 				err := t.track.WriteSample(media.Sample{Data: frame, Duration: keepaliveInterval})
+				lastSend = time.Now()
 				if err != nil {
 					t.logFn("vp8tunnel: WriteSample DATA error: %v (frame %d, %d bytes)", err, t.frameCount-1, len(frame))
 				} else if t.frameCount <= 10 || t.frameCount%100 == 0 {
