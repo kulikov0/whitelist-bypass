@@ -31,7 +31,6 @@ export function createMainKeyboard() {
         { action: { type: 'text', label: '👻 VK Headless', payload: JSON.stringify({ cmd: BotCommand.VK, mode: 'headless' }) } },
       ],
       [
-        { action: { type: 'text', label: '📞 TM DC', payload: JSON.stringify({ cmd: BotCommand.TM, mode: 'dc' }) } },
         { action: { type: 'text', label: '📹 TM Video', payload: JSON.stringify({ cmd: BotCommand.TM, mode: 'video' }) } },
         { action: { type: 'text', label: '👻 TM Headless', payload: JSON.stringify({ cmd: BotCommand.TM, mode: 'headless' }) } },
       ],

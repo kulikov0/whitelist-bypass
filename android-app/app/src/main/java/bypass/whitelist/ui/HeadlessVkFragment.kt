@@ -42,7 +42,7 @@ class HeadlessVkFragment : Fragment() {
         relay = HeadlessRelayController(
             requireContext().applicationInfo.nativeLibraryDir,
             onLog = { message ->
-                if (message.contains("ERROR:")) {
+                if (message.contains("ERROR:") && !message.contains("ortc ERROR")) {
                     host?.onJoinStatusText(message)
                 }
                 host?.appendLog(message)

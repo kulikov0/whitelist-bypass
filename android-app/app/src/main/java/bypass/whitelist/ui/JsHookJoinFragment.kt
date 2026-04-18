@@ -55,7 +55,7 @@ class JsHookJoinFragment : Fragment() {
 
     private val hooks = mapOf(
         HookKey(false, CallPlatform.VK) to lazy { loadAsset("dc-joiner-vk.js") },
-        HookKey(false, CallPlatform.TELEMOST) to lazy { loadAsset("dc-joiner-telemost.js") },
+        HookKey(false, CallPlatform.TELEMOST) to lazy { loadAsset("video-telemost.js") },
         HookKey(true, CallPlatform.VK) to lazy { loadAsset("video-vk.js") },
         HookKey(true, CallPlatform.TELEMOST) to lazy { loadAsset("video-telemost.js") },
     )

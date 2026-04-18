@@ -1,4 +1,4 @@
-import { Platform, Bridge, LogPanel, Webview } from '../types';
+import { Platform, Bridge, LogPanel, TunnelMode, Webview } from '../types';
 import { SESSION_PARTITION, HOOK_POLL_INTERVAL_MS, CALL_CREATOR_INJECT_DELAY_MS } from '../constants';
 import { RendererTabManager } from './tab-manager';
 
@@ -71,7 +71,12 @@ export function renderContent(tm: RendererTabManager): void {
   } else {
     toolbar.style.display = 'flex';
     headlessInfo.style.display = 'none';
-    (document.getElementById('modeSelect') as HTMLSelectElement).value = activeTab.mode;
+    const isVK = activeTab.platform === Platform.VK && activeTab.url.includes('vk.com');
+    const modeSelect = document.getElementById('modeSelect') as HTMLSelectElement;
+    const tunnelLabel = document.getElementById('tunnelLabel') as HTMLElement;
+    modeSelect.style.display = isVK ? '' : 'none';
+    tunnelLabel.style.display = isVK ? '' : 'none';
+    modeSelect.value = activeTab.mode;
     if (activeTab.wv) activeTab.wv.classList.remove('hidden');
   }
 
@@ -98,6 +103,13 @@ export function scrollLogs(): void {
 export function loadURL(tm: RendererTabManager, url: string): void {
   if (!tm.activeTabId) return;
   const activeTab = tm.tabs[tm.activeTabId];
+  if (url.includes('telemost.yandex')) {
+    activeTab.platform = Platform.Telemost;
+    activeTab.mode = TunnelMode.PionVideo;
+  } else if (url.includes('vk.com')) {
+    activeTab.platform = Platform.VK;
+  }
+  window.bridge.setTunnelMode(tm.activeTabId, activeTab.mode, activeTab.platform);
   if (activeTab.wv) activeTab.wv.remove();
 
   const webview = document.createElement('webview') as unknown as Webview;
@@ -150,6 +162,7 @@ export function loadURL(tm: RendererTabManager, url: string): void {
   activeTab.wv = webview;
   activeTab.url = url;
   renderTabs(tm);
+  renderContent(tm);
 }
 
 export function startHookLogPoller(tm: RendererTabManager): void {

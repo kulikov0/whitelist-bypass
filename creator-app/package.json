@@ -36,10 +36,6 @@
         "to": "hooks/dc-creator-vk.js"
       },
       {
-        "from": "../hooks/dc-creator-telemost.js",
-        "to": "hooks/dc-creator-telemost.js"
-      },
-      {
         "from": "../hooks/video-vk.js",
         "to": "hooks/video-vk.js"
       },

@@ -116,7 +116,7 @@ export interface RelayLogData {
 export interface Bridge {
   onRelayLog(cb: (tabId: string, msg: string) => void): void;
   getHookCode(tabId: string, url: string): Promise<string>;
-  setTunnelMode(tabId: string, mode: string): Promise<void>;
+  setTunnelMode(tabId: string, mode: string, platform?: string): Promise<void>;
   startRelay(tabId: string): Promise<void>;
   closeTab(tabId: string): Promise<void>;
   startBot(settings: BotSettings): Promise<void>;

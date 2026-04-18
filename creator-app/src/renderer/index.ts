@@ -160,7 +160,6 @@ function init(): void {
     } else if (data.mode === TunnelMode.HeadlessTelemost) {
       tm.switchToHeadless(Platform.Telemost);
     } else {
-      window.bridge.setTunnelMode(data.tabId, data.mode);
       const url = data.platform === Platform.Telemost ? TELEMOST_URL : VK_IM_URL;
       loadURL(tm, url);
     }

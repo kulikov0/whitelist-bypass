@@ -254,31 +254,22 @@ export class TabManager {
 
   async loadHook(tabId: string, url: string, tab: TabState): Promise<string> {
     const isTelemost = url.includes('telemost.yandex');
-    const newPlatform = isTelemost ? Platform.Telemost : Platform.VK;
+    tab.platform = isTelemost ? Platform.Telemost : Platform.VK;
 
-    if (newPlatform !== tab.platform && tab.tunnelMode === TunnelMode.PionVideo) {
-      tab.platform = newPlatform;
-      this.killRelay(tabId, tab);
-      setTimeout(() => this.startRelay(tabId, tab), RELAY_RESTART_DELAY_MS);
-    } else {
-      tab.platform = newPlatform;
-    }
-
-    if (tab.tunnelMode === TunnelMode.PionVideo) {
+    if (isTelemost || tab.tunnelMode === TunnelMode.PionVideo) {
       const hookFile = isTelemost ? 'video-telemost.js' : 'video-vk.js';
       const hook = await fs.readFile(path.join(this.hooksDir, hookFile), 'utf8');
       return LOG_CAPTURE_SNIPPET + `window.PION_PORT=${tab.pionPort};window.IS_CREATOR=true;` + hook;
     }
 
-    const hookFile = isTelemost ? 'dc-creator-telemost.js' : 'dc-creator-vk.js';
-    const hook = await fs.readFile(path.join(this.hooksDir, hookFile), 'utf8');
+    const hook = await fs.readFile(path.join(this.hooksDir, 'dc-creator-vk.js'), 'utf8');
     return LOG_CAPTURE_SNIPPET + `window.WS_PORT=${tab.dcPort};` + hook;
   }
 
-  setTunnelMode(tabId: string, mode: TunnelMode): void {
-    const tab = this.tabs.get(tabId);
-    if (!tab) return;
+  async setTunnelMode(tabId: string, mode: TunnelMode, platform?: Platform): Promise<void> {
+    const tab = await this.getOrCreateTab(tabId);
     tab.tunnelMode = mode;
+    if (platform) tab.platform = platform;
     if (mode === TunnelMode.HeadlessVK || mode === TunnelMode.HeadlessTelemost) return;
     this.killRelay(tabId, tab);
     setTimeout(() => this.startRelay(tabId, tab), RELAY_RESTART_DELAY_MS);

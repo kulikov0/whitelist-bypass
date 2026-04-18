@@ -30,7 +30,6 @@ export class RendererTabManager {
       name: '',
       isBot: false,
     };
-    window.bridge.startRelay(tabId);
     this.selectTab(tabId);
     return tabId;
   }

@@ -8,8 +8,8 @@ import { IPC } from '../constants';
   getHookCode(tabId: string, url: string) {
     return ipcRenderer.invoke(IPC.GET_HOOK_CODE, tabId, url);
   },
-  setTunnelMode(tabId: string, mode: string) {
-    return ipcRenderer.invoke(IPC.SET_TUNNEL_MODE, tabId, mode);
+  setTunnelMode(tabId: string, mode: string, platform?: string) {
+    return ipcRenderer.invoke(IPC.SET_TUNNEL_MODE, tabId, mode, platform);
   },
   startRelay(tabId: string) {
     return ipcRenderer.invoke(IPC.START_RELAY, tabId);
