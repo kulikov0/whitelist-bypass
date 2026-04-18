@@ -10,7 +10,7 @@ struct ContentView: View {
                 VStack(spacing: 12) {
                     HStack {
                         ZStack(alignment: .trailing) {
-                            TextField("VK or Telemost call link", text: $proxyManager.callUrl)
+                            TextField(NSLocalizedString("hint_call_link", comment: ""), text: $proxyManager.callUrl)
                                 .textFieldStyle(.roundedBorder)
                                 .autocapitalization(.none)
                                 .disableAutocorrection(true)
@@ -33,7 +33,7 @@ struct ContentView: View {
                                 proxyManager.connect()
                             }
                         }) {
-                            Text(proxyManager.isRunning ? "Stop" : "Go")
+                            Text(proxyManager.isRunning ? NSLocalizedString("btn_stop", comment: "") : NSLocalizedString("btn_go", comment: ""))
                                 .fontWeight(.bold)
                                 .frame(width: 60)
                         }
@@ -51,7 +51,7 @@ struct ContentView: View {
                         ProxyInfoView(proxyUrl: proxyManager.socksUrl, onCopy: proxyManager.copyProxyUrl)
 
                         Button(action: { proxyManager.openTelegramProxy() }) {
-                            Label("Open in Telegram", systemImage: "paperplane.fill")
+                            Label(NSLocalizedString("btn_open_in_telegram", comment: ""), systemImage: "paperplane.fill")
                                 .frame(maxWidth: .infinity)
                         }
                         .buttonStyle(.borderedProminent)
@@ -70,7 +70,7 @@ struct ContentView: View {
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .navigationBarLeading) {
-                    StatusIndicator(status: proxyManager.status, errorMessage: proxyManager.errorMessage, statusText: proxyManager.statusText)
+                    StatusIndicator(status: proxyManager.status, errorMessage: proxyManager.errorMessage, statusText: proxyManager.statusText, tunnelMode: proxyManager.tunnelMode)
                 }
                 ToolbarItem(placement: .navigationBarTrailing) {
                     Button(action: { showSettings = true }) {
@@ -107,6 +107,7 @@ struct StatusIndicator: View {
     let status: ProxyStatus
     let errorMessage: String
     let statusText: String?
+    let tunnelMode: TunnelMode
 
     var statusColor: Color {
         if statusText != nil { return .yellow }
@@ -121,9 +122,11 @@ struct StatusIndicator: View {
     }
 
     var displayText: String {
-        if let text = statusText { return text }
-        if !errorMessage.isEmpty { return errorMessage }
-        return status.displayLabel
+        let statusLabel: String
+        if let text = statusText { statusLabel = text }
+        else if !errorMessage.isEmpty { statusLabel = errorMessage }
+        else { statusLabel = status.displayLabel }
+        return "\(tunnelMode.label) | \(statusLabel)"
     }
 
     var body: some View {
@@ -198,40 +201,40 @@ struct SettingsView: View {
     var body: some View {
         NavigationView {
             Form {
-                Section("Tunnel") {
-                    Picker("Mode", selection: $proxyManager.tunnelMode) {
-                        Text("DataChannel").tag("dc")
-                        Text("Video (VP8)").tag("video")
+                Section(NSLocalizedString("settings_tunnel", comment: "")) {
+                    Picker(NSLocalizedString("settings_tunnel_mode", comment: ""), selection: $proxyManager.tunnelMode) {
+                        Text(NSLocalizedString("settings_tunnel_dc", comment: "")).tag(TunnelMode.dc)
+                        Text(NSLocalizedString("settings_tunnel_video", comment: "")).tag(TunnelMode.video)
                     }
                 }
 
-                Section("Proxy") {
-                    Picker("Auth Mode", selection: $proxyManager.socksAuthMode) {
-                        Text("Auto").tag(SocksAuthMode.auto)
-                        Text("Manual").tag(SocksAuthMode.manual)
+                Section(NSLocalizedString("settings_proxy", comment: "")) {
+                    Picker(NSLocalizedString("settings_auth_mode", comment: ""), selection: $proxyManager.socksAuthMode) {
+                        Text(NSLocalizedString("settings_auth_auto", comment: "")).tag(SocksAuthMode.auto)
+                        Text(NSLocalizedString("settings_auth_manual", comment: "")).tag(SocksAuthMode.manual)
                     }
 
                     if proxyManager.socksAuthMode == .manual {
-                        TextField("Username", text: $proxyManager.manualSocksUser)
+                        TextField(NSLocalizedString("hint_username", comment: ""), text: $proxyManager.manualSocksUser)
                             .autocapitalization(.none)
                             .disableAutocorrection(true)
-                        TextField("Password", text: $proxyManager.manualSocksPass)
+                        TextField(NSLocalizedString("hint_password", comment: ""), text: $proxyManager.manualSocksPass)
                             .autocapitalization(.none)
                             .disableAutocorrection(true)
                     }
                 }
 
-                Section("Display") {
-                    TextField("Display Name", text: $proxyManager.displayName)
-                    Toggle("Show Logs", isOn: $proxyManager.showLogs)
+                Section(NSLocalizedString("settings_display", comment: "")) {
+                    TextField(NSLocalizedString("hint_display_name", comment: ""), text: $proxyManager.displayName)
+                    Toggle(NSLocalizedString("settings_show_logs", comment: ""), isOn: $proxyManager.showLogs)
                 }
 
             }
-            .navigationTitle("Settings")
+            .navigationTitle(NSLocalizedString("settings_title", comment: ""))
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .navigationBarTrailing) {
-                    Button("Done") { dismiss() }
+                    Button(NSLocalizedString("btn_done", comment: "")) { dismiss() }
                 }
             }
         }

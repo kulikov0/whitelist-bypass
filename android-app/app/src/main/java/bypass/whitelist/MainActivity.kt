@@ -9,6 +9,7 @@ import android.view.View
 import android.widget.Button
 import android.widget.EditText
 import android.widget.ImageButton
+import android.widget.Toast
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AppCompatActivity
@@ -165,6 +166,13 @@ class MainActivity : AppCompatActivity(), SettingsDialogFragment.Listener, JoinF
     private fun onGoPressed() {
         val url = urlInput.text.toString().trim()
         if (url.isEmpty()) return
+
+        val platform = CallPlatform.fromUrl(url)
+        if (Prefs.tunnelMode == TunnelMode.DC && platform != CallPlatform.VK) {
+            Prefs.tunnelMode = TunnelMode.VIDEO
+            statusCtrl.tunnelMode = TunnelMode.VIDEO
+            Toast.makeText(this, R.string.dc_mode_not_supported, Toast.LENGTH_SHORT).show()
+        }
 
         logCtrl.reset()
         hideKeyboard()

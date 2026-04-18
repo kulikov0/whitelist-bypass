@@ -217,12 +217,3 @@ func ReadTrack(track *webrtc.TrackRemote, tun *tunnel.VP8DataTunnel, logFn func(
 		}
 	}
 }
-
-func DrainTrack(track *webrtc.TrackRemote) {
-	buf := make([]byte, 4096)
-	for {
-		if _, _, err := track.Read(buf); err != nil {
-			return
-		}
-	}
-}

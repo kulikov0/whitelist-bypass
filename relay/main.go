@@ -88,11 +88,7 @@ func main() {
 	case "telemost-headless-joiner":
 		c := android.NewTelemostHeadlessJoiner(log.Printf)
 		c.OnConnected = func(tun tunnel.DataTunnel) {
-			readBuf := common.VP8BufSize
-			if _, ok := tun.(*tunnel.DCTunnel); ok {
-				readBuf = common.DCBufSize
-			}
-			startJoinerBridge(tun, readBuf)
+			startJoinerBridge(tun, common.VP8BufSize)
 		}
 		c.Run()
 	case "telemost-video-joiner":

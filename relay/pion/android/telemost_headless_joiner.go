@@ -19,7 +19,7 @@ func NewTelemostHeadlessJoiner(logFn func(string, ...any)) *TelemostHeadlessJoin
 	if logFn == nil {
 		logFn = log.Printf
 	}
-	inner := joiner.NewTelemostHeadlessJoiner(logFn, RequestResolve, StatusEmitter{}, PCConfigurer{}, pion.AddTunnelTracks, pion.ReadTrack, pion.DrainTrack)
+	inner := joiner.NewTelemostHeadlessJoiner(logFn, RequestResolve, StatusEmitter{}, PCConfigurer{}, pion.AddTunnelTracks, pion.ReadTrack)
 	wrapper := &TelemostHeadlessJoiner{inner: inner}
 	inner.OnConnected = func(tun tunnel.DataTunnel) {
 		if wrapper.OnConnected != nil {

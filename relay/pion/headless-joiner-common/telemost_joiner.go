@@ -34,11 +34,9 @@ type TelemostHeadlessJoiner struct {
 	PCConfig       PeerConnectionConfigurer
 	AddTracks      AddTunnelTracksFunc
 	ReadTrackFn    ReadTrackFunc
-	DrainTrackFn   DrainTrackFunc
 
 	joinLink    string
 	displayName string
-	tunnelMode  string
 
 	ws   *websocket.Conn
 	wsMu sync.Mutex
@@ -55,8 +53,6 @@ type TelemostHeadlessJoiner struct {
 
 	sampleTrack *webrtc.TrackLocalStaticSample
 	vp8tunnel   *tunnel.VP8DataTunnel
-	pubDC       *webrtc.DataChannel
-	dcReady     chan struct{}
 
 	httpClient *http.Client
 	instanceID string
@@ -69,17 +65,15 @@ type TelemostHeadlessJoiner struct {
 	iceServers  []webrtc.ICEServer
 }
 
-func NewTelemostHeadlessJoiner(logFn func(string, ...any), resolveFn ResolveFunc, status StatusEmitter, pcConfig PeerConnectionConfigurer, addTracks AddTunnelTracksFunc, readTrackFn ReadTrackFunc, drainTrackFn DrainTrackFunc) *TelemostHeadlessJoiner {
+func NewTelemostHeadlessJoiner(logFn func(string, ...any), resolveFn ResolveFunc, status StatusEmitter, pcConfig PeerConnectionConfigurer, addTracks AddTunnelTracksFunc, readTrackFn ReadTrackFunc) *TelemostHeadlessJoiner {
 	return &TelemostHeadlessJoiner{
-		logFn:        logFn,
-		ResolveFn:    resolveFn,
-		Status:       status,
-		PCConfig:     pcConfig,
-		AddTracks:    addTracks,
-		ReadTrackFn:  readTrackFn,
-		DrainTrackFn: drainTrackFn,
-		instanceID:   uuid.New().String(),
-		dcReady:      make(chan struct{}),
+		logFn:       logFn,
+		ResolveFn:   resolveFn,
+		Status:      status,
+		PCConfig:    pcConfig,
+		AddTracks:   addTracks,
+		ReadTrackFn: readTrackFn,
+		instanceID:  uuid.New().String(),
 	}
 }
 
@@ -87,7 +81,6 @@ func (j *TelemostHeadlessJoiner) RunWithParams(jsonParams string) {
 	var params struct {
 		JoinLink    string `json:"joinLink"`
 		DisplayName string `json:"displayName"`
-		TunnelMode  string `json:"tunnelMode"`
 	}
 	if err := json.Unmarshal([]byte(jsonParams), &params); err != nil {
 		j.logFn("telemost-joiner: failed to parse params: %v", err)
@@ -96,14 +89,10 @@ func (j *TelemostHeadlessJoiner) RunWithParams(jsonParams string) {
 	}
 	j.joinLink = params.JoinLink
 	j.displayName = params.DisplayName
-	j.tunnelMode = params.TunnelMode
 	if j.displayName == "" {
 		j.displayName = "Joiner"
 	}
-	if j.tunnelMode == "" {
-		j.tunnelMode = "dc"
-	}
-	j.logFn("telemost-joiner: link=%s name=%s mode=%s", j.joinLink, j.displayName, j.tunnelMode)
+	j.logFn("telemost-joiner: link=%s name=%s mode=video", j.joinLink, j.displayName)
 	j.Status.EmitStatus(common.StatusConnecting)
 
 	if err := j.getConnection(); err != nil {
@@ -363,20 +352,9 @@ func (j *TelemostHeadlessJoiner) initPC() {
 		}
 	})
 
-	subPC.OnDataChannel(func(dc *webrtc.DataChannel) {
-		j.logFn("telemost-joiner: sub incoming DC: label=%s id=%d", dc.Label(), dc.ID())
-		if dc.Label() == "sharing" {
-			j.setupIncomingDC(dc)
-		}
-	})
-
 	subPC.OnTrack(func(track *webrtc.TrackRemote, receiver *webrtc.RTPReceiver) {
 		j.logFn("telemost-joiner: sub remote track: %s", track.Codec().MimeType)
-		if j.tunnelMode == "video" {
-			go j.ReadTrackFn(track, j.vp8tunnel, j.logFn, "telemost-joiner")
-		} else {
-			go j.DrainTrackFn(track)
-		}
+		go j.ReadTrackFn(track, j.vp8tunnel, j.logFn, "telemost-joiner")
 	})
 
 	pubPC, err := api.NewPeerConnection(config)
@@ -388,7 +366,6 @@ func (j *TelemostHeadlessJoiner) initPC() {
 	j.pubSeq = 1
 
 	j.sampleTrack = j.AddTracks(pubPC, j.logFn, "telemost-joiner [pub]")
-	j.createSharingDC()
 
 	pubPC.OnICECandidate(func(cand *webrtc.ICECandidate) {
 		if cand != nil {
@@ -398,7 +375,7 @@ func (j *TelemostHeadlessJoiner) initPC() {
 
 	pubPC.OnConnectionStateChange(func(state webrtc.PeerConnectionState) {
 		j.logFn("telemost-joiner: pub PC state: %s", state.String())
-		if state == webrtc.PeerConnectionStateConnected && j.tunnelMode == "video" && j.vp8tunnel == nil {
+		if state == webrtc.PeerConnectionStateConnected && j.vp8tunnel == nil {
 			j.logFn("telemost-joiner: === VP8 TUNNEL CONNECTED ===")
 			j.Status.EmitStatus(common.StatusTunnelConnected)
 			j.vp8tunnel = tunnel.NewVP8DataTunnel(j.sampleTrack, j.logFn)
@@ -409,96 +386,7 @@ func (j *TelemostHeadlessJoiner) initPC() {
 		}
 	})
 
-	j.logFn("telemost-joiner: sub+pub PCs created with %d ICE servers, mode=%s", len(j.iceServers), j.tunnelMode)
-}
-
-func (j *TelemostHeadlessJoiner) createSharingDC() {
-	ordered := true
-	dc, err := j.pubPC.CreateDataChannel("sharing", &webrtc.DataChannelInit{Ordered: &ordered})
-	if err != nil {
-		j.logFn("telemost-joiner: failed to create sharing DC: %v", err)
-		return
-	}
-	j.pubDC = dc
-	dc.OnOpen(func() {
-		j.logFn("telemost-joiner: pub sharing DC open")
-		if j.tunnelMode == "dc" {
-			go func() {
-				for {
-					select {
-					case <-j.dcReady:
-						return
-					default:
-					}
-					if dc.ReadyState() != webrtc.DataChannelStateOpen {
-						return
-					}
-					j.logFn("telemost-joiner: sending tunnel:ping on pub DC")
-					if err := dc.SendText("tunnel:ping"); err != nil {
-						j.logFn("telemost-joiner: tunnel:ping send error: %v", err)
-					}
-					select {
-					case <-j.dcReady:
-						return
-					case <-time.After(5 * time.Second):
-					}
-				}
-			}()
-		}
-	})
-	dc.OnClose(func() {
-		j.logFn("telemost-joiner: pub sharing DC closed")
-	})
-	dc.OnMessage(func(msg webrtc.DataChannelMessage) {
-		if msg.IsString {
-			s := string(msg.Data)
-			if s == "tunnel:ping" {
-				dc.SendText("tunnel:pong")
-				return
-			}
-		}
-	})
-}
-
-func (j *TelemostHeadlessJoiner) setupIncomingDC(dc *webrtc.DataChannel) {
-	j.logFn("telemost-joiner: incoming sharing DC found")
-
-	dc.OnOpen(func() {
-		j.logFn("telemost-joiner: incoming sharing DC open")
-		if j.tunnelMode == "dc" {
-			go j.waitForPong(dc)
-		}
-	})
-}
-
-func (j *TelemostHeadlessJoiner) waitForPong(dc *webrtc.DataChannel) {
-	raw, err := dc.Detach()
-	if err != nil {
-		j.logFn("telemost-joiner: incoming DC detach failed: %v", err)
-		return
-	}
-	buf := make([]byte, 1024)
-	for {
-		n, isString, err := raw.ReadDataChannel(buf)
-		if err != nil {
-			j.logFn("telemost-joiner: incoming DC read error: %v", err)
-			return
-		}
-		if isString {
-			s := string(buf[:n])
-			j.logFn("telemost-joiner: incoming DC text: %s", s)
-			if s == "tunnel:pong" {
-				close(j.dcReady)
-				j.logFn("telemost-joiner: === DC TUNNEL CONNECTED ===")
-				j.Status.EmitStatus(common.StatusTunnelConnected)
-				dcTunnel := tunnel.NewChunkedDCTunnel(raw, j.pubDC, common.DCBufSize, j.logFn)
-				if j.OnConnected != nil {
-					j.OnConnected(dcTunnel)
-				}
-				return
-			}
-		}
-	}
+	j.logFn("telemost-joiner: sub+pub PCs created with %d ICE servers", len(j.iceServers))
 }
 
 func (j *TelemostHeadlessJoiner) sendPubOffer() {

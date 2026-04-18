@@ -3,6 +3,7 @@ import UIKit
 import Combine
 import Mobile
 
+
 enum ProxyStatus: String {
     case idle = "IDLE"
     case ready = "READY"
@@ -13,12 +14,12 @@ enum ProxyStatus: String {
 
     var displayLabel: String {
         switch self {
-        case .idle: return "Idle"
-        case .ready: return "Ready"
-        case .connecting: return "Connecting..."
-        case .tunnelConnected: return "Tunnel Active"
-        case .tunnelLost: return "Tunnel Lost"
-        case .error: return "Error"
+        case .idle: return NSLocalizedString("status_idle", comment: "")
+        case .ready: return NSLocalizedString("status_ready", comment: "")
+        case .connecting: return NSLocalizedString("status_connecting", comment: "")
+        case .tunnelConnected: return NSLocalizedString("status_tunnel_active", comment: "")
+        case .tunnelLost: return NSLocalizedString("status_tunnel_lost", comment: "")
+        case .error: return NSLocalizedString("status_error", comment: "")
         }
     }
 }
@@ -101,6 +102,18 @@ class HeadlessCallbackBridge: NSObject, IosHeadlessCallbackProtocol {
     }
 }
 
+enum TunnelMode: String, CaseIterable {
+    case dc = "dc"
+    case video = "video"
+
+    var label: String {
+        switch self {
+        case .dc: return "DC"
+        case .video: return "Video"
+        }
+    }
+}
+
 enum CallPlatform: String {
     case vk = "vk"
     case telemost = "telemost"
@@ -120,17 +133,16 @@ class ProxyManager: ObservableObject {
     @Published var isRunning: Bool = false
     @Published var toastMessage: String?
     @Published var statusText: String?
-    var detectedPlatform: CallPlatform = .telemost
+    var detectedPlatform: CallPlatform = .vk
 
-    @Published var callUrl: String = UserDefaults.standard.string(forKey: "lastUrl") ?? ""
-    @Published var socksPort: Int = UserDefaults.standard.object(forKey: "socksPort") as? Int ?? 1080
-    @Published var tunnelMode: String = UserDefaults.standard.string(forKey: "tunnelMode") ?? "dc"
-    @Published var displayName: String = UserDefaults.standard.string(forKey: "displayName") ?? "Hello"
-    @Published var showLogs: Bool = UserDefaults.standard.object(forKey: "showLogs") as? Bool ?? true
-
-    @Published var socksAuthMode: SocksAuthMode
-    @Published var manualSocksUser: String = UserDefaults.standard.string(forKey: "socksUser") ?? ""
-    @Published var manualSocksPass: String = UserDefaults.standard.string(forKey: "socksPass") ?? ""
+    @Published var callUrl: String = AppDefaults.lastUrl { didSet { AppDefaults.lastUrl = callUrl } }
+    @Published var socksPort: Int = AppDefaults.socksPort { didSet { AppDefaults.socksPort = socksPort } }
+    @Published var tunnelMode: TunnelMode = AppDefaults.tunnelMode { didSet { AppDefaults.tunnelMode = tunnelMode } }
+    @Published var displayName: String = AppDefaults.displayName { didSet { AppDefaults.displayName = displayName } }
+    @Published var showLogs: Bool = AppDefaults.showLogs { didSet { AppDefaults.showLogs = showLogs } }
+    @Published var socksAuthMode: SocksAuthMode = AppDefaults.socksAuthMode { didSet { AppDefaults.socksAuthMode = socksAuthMode } }
+    @Published var manualSocksUser: String = AppDefaults.socksUser { didSet { AppDefaults.socksUser = manualSocksUser } }
+    @Published var manualSocksPass: String = AppDefaults.socksPass { didSet { AppDefaults.socksPass = manualSocksPass } }
 
     private let autoSocksUser: String
     private let autoSocksPass: String
@@ -152,8 +164,6 @@ class ProxyManager: ObservableObject {
         let chars = "abcdefghijklmnopqrstuvwxyz0123456789"
         autoSocksUser = String((0..<16).map { _ in chars.randomElement()! })
         autoSocksPass = String((0..<24).map { _ in chars.randomElement()! })
-        let savedMode = UserDefaults.standard.string(forKey: "socksAuthMode") ?? "AUTO"
-        socksAuthMode = SocksAuthMode(rawValue: savedMode) ?? .auto
     }
 
     var socksUrl: String {
@@ -231,14 +241,6 @@ class ProxyManager: ObservableObject {
             appendLog("Port \(originalPort) busy, using \(socksPort)")
         }
 
-        UserDefaults.standard.set(callUrl, forKey: "lastUrl")
-        UserDefaults.standard.set(socksPort, forKey: "socksPort")
-        UserDefaults.standard.set(tunnelMode, forKey: "tunnelMode")
-        UserDefaults.standard.set(displayName, forKey: "displayName")
-        UserDefaults.standard.set(socksAuthMode.rawValue, forKey: "socksAuthMode")
-        UserDefaults.standard.set(manualSocksUser, forKey: "socksUser")
-        UserDefaults.standard.set(manualSocksPass, forKey: "socksPass")
-
         logs.removeAll()
         pendingLogs.removeAll()
         errorMessage = ""
@@ -253,6 +255,11 @@ class ProxyManager: ObservableObject {
         detectedPlatform = CallPlatform.detect(url: callUrl)
         appendLog("Platform: \(detectedPlatform.rawValue)")
 
+        if tunnelMode == .dc && detectedPlatform != .vk {
+            tunnelMode = .video
+            showToast(NSLocalizedString("dc_mode_not_supported", comment: ""))
+        }
+
         switch detectedPlatform {
         case .telemost:
             IosStartTelemostHeadless(socksPort, activeSocksUser, activeSocksPass, bridge)
@@ -260,7 +267,6 @@ class ProxyManager: ObservableObject {
             let joinParams: [String: String] = [
                 "joinLink": callUrl,
                 "displayName": displayName,
-                "tunnelMode": tunnelMode
             ]
             if let jsonData = try? JSONSerialization.data(withJSONObject: joinParams),
                let jsonString = String(data: jsonData, encoding: .utf8) {
@@ -269,7 +275,7 @@ class ProxyManager: ObservableObject {
             }
 
         case .vk:
-            IosStartVKHeadless(socksPort, activeSocksUser, activeSocksPass, callUrl, displayName, tunnelMode, bridge)
+            IosStartVKHeadless(socksPort, activeSocksUser, activeSocksPass, callUrl, displayName, tunnelMode.rawValue, bridge)
             appendLog("Started VK headless joiner")
         }
     }
@@ -307,7 +313,7 @@ class ProxyManager: ObservableObject {
             appendLog("ERROR: \(errorText)")
         } else if statusString.hasPrefix("CAPTCHA:") {
             captchaURL = String(statusString.dropFirst(8))
-            statusText = "Solve the captcha:"
+            statusText = NSLocalizedString("status_solve_captcha", comment: "")
             appendLog("Captcha: \(captchaURL ?? "")")
         } else {
             if captchaURL != nil && statusString != "CAPTCHA" {
@@ -343,7 +349,7 @@ class ProxyManager: ObservableObject {
 
     func copyProxyUrl() {
         UIPasteboard.general.string = socksUrl
-        showToast("Proxy URL copied")
+        showToast(NSLocalizedString("proxy_url_copied", comment: ""))
     }
 
     func showToast(_ message: String) {

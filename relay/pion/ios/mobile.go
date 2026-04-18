@@ -109,7 +109,7 @@ func StartTelemostHeadless(socksPort int, socksUser, socksPass string, callback 
 	activeHeadless.Unlock()
 
 	logFn, resolveFn, statusEmitter := makeHelpers(callback)
-	tmJoiner := joiner.NewTelemostHeadlessJoiner(logFn, resolveFn, statusEmitter, nil, pion.AddTunnelTracks, pion.ReadTrack, pion.DrainTrack)
+	tmJoiner := joiner.NewTelemostHeadlessJoiner(logFn, resolveFn, statusEmitter, nil, pion.AddTunnelTracks, pion.ReadTrack)
 	tmJoiner.OnConnected = makeOnConnected(socksPort, socksUser, socksPass, logFn, callback)
 
 	activeHeadless.Lock()

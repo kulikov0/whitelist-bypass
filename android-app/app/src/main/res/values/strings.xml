@@ -61,4 +61,5 @@
     <string name="notification_proxy_title">Proxy active</string>
     <string name="notification_disconnect">Disconnect</string>
     <string name="settings_close">Close</string>
+    <string name="dc_mode_not_supported">DC mode not supported - falling back to video</string>
 </resources>

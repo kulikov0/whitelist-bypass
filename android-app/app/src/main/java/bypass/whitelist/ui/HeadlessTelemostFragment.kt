@@ -28,7 +28,6 @@ class HeadlessTelemostFragment : Fragment() {
     override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
         val joinLink = requireArguments().getString(ARG_URL, "")
         val displayName = Prefs.autoclickName
-        val tunnelMode = Prefs.tunnelMode.relayArg
 
         relay = HeadlessRelayController(
             requireContext().applicationInfo.nativeLibraryDir,
@@ -42,7 +41,6 @@ class HeadlessTelemostFragment : Fragment() {
                         val params = JSONObject().apply {
                             put("joinLink", joinLink)
                             put("displayName", displayName)
-                            put("tunnelMode", tunnelMode)
                         }
                         relay.sendJoinParams(params.toString())
                     }

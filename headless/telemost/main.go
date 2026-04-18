@@ -76,7 +76,6 @@ type Bridge struct {
 	subSeq    int
 	peers     map[string]string
 	readBuf   int
-	maxDCBuf  uint64
 }
 
 func tmRequest(method, path string, body interface{}, cookieStr string, cfg TMConfig) ([]byte, int, error) {
@@ -505,7 +504,6 @@ func (b *Bridge) initRelay() {
 
 	relay := NewSFURelay()
 	relay.readBufSize = b.readBuf
-	relay.maxDCBuf = b.maxDCBuf
 	relay.OnConnected = func(tun *tunnel.VP8DataTunnel) {
 		tunnel.NewRelayBridge(tun, "creator", common.VP8BufSize, log.Printf)
 		fmt.Print("\n  TUNNEL CONNECTED\n")
@@ -635,20 +633,16 @@ func main() {
 	flag.Parse()
 
 	var readBuf int
-	var maxDCBuf uint64
 	var memLimit int64
 	switch *resources {
 	case "moderate":
 		readBuf = 16384
-		maxDCBuf = 1 << 20
 		memLimit = 64 << 20
 	case "default":
 		readBuf = 32768
-		maxDCBuf = 4 << 20
 		memLimit = 128 << 20
 	case "unlimited":
 		readBuf = common.RTPBufSize
-		maxDCBuf = 8 << 20
 		memLimit = 256 << 20
 	default:
 		log.Fatalf("[config] unknown resources mode: %s", *resources)
@@ -657,7 +651,7 @@ func main() {
 		debug.SetMemoryLimit(memLimit)
 	}
 	common.MaskingEnabled = true
-	log.Printf("[config] resources=%s read-buf=%d max-dc-buf=%d mem-limit=%d", *resources, readBuf, maxDCBuf, memLimit)
+	log.Printf("[config] resources=%s read-buf=%d mem-limit=%d", *resources, readBuf, memLimit)
 
 	var cookieStr string
 	if *cookieString != "" {
@@ -695,7 +689,6 @@ func main() {
 		cookieStr: cookieStr,
 		peers:     make(map[string]string),
 		readBuf:   readBuf,
-		maxDCBuf:  maxDCBuf,
 	}
 	bridge.run()
 }

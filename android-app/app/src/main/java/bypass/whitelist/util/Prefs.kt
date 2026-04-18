@@ -24,11 +24,11 @@ object Prefs {
 
     var tunnelMode: TunnelMode
         get() {
-            val name = prefs.getString(PrefsKeys.TUNNEL_MODE, TunnelMode.DC.name)!!
+            val name = prefs.getString(PrefsKeys.TUNNEL_MODE, TunnelMode.VIDEO.name)!!
             return try {
                 TunnelMode.valueOf(name)
             } catch (_: IllegalArgumentException) {
-                TunnelMode.DC
+                TunnelMode.VIDEO
             }
         }
         set(value) = prefs.edit { putString(PrefsKeys.TUNNEL_MODE, value.name) }
