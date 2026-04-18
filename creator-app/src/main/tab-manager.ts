@@ -230,11 +230,12 @@ export class TabManager {
     }
     this.killRelay(tabId, tab);
     const binaryPath = isTelemost ? this.headlessTelemostPath : this.headlessVKPath;
-    const proc = spawn(binaryPath, ['--cookie-string', cookieStr, '--resources', 'default'], {
-      stdio: ['ignore', 'pipe', 'pipe'],
+    const proc = spawn(binaryPath, ['--resources', 'default'], {
+      stdio: ['pipe', 'pipe', 'pipe'],
     });
     tab.relay = proc;
     this.attachProcessOutput(proc, tabId);
+    proc.stdin?.write(cookieStr + '\n');
     proc.on('close', (code) => {
       this.sendLog(tabId, `Headless exited with code ${code}`);
     });

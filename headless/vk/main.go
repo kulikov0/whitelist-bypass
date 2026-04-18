@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bufio"
 	"encoding/json"
 	"flag"
 	"fmt"
@@ -569,7 +570,12 @@ func main() {
 	} else if *cookiesPath != "" {
 		cookieStr = common.LoadCookies(*cookiesPath)
 	} else {
-		log.Fatal("Either --cookies or --cookie-string is required")
+		fmt.Println("WAITING_FOR_COOKIES")
+		line, err := bufio.NewReader(os.Stdin).ReadString('\n')
+		if err != nil || strings.TrimSpace(line) == "" {
+			log.Fatal("No cookies received on stdin")
+		}
+		cookieStr = strings.TrimSpace(line)
 	}
 
 	log.Println("[config] Fetching live config from VK bundle...")
