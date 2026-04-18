@@ -51,6 +51,7 @@ export enum IPC {
   CREATE_BOT_TAB = 'create-bot-tab',
   CLOSE_BOT_TAB = 'close-bot-tab',
   BOT_ERROR = 'bot-error',
+  SEND_BOT_CALL_LINK = 'send-bot-call-link',
 }
 
 export const LOG_CAPTURE_SNIPPET = [

@@ -57,7 +57,9 @@ export class RendererTabManager {
 
   createBotTab(data: BotTabData): void {
     if (!this.tabs[data.tabId]) {
-      const botName = data.platform === Platform.Telemost ? 'Bot-Telemost' : 'Bot-VK';
+      const isHeadless = data.mode === TunnelMode.HeadlessVK || data.mode === TunnelMode.HeadlessTelemost;
+      const platformLabel = data.platform === Platform.Telemost ? 'TM' : 'VK';
+      const botName = isHeadless ? `Bot-Headless-${platformLabel}` : `Bot-${data.platform === Platform.Telemost ? 'Telemost' : 'VK'}`;
       this.tabs[data.tabId] = {
         wv: null,
         url: '',
@@ -141,23 +143,22 @@ export class RendererTabManager {
       tab.headlessStatus = 'Call created';
       changed = true;
     }
-    if (trimmed.includes(HeadlessLogMarker.JOIN_LINK)) {
-      if (!tab.callInfo) tab.callInfo = {};
+    if (trimmed.includes(HeadlessLogMarker.JOIN_LINK) && tab.callInfo) {
       tab.callInfo.joinLink = trimmed.split(HeadlessLogMarker.JOIN_LINK)[1].trim();
+      if (tab.isBot) {
+        window.bridge.sendBotCallLink(tabId, tab.callInfo.joinLink);
+      }
       changed = true;
     }
-    if (trimmed.includes(HeadlessLogMarker.SHORT_LINK)) {
-      if (!tab.callInfo) tab.callInfo = {};
+    if (trimmed.includes(HeadlessLogMarker.SHORT_LINK) && tab.callInfo) {
       tab.callInfo.shortLink = trimmed.split(HeadlessLogMarker.SHORT_LINK)[1].trim();
       changed = true;
     }
-    if (trimmed.includes(HeadlessLogMarker.TURN)) {
-      if (!tab.callInfo) tab.callInfo = {};
+    if (trimmed.includes(HeadlessLogMarker.TURN) && tab.callInfo) {
       tab.callInfo.turn = trimmed.split(HeadlessLogMarker.TURN)[1].trim();
       changed = true;
     }
-    if (trimmed.includes(HeadlessLogMarker.PROTOCOL)) {
-      if (!tab.callInfo) tab.callInfo = {};
+    if (trimmed.includes(HeadlessLogMarker.PROTOCOL) && tab.callInfo) {
       tab.callInfo.protocol = trimmed.split(HeadlessLogMarker.PROTOCOL)[1].trim();
       changed = true;
     }

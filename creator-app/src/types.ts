@@ -126,5 +126,6 @@ export interface Bridge {
   onBotError(cb: (msg: string) => void): void;
   getCookies(domain: string): Promise<Electron.Cookie[]>;
   startHeadless(tabId: string, platform: string): Promise<void>;
+  sendBotCallLink(tabId: string, link: string): Promise<void>;
   onCloseBotTab(cb: (data: { tabId: string }) => void): void;
 }

@@ -90,6 +90,10 @@ export function registerIpcHandlers(tabManager: TabManager): void {
     return { success: true };
   });
 
+  ipcMain.handle(IPC.SEND_BOT_CALL_LINK, (_e, tabId: string, link: string) => {
+    tabManager.sendBotCallLink(tabId, link);
+  });
+
   ipcMain.handle(IPC.GET_COOKIES, async (_e, domain: string) => {
     const ses = session.fromPartition(SESSION_PARTITION);
     const all = await ses.cookies.get({});

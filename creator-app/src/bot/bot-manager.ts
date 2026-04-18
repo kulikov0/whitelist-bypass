@@ -163,10 +163,9 @@ export class BotManager {
     if (payload?.cmd) {
       const handled = await this.handlePayloadCommand(payload, peerId);
       if (handled) return;
-      if (payload.cmd === BotCommand.VK) {
-        text = '/vk' + (payload.mode === 'video' ? ' video' : '');
-      } else if (payload.cmd === BotCommand.TM) {
-        text = '/tm' + (payload.mode === 'video' ? ' video' : '');
+      const cmdPrefix = payload.cmd === BotCommand.VK ? '/vk' : payload.cmd === BotCommand.TM ? '/tm' : null;
+      if (cmdPrefix && payload.mode) {
+        text = `${cmdPrefix} ${payload.mode}`;
       }
     }
 
@@ -195,19 +194,37 @@ export class BotManager {
     return false;
   }
 
+  private parseTunnelMode(text: string, platform: Platform): TunnelMode {
+    if (text.includes('headless')) {
+      return platform === Platform.VK ? TunnelMode.HeadlessVK : TunnelMode.HeadlessTelemost;
+    }
+    if (text.includes('video')) return TunnelMode.PionVideo;
+    return TunnelMode.DC;
+  }
+
+  private tunnelModeLabel(mode: TunnelMode): string {
+    switch (mode) {
+      case TunnelMode.HeadlessVK:
+      case TunnelMode.HeadlessTelemost:
+        return 'Headless';
+      case TunnelMode.PionVideo:
+        return 'Video';
+      default:
+        return 'DC';
+    }
+  }
+
   private async handleTextCommand(text: string, peerId: number): Promise<void> {
     if (text.startsWith('/vk')) {
-      const mode = text.includes('video') ? TunnelMode.PionVideo : TunnelMode.DC;
+      const mode = this.parseTunnelMode(text, Platform.VK);
       console.log('[BOT] Creating VK tab with mode:', mode);
       this.onCreateTab({ mode, peerId, platform: Platform.VK });
-      const label = mode === TunnelMode.DC ? 'DC' : 'Video';
-      await this.sendMessage(peerId, `Creating VK call (${label})`, createMainKeyboard());
+      await this.sendMessage(peerId, `Creating VK call (${this.tunnelModeLabel(mode)})`, createMainKeyboard());
     } else if (text.startsWith('/tm')) {
-      const mode = text.includes('video') ? TunnelMode.PionVideo : TunnelMode.DC;
+      const mode = this.parseTunnelMode(text, Platform.Telemost);
       console.log('[BOT] Creating Telemost tab with mode:', mode);
       this.onCreateTab({ mode, peerId, platform: Platform.Telemost });
-      const label = mode === TunnelMode.DC ? 'DC' : 'Video';
-      await this.sendMessage(peerId, `Creating Telemost call (${label})`, createMainKeyboard());
+      await this.sendMessage(peerId, `Creating Telemost call (${this.tunnelModeLabel(mode)})`, createMainKeyboard());
     } else if (text === '/list') {
       await this.showList(peerId);
     } else if (text.startsWith('/close ')) {

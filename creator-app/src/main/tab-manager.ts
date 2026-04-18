@@ -188,6 +188,14 @@ export class TabManager {
     proc.stderr?.on('data', onData);
   }
 
+  sendBotCallLink(tabId: string, link: string): void {
+    if (!this.botTabIds.has(tabId) || !this._botManager) return;
+    const tab = this.tabs.get(tabId);
+    if (!tab || tab.peerId == null) return;
+    console.log(`[MAIN] Headless call link for bot tab ${tabId}:`, link);
+    this._botManager.sendMessage(tab.peerId, `Call created!\n${link}`);
+  }
+
   startRelay(tabId: string, tab: TabState): void {
     this.killRelay(tabId, tab);
     const port = tab.tunnelMode === TunnelMode.PionVideo ? tab.pionPort : tab.dcPort;
@@ -271,6 +279,7 @@ export class TabManager {
     const tab = this.tabs.get(tabId);
     if (!tab) return;
     tab.tunnelMode = mode;
+    if (mode === TunnelMode.HeadlessVK || mode === TunnelMode.HeadlessTelemost) return;
     this.killRelay(tabId, tab);
     setTimeout(() => this.startRelay(tabId, tab), RELAY_RESTART_DELAY_MS);
   }

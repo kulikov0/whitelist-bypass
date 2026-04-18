@@ -155,9 +155,15 @@ function init(): void {
   window.bridge.onCreateBotTab((data: BotTabData) => {
     tm.createBotTab(data);
     (document.getElementById('modeSelect') as HTMLSelectElement).value = data.mode;
-    window.bridge.setTunnelMode(data.tabId, data.mode);
-    const url = data.platform === Platform.Telemost ? TELEMOST_URL : VK_IM_URL;
-    loadURL(tm, url);
+    if (data.mode === TunnelMode.HeadlessVK) {
+      tm.switchToHeadless(Platform.VK);
+    } else if (data.mode === TunnelMode.HeadlessTelemost) {
+      tm.switchToHeadless(Platform.Telemost);
+    } else {
+      window.bridge.setTunnelMode(data.tabId, data.mode);
+      const url = data.platform === Platform.Telemost ? TELEMOST_URL : VK_IM_URL;
+      loadURL(tm, url);
+    }
   });
 
   window.bridge.onCloseBotTab((data: { tabId: string }) => {
