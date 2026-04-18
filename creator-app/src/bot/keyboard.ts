@@ -26,15 +26,15 @@ export function createMainKeyboard() {
     one_time: false,
     buttons: [
       [
-        { action: { type: 'text', label: 'VK DC', payload: JSON.stringify({ cmd: BotCommand.VK, mode: 'dc' }) } },
-        { action: { type: 'text', label: 'VK Video', payload: JSON.stringify({ cmd: BotCommand.VK, mode: 'video' }) } },
+        { action: { type: 'text', label: '📞 VK DC', payload: JSON.stringify({ cmd: BotCommand.VK, mode: 'dc' }) } },
+        { action: { type: 'text', label: '📹 VK Video', payload: JSON.stringify({ cmd: BotCommand.VK, mode: 'video' }) } },
       ],
       [
-        { action: { type: 'text', label: 'TM DC', payload: JSON.stringify({ cmd: BotCommand.TM, mode: 'dc' }) } },
-        { action: { type: 'text', label: 'TM Video', payload: JSON.stringify({ cmd: BotCommand.TM, mode: 'video' }) } },
+        { action: { type: 'text', label: '📞 TM DC', payload: JSON.stringify({ cmd: BotCommand.TM, mode: 'dc' }) } },
+        { action: { type: 'text', label: '📹 TM Video', payload: JSON.stringify({ cmd: BotCommand.TM, mode: 'video' }) } },
       ],
       [
-        { action: { type: 'text', label: 'Active Tabs', payload: JSON.stringify({ cmd: BotCommand.List }) } },
+        { action: { type: 'text', label: '📋 Active Tabs', payload: JSON.stringify({ cmd: BotCommand.List }) } },
       ],
     ],
   };
@@ -44,7 +44,7 @@ export function createListKeyboard(tabsList: TabListEntry[]) {
   const buttons = tabsList.map((entry) => {
     const shortId = padShortId(generateShortId(entry.id));
     const prefix = entry.isBot ? 'bot' : 'user';
-    const status = entry.callStatus === CallStatus.Active ? '+' : '-';
+    const status = entry.callStatus === CallStatus.Active ? '🟢' : '⚪';
     return [
       {
         action: {
@@ -56,7 +56,7 @@ export function createListKeyboard(tabsList: TabListEntry[]) {
     ];
   });
   buttons.push([
-    { action: { type: 'text', label: 'Back', payload: JSON.stringify({ cmd: BotCommand.Menu }) } },
+    { action: { type: 'text', label: '◀️ Back', payload: JSON.stringify({ cmd: BotCommand.Menu }) } },
   ]);
   return { one_time: false, buttons };
 }
