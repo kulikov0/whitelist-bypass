@@ -71,7 +71,7 @@ func (c *VKClient) handleMessage(raw []byte) {
 
 func (c *VKClient) createPC(config webrtc.Configuration) error {
 	se := webrtc.SettingEngine{}
-	se.SetNet(&AndroidNet{})
+	se.SetNet(&common.AndroidNet{})
 	se.SetInterfaceFilter(func(iface string) bool { return false })
 	api := webrtc.NewAPI(webrtc.WithSettingEngine(se))
 	pc, err := api.NewPeerConnection(config)

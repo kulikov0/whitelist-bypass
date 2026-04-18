@@ -162,7 +162,7 @@ class JsHookJoinFragment : Fragment() {
                     }
                     val platform = CallPlatform.fromUrl(url)
                     host?.appendLog("Page loaded, injecting hook for ${maskUrl(url)}")
-                    view.evaluateJavascript("window.WS_PORT=${mobile.Mobile.activeWsPort()}", null)
+                    view.evaluateJavascript("window.WS_PORT=${androidbind.Androidbind.activeWsPort()}", null)
                     view.evaluateJavascript("window.PION_PORT=${Ports.PION_SIGNALING}", null)
                     view.evaluateJavascript(hookForPlatform(platform), null)
                     if (Prefs.autoclickEnabled) {

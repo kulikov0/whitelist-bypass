@@ -5,8 +5,8 @@ import bypass.whitelist.util.ParamCallback
 import bypass.whitelist.util.Ports
 import bypass.whitelist.util.Prefs
 import bypass.whitelist.util.SocksAuth
-import mobile.LogCallback
-import mobile.Mobile
+import androidbind.LogCallback
+import androidbind.Androidbind
 import java.io.BufferedWriter
 import java.io.File
 import java.io.OutputStreamWriter
@@ -45,7 +45,7 @@ class RelayController(
         pionThread?.interrupt()
         pionThread = null
 
-        Mobile.stopJoiner()
+        Androidbind.stopJoiner()
         dcThread?.interrupt()
         dcThread = null
     }
@@ -59,7 +59,7 @@ class RelayController(
         dcThread = Thread {
             if (!checkPortOrAbort()) return@Thread
             try {
-                Mobile.startJoiner(Ports.DC_WS, Prefs.socksPort, SocksAuth.user, SocksAuth.pass, cb)
+                Androidbind.startJoiner(Ports.DC_WS, Prefs.socksPort, SocksAuth.user, SocksAuth.pass, cb)
             } catch (e: Exception) {
                 if (isRunning) onLog("Relay error: ${e.message}")
             }

@@ -6,7 +6,7 @@ import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
 import android.webkit.WebView
-import androidx.appcompat.app.AppCompatActivity
+import android.webkit.WebViewClient
 import androidx.core.view.isVisible
 import androidx.fragment.app.Fragment
 import bypass.whitelist.R
@@ -14,12 +14,10 @@ import bypass.whitelist.util.BLANK_URL
 import bypass.whitelist.tunnel.HeadlessRelayController
 import bypass.whitelist.tunnel.VpnStatus
 import bypass.whitelist.util.Prefs
-import org.json.JSONObject
 
 class HeadlessVkFragment : Fragment() {
 
     private lateinit var relay: HeadlessRelayController
-    private lateinit var captchaView: VkCaptchaWebView
     private lateinit var webView: WebView
 
     private val host: JoinFragmentHost?
@@ -36,6 +34,11 @@ class HeadlessVkFragment : Fragment() {
         val url = requireArguments().getString(ARG_URL, "")
         val displayName = Prefs.autoclickName
 
+        webView.settings.javaScriptEnabled = true
+        webView.settings.domStorageEnabled = true
+        webView.webViewClient = WebViewClient()
+        webView.isVisible = false
+
         relay = HeadlessRelayController(
             requireContext().applicationInfo.nativeLibraryDir,
             onLog = { message ->
@@ -48,35 +51,29 @@ class HeadlessVkFragment : Fragment() {
                 Log.d("HEADLESS-VK", "status: $status")
                 host?.onJoinStatus(status)
                 if (status == VpnStatus.TUNNEL_ACTIVE) {
-                    activity?.runOnUiThread { host?.requestVpn() }
+                    activity?.runOnUiThread {
+                        webView.stopLoading()
+                        webView.loadUrl(BLANK_URL)
+                        webView.isVisible = false
+                        host?.requestVpn()
+                    }
+                }
+            },
+            onCaptchaUrl = { captchaUrl ->
+                Log.d("HEADLESS-VK", "captcha URL: $captchaUrl")
+                activity?.runOnUiThread {
+                    webView.isVisible = true
+                    webView.loadUrl(captchaUrl)
                 }
             },
         )
         relay.start()
-
-        captchaView = VkCaptchaWebView(
-            requireActivity() as AppCompatActivity,
-            webView,
-            onStatus = { message -> host?.onJoinStatusText(message) },
-        ) { joinJson ->
-            Log.d("HEADLESS-VK", "Auth complete, sending join params to relay")
-            val params = JSONObject(joinJson)
-            params.put("tunnelMode", Prefs.tunnelMode.relayArg)
-            relay.sendJoinParams(params.toString())
-            activity?.runOnUiThread {
-                webView.stopLoading()
-                webView.loadUrl(BLANK_URL)
-                webView.isVisible = false
-            }
-        }
-        captchaView.setup()
-        captchaView.start(url, displayName)
+        relay.sendAuth(url, displayName, Prefs.tunnelMode.relayArg)
     }
 
     override fun onDestroyView() {
         webView.stopLoading()
         webView.loadUrl(BLANK_URL)
-
         webView.destroy()
         relay.stop()
         super.onDestroyView()

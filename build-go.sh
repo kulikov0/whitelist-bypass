@@ -16,7 +16,7 @@ ROOT="$(cd "$(dirname "$0")" && pwd)"
 cd "$ROOT/relay"
 
 echo "Building gomobile .aar..."
-gomobile bind -v -target=android -androidapi 23 -o mobile.aar ./mobile/ 2>&1
+gomobile bind -v -target=android -androidapi 23 -o mobile.aar ./androidbind/ 2>&1
 
 echo "Copying .aar to android-app/libs..."
 mkdir -p ../android-app/app/libs

@@ -5,6 +5,7 @@ import bypass.whitelist.util.ParamCallback
 import bypass.whitelist.util.Ports
 import bypass.whitelist.util.Prefs
 import bypass.whitelist.util.SocksAuth
+import org.json.JSONObject
 import java.io.BufferedWriter
 import java.io.File
 import java.io.OutputStreamWriter
@@ -16,10 +17,12 @@ class HeadlessRelayController(
     private val relayMode: String = "vk-headless-joiner",
     private val onLog: ParamCallback<String>,
     private val onStatus: ParamCallback<VpnStatus>,
+    private val onCaptchaUrl: ParamCallback<String>? = null,
 ) {
     private var process: Process? = null
     private var thread: Thread? = null
     private var stdinWriter: BufferedWriter? = null
+    private val pendingCommands = mutableListOf<String>()
 
     @Volatile
     var isRunning = false
@@ -57,6 +60,8 @@ class HeadlessRelayController(
                 synchronized(this) {
                     process = proc
                     stdinWriter = BufferedWriter(OutputStreamWriter(proc.outputStream))
+                    pendingCommands.forEach { writeStdin(it) }
+                    pendingCommands.clear()
                 }
                 onLog("Headless relay started (signaling :${Ports.PION_SIGNALING}, SOCKS5 ${SocksAuth.user}:${SocksAuth.pass}@127.0.0.1:${Prefs.socksPort})")
 
@@ -81,6 +86,11 @@ class HeadlessRelayController(
                             status == "CONNECTING" -> onStatus(VpnStatus.CONNECTING)
                             status == "TUNNEL_CONNECTED" -> onStatus(VpnStatus.TUNNEL_ACTIVE)
                             status == "TUNNEL_LOST" -> onStatus(VpnStatus.TUNNEL_LOST)
+                            status.startsWith("CAPTCHA:") -> {
+                                val captchaUrl = status.removePrefix("CAPTCHA:")
+                                onStatus(VpnStatus.ACTION_REQUIRED_CAPTCHA)
+                                onCaptchaUrl?.invoke(captchaUrl)
+                            }
                             status.startsWith("ERROR:") -> onStatus(VpnStatus.CALL_FAILED)
                         }
                     } else {
@@ -103,6 +113,15 @@ class HeadlessRelayController(
         writeStdin("JOIN:$joinJson")
     }
 
+    fun sendAuth(joinLink: String, displayName: String, tunnelMode: String) {
+        val json = JSONObject().apply {
+            put("joinLink", joinLink)
+            put("displayName", displayName)
+            put("tunnelMode", tunnelMode)
+        }
+        writeStdin("AUTH:$json")
+    }
+
     @Synchronized
     fun stop() {
         isRunning = false
@@ -118,6 +137,10 @@ class HeadlessRelayController(
 
     @Synchronized
     private fun writeStdin(line: String) {
+        if (stdinWriter == null) {
+            pendingCommands.add(line)
+            return
+        }
         try {
             stdinWriter?.write(line)
             stdinWriter?.newLine()

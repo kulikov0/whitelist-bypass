@@ -2,9 +2,7 @@ package pion
 
 import (
 	"encoding/json"
-	"net"
 	"net/http"
-	"strings"
 	"sync"
 
 	"github.com/gorilla/websocket"
@@ -43,45 +41,6 @@ var WsUpgrader = websocket.Upgrader{
 	CheckOrigin: func(r *http.Request) bool { return true },
 }
 
-// Wraps bare IPv6 addresses in brackets for TURN/STUN URLs.
-// Tries host:port split first (more common), then full address.
-func fixICEURL(url string) string {
-	idx := strings.Index(url, ":")
-	if idx < 0 {
-		return url
-	}
-	scheme := url[:idx]
-	if scheme != "turn" && scheme != "stun" && scheme != "turns" && scheme != "stuns" {
-		return url
-	}
-	rest := url[idx+1:]
-	if strings.HasPrefix(rest, "[") {
-		return url
-	}
-	if strings.Count(rest, ":") <= 1 {
-		return url
-	}
-	params := ""
-	if qm := strings.Index(rest, "?"); qm >= 0 {
-		params = rest[qm:]
-		rest = rest[:qm]
-	}
-	// Try splitting last segment as port first (host:port is more common)
-	lastColon := strings.LastIndex(rest, ":")
-	if lastColon > 0 {
-		host := rest[:lastColon]
-		port := rest[lastColon+1:]
-		if net.ParseIP(host) != nil {
-			return scheme + ":[" + host + "]:" + port + params
-		}
-	}
-	// Fallback: whole thing is an IPv6 address with no port
-	if net.ParseIP(rest) != nil {
-		return scheme + ":[" + rest + "]" + params
-	}
-	return url
-}
-
 var iceLogFn func(string, ...any)
 
 func ParseICEServers(data json.RawMessage) ([]webrtc.ICEServer, error) {
@@ -93,7 +52,7 @@ func ParseICEServers(data json.RawMessage) ([]webrtc.ICEServer, error) {
 	for i, s := range servers {
 		urls := make([]string, len(s.URLs))
 		for j, u := range s.URLs {
-			fixed := fixICEURL(u)
+			fixed := common.FixICEURL(u)
 			if iceLogFn != nil && fixed != u {
 				iceLogFn("ice: fix URL %q -> %q", u, fixed)
 			}
@@ -111,7 +70,7 @@ func ParseICEServers(data json.RawMessage) ([]webrtc.ICEServer, error) {
 
 func NewPionAPI(localIP string) *webrtc.API {
 	se := webrtc.SettingEngine{}
-	se.SetNet(&AndroidNet{LocalIP: localIP})
+	se.SetNet(&common.AndroidNet{LocalIP: localIP})
 	return webrtc.NewAPI(webrtc.WithSettingEngine(se))
 }
 
@@ -255,6 +214,15 @@ func ReadTrack(track *webrtc.TrackRemote, tun *tunnel.VP8DataTunnel, logFn func(
 					tun.OnData(data)
 				}
 			}
+		}
+	}
+}
+
+func DrainTrack(track *webrtc.TrackRemote) {
+	buf := make([]byte, 4096)
+	for {
+		if _, _, err := track.Read(buf); err != nil {
+			return
 		}
 	}
 }

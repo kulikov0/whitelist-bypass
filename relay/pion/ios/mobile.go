@@ -7,6 +7,8 @@ import (
 	"sync"
 
 	"whitelist-bypass/relay/common"
+	"whitelist-bypass/relay/pion"
+	joiner "whitelist-bypass/relay/pion/headless-joiner-common"
 	"whitelist-bypass/relay/tunnel"
 )
 
@@ -31,6 +33,20 @@ var activeHeadless struct {
 	stopped  bool
 	platform string
 }
+
+type iosStatusEmitter struct {
+	statusFn func(string)
+}
+
+func (e *iosStatusEmitter) EmitStatus(status string)  { e.statusFn(status) }
+func (e *iosStatusEmitter) EmitStatusError(msg string) { e.statusFn("ERROR:" + msg) }
+
+type iosCacheStore struct {
+	callback HeadlessCallback
+}
+
+func (c *iosCacheStore) Save(key string, value string) { c.callback.SaveCache(key, value) }
+func (c *iosCacheStore) Load(key string) string         { return c.callback.LoadCache(key) }
 
 func makeOnConnected(socksPort int, socksUser, socksPass string, logFn func(string, ...any), callback HeadlessCallback) func(tunnel.DataTunnel) {
 	return func(tun tunnel.DataTunnel) {
@@ -59,7 +75,7 @@ func makeOnConnected(socksPort int, socksUser, socksPass string, logFn func(stri
 	}
 }
 
-func makeHelpers(callback HeadlessCallback) (func(string, ...any), ResolveFunc, StatusFunc) {
+func makeHelpers(callback HeadlessCallback) (func(string, ...any), joiner.ResolveFunc, *iosStatusEmitter) {
 	logFn := func(format string, args ...any) {
 		msg := fmt.Sprintf(format, args...)
 		callback.OnLog(msg)
@@ -71,10 +87,12 @@ func makeHelpers(callback HeadlessCallback) (func(string, ...any), ResolveFunc, 
 		}
 		return result, nil
 	}
-	statusFn := func(status string) {
-		callback.OnStatus(status)
+	statusEmitter := &iosStatusEmitter{
+		statusFn: func(status string) {
+			callback.OnStatus(status)
+		},
 	}
-	return logFn, resolveFn, statusFn
+	return logFn, resolveFn, statusEmitter
 }
 
 func init() {
@@ -90,12 +108,12 @@ func StartTelemostHeadless(socksPort int, socksUser, socksPass string, callback 
 	activeHeadless.platform = "telemost"
 	activeHeadless.Unlock()
 
-	logFn, resolveFn, statusFn := makeHelpers(callback)
-	joiner := NewTelemostHeadlessJoiner(logFn, resolveFn, statusFn)
-	joiner.OnConnected = makeOnConnected(socksPort, socksUser, socksPass, logFn, callback)
+	logFn, resolveFn, statusEmitter := makeHelpers(callback)
+	tmJoiner := joiner.NewTelemostHeadlessJoiner(logFn, resolveFn, statusEmitter, nil, pion.AddTunnelTracks, pion.ReadTrack, pion.DrainTrack)
+	tmJoiner.OnConnected = makeOnConnected(socksPort, socksUser, socksPass, logFn, callback)
 
 	activeHeadless.Lock()
-	activeHeadless.joiner = joiner
+	activeHeadless.joiner = tmJoiner
 	activeHeadless.Unlock()
 
 	callback.OnStatus(common.StatusReady)
@@ -110,16 +128,16 @@ func StartVKHeadless(socksPort int, socksUser, socksPass string, joinLink, displ
 	activeHeadless.platform = "vk"
 	activeHeadless.Unlock()
 
-	logFn, resolveFn, statusFn := makeHelpers(callback)
-	joiner := NewVKHeadlessJoiner(logFn, resolveFn, statusFn)
-	joiner.OnConnected = makeOnConnected(socksPort, socksUser, socksPass, logFn, callback)
+	logFn, resolveFn, statusEmitter := makeHelpers(callback)
+	vkJoiner := joiner.NewVKHeadlessJoiner(logFn, resolveFn, statusEmitter, nil, pion.AddTunnelTracks, pion.ReadTrack)
+	vkJoiner.OnConnected = makeOnConnected(socksPort, socksUser, socksPass, logFn, callback)
 
 	activeHeadless.Lock()
-	activeHeadless.joiner = joiner
+	activeHeadless.joiner = vkJoiner
 	activeHeadless.Unlock()
 
 	go func() {
-		authJSON, err := RunVKAuth(joinLink, displayName, logFn, statusFn, callback)
+		authJSON, err := joiner.RunVKAuth(joinLink, displayName, logFn, statusEmitter.statusFn, &iosCacheStore{callback: callback}, resolveFn)
 		if err != nil {
 			logFn("vk-auth: failed: %v", err)
 			callback.OnStatus("ERROR:" + err.Error())
@@ -133,36 +151,40 @@ func StartVKHeadless(socksPort int, socksUser, socksPass string, joinLink, displ
 			}
 		}
 		logFn("vk-auth: sending join params to relay (mode=%s)", tunnelMode)
-		joiner.RunWithParams(authJSON)
+		vkJoiner.RunWithParams(authJSON)
 	}()
 }
 
 func SendJoinParams(jsonParams string) {
 	activeHeadless.Lock()
-	joiner := activeHeadless.joiner
+	currentJoiner := activeHeadless.joiner
 	platform := activeHeadless.platform
 	activeHeadless.Unlock()
 
-	if joiner == nil {
+	if currentJoiner == nil {
 		return
 	}
 
 	switch platform {
 	case "telemost":
-		if tm, ok := joiner.(*TelemostHeadlessJoiner); ok {
-			go tm.RunWithParams(jsonParams)
+		if tmJoiner, ok := currentJoiner.(*joiner.TelemostHeadlessJoiner); ok {
+			go tmJoiner.RunWithParams(jsonParams)
 		}
 	case "vk":
-		if vk, ok := joiner.(*VKHeadlessJoiner); ok {
-			go vk.RunWithParams(jsonParams)
+		if vkJoiner, ok := currentJoiner.(*joiner.VKHeadlessJoiner); ok {
+			go vkJoiner.RunWithParams(jsonParams)
 		}
 	}
+}
+
+func StopCaptchaProxy() {
+	joiner.StopCaptchaProxy()
 }
 
 func StopHeadless() {
 	activeHeadless.Lock()
 	activeHeadless.stopped = true
-	joiner := activeHeadless.joiner
+	currentJoiner := activeHeadless.joiner
 	socksLn := activeHeadless.socksLn
 	activeHeadless.joiner = nil
 	activeHeadless.socksLn = nil
@@ -170,8 +192,9 @@ func StopHeadless() {
 	activeHeadless.platform = ""
 	activeHeadless.Unlock()
 
-	if joiner != nil {
-		joiner.Close()
+	joiner.StopCaptchaProxy()
+	if currentJoiner != nil {
+		currentJoiner.Close()
 	}
 	if socksLn != nil {
 		socksLn.Close()

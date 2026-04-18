@@ -17,7 +17,7 @@ import bypass.whitelist.util.DnsMode
 import bypass.whitelist.util.Prefs
 import bypass.whitelist.util.SocksAuth
 import bypass.whitelist.util.Vpn
-import mobile.Mobile
+import androidbind.Androidbind
 
 class TunnelVpnService : VpnService() {
 
@@ -63,7 +63,7 @@ class TunnelVpnService : VpnService() {
         if (!isRunning) return
         isRunning = false
         try {
-            Mobile.stopTun2Socks()
+            Androidbind.stopTun2Socks()
         } catch (e: Exception) {
             Log.e(TAG, "tun2socks stop error: ${e.message}")
         }
@@ -150,7 +150,7 @@ class TunnelVpnService : VpnService() {
 
         tun2socksThread = Thread {
             try {
-                Mobile.startTun2Socks(fd.toLong(), Vpn.MTU.toLong(), Prefs.socksPort, SocksAuth.user, SocksAuth.pass)
+                Androidbind.startTun2Socks(fd.toLong(), Vpn.MTU.toLong(), Prefs.socksPort, SocksAuth.user, SocksAuth.pass)
             } catch (e: Exception) {
                 Log.e(TAG, "tun2socks error: ${e.message}")
                 isRunning = false

@@ -8,8 +8,9 @@ import (
 	"os"
 
 	"whitelist-bypass/relay/common"
-	"whitelist-bypass/relay/mobile"
+	"whitelist-bypass/relay/androidbind"
 	"whitelist-bypass/relay/pion"
+	"whitelist-bypass/relay/pion/android"
 	"whitelist-bypass/relay/tunnel"
 )
 
@@ -63,15 +64,15 @@ func main() {
 
 	switch *mode {
 	case "dc-joiner":
-		log.Fatal(mobile.StartJoiner(*wsPort, *socksPort, *socksUser, *socksPass, cb))
+		log.Fatal(androidbind.StartJoiner(*wsPort, *socksPort, *socksUser, *socksPass, cb))
 	case "dc-creator":
-		log.Fatal(mobile.StartCreator(*wsPort, cb))
+		log.Fatal(startDCCreator(*wsPort))
 	case "vk-video-joiner":
 		c := pion.NewVKClient(log.Printf)
 		c.OnConnected = joinerCallback
 		startVideo(*mode, c, joinerCallback)
 	case "vk-headless-joiner":
-		c := pion.NewVKHeadlessJoiner(log.Printf)
+		c := android.NewVKHeadlessJoiner(log.Printf)
 		c.OnConnected = func(tun tunnel.DataTunnel) {
 			readBuf := common.VP8BufSize
 			if _, ok := tun.(*tunnel.DCTunnel); ok {
@@ -85,7 +86,7 @@ func main() {
 		c.OnConnected = creatorCallback
 		startVideo(*mode, c, creatorCallback)
 	case "telemost-headless-joiner":
-		c := pion.NewTelemostHeadlessJoiner(log.Printf)
+		c := android.NewTelemostHeadlessJoiner(log.Printf)
 		c.OnConnected = func(tun tunnel.DataTunnel) {
 			readBuf := common.VP8BufSize
 			if _, ok := tun.(*tunnel.DCTunnel); ok {
