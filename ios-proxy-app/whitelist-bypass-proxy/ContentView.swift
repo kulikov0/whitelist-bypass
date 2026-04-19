@@ -82,9 +82,6 @@ struct ContentView: View {
                 SettingsView()
                     .environmentObject(proxyManager)
             }
-            .onTapGesture {
-                UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil)
-            }
             .overlay(alignment: .bottom) {
                 if let toast = proxyManager.toastMessage {
                     Text(toast)
@@ -99,6 +96,9 @@ struct ContentView: View {
                         .animation(.easeInOut(duration: 0.3), value: proxyManager.toastMessage)
                 }
             }
+        }
+        .onTapGesture {
+            UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil)
         }
     }
 }

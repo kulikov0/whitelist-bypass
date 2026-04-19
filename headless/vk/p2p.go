@@ -143,6 +143,15 @@ func (p *P2PHandler) OnPionICECandidate(data json.RawMessage) {
 	}
 }
 
+func (p *P2PHandler) kickRemotePeer() {
+	if p.remotePeerId != nil {
+		p.bridge.vkSend("remove-participant", map[string]interface{}{
+			"participantId": *p.remotePeerId,
+			"ban":           false,
+		})
+	}
+}
+
 // OnConnectionState updates P2P connection state.
 func (p *P2PHandler) OnConnectionState(state string) {
 	switch state {
@@ -151,19 +160,16 @@ func (p *P2PHandler) OnConnectionState(state string) {
 		log.Print("\n  TUNNEL CONNECTED\n")
 	case "disconnected":
 		p.connected = false
-		log.Println("[p2p] Connection disconnected, waiting for peer to rejoin")
+		log.Println("[p2p] Connection disconnected, kicking peer")
+		p.kickRemotePeer()
 	case "failed":
 		p.connected = false
 		log.Println("[p2p] Connection failed, removing stale peer")
-		if p.remotePeerId != nil {
-			p.bridge.vkSend("remove-participant", map[string]interface{}{
-				"participantId": *p.remotePeerId,
-				"ban":           false,
-			})
-		}
+		p.kickRemotePeer()
 	case "closed":
 		p.connected = false
-		log.Println("[p2p] Connection closed")
+		log.Println("[p2p] Connection closed, kicking peer")
+		p.kickRemotePeer()
 	}
 }
 
