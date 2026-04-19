@@ -8,7 +8,7 @@ Step-by-step setup guide (in Russian): [docs/SETUP.md](docs/SETUP.md)
 
 ## How it works
 
-Two tunnel modes are available: **DC** (DataChannel) and **Pion Video** (VP8 data encoding).
+Two tunnel modes are available: **DC** (DataChannel) and **Video** (VP8 data encoding).
 
 ### DC mode
 
@@ -40,7 +40,7 @@ DataChannel  <----- SFU ----->   DataChannel
                                         Internet
 ```
 
-### Pion Video mode
+### Video mode
 
 Go-based. Pion (Go WebRTC library) connects directly to the platform's TURN/SFU servers, bypassing the browser's WebRTC stack entirely. Data is encoded inside VP8 video frames.
 
@@ -101,7 +101,7 @@ Prebuilt binaries are available on [GitHub Releases](../../releases).
 Download and run the Electron app from [GitHub Releases](../../releases). It bundles the Go relay automatically.
 
 1. Open the app
-2. Select tunnel mode (DC or Pion Video)
+2. Select tunnel mode (DC or Video)
 3. Click "VK" or "Telemost"
 4. Log in, **create a new call** from the app
 5. Copy the join link, send it to the joiner
@@ -111,7 +111,7 @@ Download and run the Electron app from [GitHub Releases](../../releases). It bun
 ### Joiner side (censored, Android)
 
 1. Download and install `whitelist-bypass.apk` from [GitHub Releases](../../releases)
-2. Select tunnel mode (DC or Pion Video)
+2. Select tunnel mode (DC or Video)
 3. Paste the call link and tap GO
 4. The app joins the call, establishes the tunnel, starts VPN
 5. All device traffic flows through the call
