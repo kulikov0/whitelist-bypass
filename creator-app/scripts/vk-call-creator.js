@@ -3,7 +3,7 @@
   window.__callCreatorStarted = true;
 
   var CALL_MENU_TRIGGER_ID = 'call-menu-trigger';
-  var CREATE_CALL_TEXT = 'Создать звонок по';
+  var CALL_MENU_ID = 'call-menu';
   var CALL_IN_PROGRESS_KEY = 'call_in_progress';
   var VK_CALL_BASE = 'https://vk.com/call/join/';
 
@@ -15,7 +15,7 @@
       var observer = new MutationObserver(function() {
         if (fn()) observer.disconnect();
       });
-      observer.observe(document.body, { childList: true, subtree: true });
+      observer.observe(document.documentElement, { childList: true, subtree: true });
     };
 
     waitAndClick(function() {
@@ -26,15 +26,8 @@
       console.log("[BOT] VKCalls: opened call menu");
 
       waitAndClick(function() {
-        var spans = document.querySelectorAll('span');
-        var el = null;
-        for (var i = 0; i < spans.length; i++) {
-          if (spans[i].textContent.indexOf(CREATE_CALL_TEXT) !== -1) {
-            el = spans[i];
-            break;
-          }
-        }
-        var btn = el ? (el.closest('button') || el.closest('div')) : null;
+        var menu = document.getElementById(CALL_MENU_ID);
+        var btn = menu ? menu.querySelector('button') : null;
         if (!btn) return false;
 
         btn.click();
