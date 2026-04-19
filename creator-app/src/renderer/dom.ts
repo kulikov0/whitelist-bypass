@@ -117,6 +117,7 @@ export function loadURL(tm: RendererTabManager, url: string): void {
   webview.setAttribute('partition', SESSION_PARTITION);
   webview.setAttribute('nodeintegration', '');
   webview.setAttribute('nodeintegrationinsubframes', '');
+  webview.setAttribute('useragent', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36');
   webview.classList.add('webview-full');
   webview.dataset.tabId = tm.activeTabId;
   document.getElementById('content')!.appendChild(webview);
