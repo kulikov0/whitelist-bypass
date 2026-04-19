@@ -15,7 +15,6 @@ Two tunnel modes are available: **DC** (DataChannel) and **Pion Video** (VP8 dat
 Browser-based. JavaScript hooks intercept RTCPeerConnection on the call page, create a DataChannel alongside the call's built-in channels, and use it as a bidirectional data pipe.
 
 - **VK Call** - Negotiated DataChannel id:2 (alongside VK's animoji channel id:1). Data flows through VK's SFU
-- **Telemost** - Non-negotiated DataChannel labeled "sharing" (matching real screen sharing traffic), with SDP renegotiation via signaling WebSocket. SFU architecture
 
 ```
 Joiner (censored, Android)                Creator (free internet, desktop)
@@ -131,15 +130,29 @@ Download and run the Electron app from [GitHub Releases](../../releases). It bun
 ### Build scripts
 
 ```sh
-# Build Go .aar and Pion relay for Android (includes hooks copy)
-./build-go.sh
+# Full release build (Android APK + Creator app + Headless creators)
+./make-release.sh
 
-# Build Android APK -> prebuilts/whitelist-bypass.apk
-./build-app.sh
-
-# Build Electron apps for all platforms -> prebuilts/
-./build-creator.sh
+# Individual builds
+./build-go.sh          # Go .aar, relay binary, headless creators
+./copy-hooks.sh        # Copy JS hooks to android assets
+./build-app.sh         # Android APK
+./build-headless.sh    # Headless creator binaries only
+./build-creator.sh     # Creator Electron app (all platforms)
+./build-ios.sh         # Go .xcframework for iOS
 ```
+
+### iOS
+
+Requires Xcode and macOS.
+
+```sh
+./build-ios.sh
+```
+
+This builds `Mobile.xcframework` into `ios-proxy-app/`. Then open `ios-proxy-app/whitelist-bypass-proxy.xcodeproj` in Xcode, select your signing team in Signing & Capabilities, and build to device.
+
+Before committing, run `ios-proxy-app/strip-signing.sh` to remove your Apple developer team ID from the project.
 
 Output in `prebuilts/`:
 
@@ -150,6 +163,10 @@ Output in `prebuilts/`:
 | `WhitelistBypass Creator-*-ia32.exe` | Windows x86 |
 | `WhitelistBypass Creator-*.AppImage` | Linux x64 |
 | `whitelist-bypass.apk` | Android |
+| `headless-vk-creator-linux-x64` | Linux x64 |
+| `headless-vk-creator-linux-ia32` | Linux x86 |
+| `headless-telemost-creator-linux-x64` | Linux x64 |
+| `headless-telemost-creator-linux-ia32` | Linux x86 |
 
 ### Docker build
 
