@@ -180,3 +180,8 @@
 ---
 
 [Блог автора](https://t.me/markovdrankthechains)
+
+### Поблагодарить автора
+
+- `0xd986b7576340d8d7b04f806dfd38a182b19edf50` - USDC (ERC20)
+- `TTEo4XXTB6CqhEiKpyoncfk3skEvoq3bCP` - USDT (TRC20)
