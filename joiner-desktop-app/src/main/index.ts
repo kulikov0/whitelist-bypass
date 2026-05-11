@@ -33,6 +33,7 @@ function createWindow() {
       preload: join(__dirname, '..', 'preload', 'index.js'),
       contextIsolation: true,
       nodeIntegration: false,
+      sandbox: false,
     },
   });
   mainWindow.setMenuBarVisibility(false);
@@ -74,6 +75,8 @@ ipcMain.handle(IPC.START, async (_e, settings: JoinerSettings) => {
   if (settings.socksPass) args.push('--socks-pass', settings.socksPass);
   if (settings.noTun) args.push('--no-tun');
 
+  const commandLine = [exe, ...args].map((s) => (/\s/.test(s) ? `"${s}"` : s)).join(' ');
+  send(IPC.LOG, `[main] spawning: ${commandLine}\n`);
   try {
     joinerProcess = spawn(exe, args, { windowsHide: true });
   } catch (err) {
@@ -82,6 +85,12 @@ ipcMain.handle(IPC.START, async (_e, settings: JoinerSettings) => {
   send(IPC.RUNNING, true);
   send(IPC.STATUS, 'starting');
 
+  joinerProcess.on('error', (err) => {
+    send(IPC.LOG, `[main] spawn error: ${err.message}\n`);
+    send(IPC.STATUS, 'stopped');
+    send(IPC.RUNNING, false);
+    joinerProcess = null;
+  });
   joinerProcess.stdout?.on('data', (b: Buffer) => send(IPC.LOG, b.toString()));
   joinerProcess.stderr?.on('data', (b: Buffer) => {
     const text = b.toString();
