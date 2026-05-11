@@ -1,0 +1,56 @@
+:root {
+  color-scheme: dark;
+  --bg: #1a1b1f;
+  --bg-elev: #23252b;
+  --fg: #e6e8ea;
+  --muted: #8a8f99;
+  --accent: #4f88ff;
+  --danger: #c8472b;
+  --ok: #36a36a;
+}
+* { box-sizing: border-box; }
+html, body {
+  margin: 0; height: 100%;
+  font: 13px/1.4 -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  background: var(--bg); color: var(--fg);
+}
+body { display: flex; flex-direction: column; }
+header {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 10px 16px; border-bottom: 1px solid #2c2e35;
+}
+h1 { font-size: 14px; margin: 0; }
+.status {
+  font-size: 12px; padding: 3px 10px; border-radius: 10px;
+  background: #2c2e35; color: var(--muted);
+}
+.status[data-state="active"], .status[data-state="connected"] { background: var(--ok); color: #fff; }
+.status[data-state="stopped"] { background: #4a3030; color: #ffb4a8; }
+main { flex: 1; display: grid; grid-template-columns: 1fr 1fr; gap: 12px; padding: 12px; min-height: 0; }
+section.form { display: flex; flex-direction: column; gap: 10px; }
+section.log-wrap { display: flex; flex-direction: column; min-height: 0; }
+section.log-wrap h2 { font-size: 12px; margin: 0 0 6px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.05em; }
+pre#log {
+  flex: 1; margin: 0; padding: 10px; background: var(--bg-elev);
+  border: 1px solid #2c2e35; border-radius: 6px;
+  font: 11.5px/1.5 "SF Mono", Menlo, Consolas, monospace;
+  color: #c5c8cf; overflow-y: auto; white-space: pre-wrap; word-break: break-word;
+}
+label { display: flex; flex-direction: column; gap: 4px; font-size: 12px; color: var(--muted); }
+label.check { flex-direction: row; align-items: center; gap: 8px; color: var(--fg); }
+.hint { font-size: 11px; color: var(--muted); }
+.hint[data-detected="wbstream"], .hint[data-detected="telemost"] { color: var(--ok); }
+input, select {
+  font-size: 13px; padding: 6px 8px;
+  background: var(--bg-elev); color: var(--fg);
+  border: 1px solid #2c2e35; border-radius: 4px;
+}
+input:focus, select:focus { outline: none; border-color: var(--accent); }
+.row { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.actions { display: flex; gap: 8px; margin-top: 6px; }
+button {
+  flex: 1; padding: 8px 12px; border: none; border-radius: 4px;
+  background: var(--accent); color: #fff; font-weight: 500; cursor: pointer;
+}
+button#stop { background: var(--danger); }
+button:disabled { opacity: 0.4; cursor: not-allowed; }

@@ -29,6 +29,12 @@ const (
 type TelemostHeadlessJoiner struct {
 	logFn       func(string, ...any)
 	OnConnected func(tunnel.DataTunnel)
+	// OnRemoteCandidate is fired for every trickle ICE candidate the
+	// Telemost SFU sends, and once per incoming SDP (target=-1) so
+	// callers can extract any candidates carried inline. The Windows
+	// joiner uses these to install /32 bypass routes before the
+	// candidate is added to Pion's PeerConnection.
+	OnRemoteCandidate func(target int, candidateOrSDP string)
 	ResolveFn      ResolveFunc
 	Status         StatusEmitter
 	PCConfig       PeerConnectionConfigurer
@@ -442,6 +448,9 @@ func (j *TelemostHeadlessJoiner) handlePubAnswer(sdp string) {
 	if j.pubPC == nil {
 		return
 	}
+	if j.OnRemoteCandidate != nil {
+		j.OnRemoteCandidate(-1, sdp)
+	}
 	err := j.pubPC.SetRemoteDescription(webrtc.SessionDescription{
 		Type: webrtc.SDPTypeAnswer,
 		SDP:  sdp,
@@ -475,6 +484,9 @@ func (j *TelemostHeadlessJoiner) handleSubOffer(sdp string, pcSeq int) {
 	if j.subPC == nil {
 		j.logFn("telemost-joiner: sub PC not ready for offer")
 		return
+	}
+	if j.OnRemoteCandidate != nil {
+		j.OnRemoteCandidate(-1, sdp)
 	}
 
 	err := j.subPC.SetRemoteDescription(webrtc.SessionDescription{
@@ -552,6 +564,14 @@ func (j *TelemostHeadlessJoiner) handleMessage(raw []byte) {
 		sdpIdx, _ := icMap["sdpMlineIndex"].(float64)
 		idx := uint16(sdpIdx)
 		cand := webrtc.ICECandidateInit{Candidate: candidate, SDPMid: &sdpMid, SDPMLineIndex: &idx}
+
+		if j.OnRemoteCandidate != nil {
+			tgt := 1
+			if target == "SUBSCRIBER" {
+				tgt = 0
+			}
+			j.OnRemoteCandidate(tgt, candidate)
+		}
 
 		if target == "SUBSCRIBER" {
 			if j.subRemoteSet {

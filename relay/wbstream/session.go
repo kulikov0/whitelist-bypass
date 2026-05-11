@@ -66,6 +66,11 @@ type Session struct {
 
 	OnConnected   func(tunnel.DataTunnel)
 	OnPeerRestart func()
+	// OnRemoteCandidate is forwarded from the underlying LiveKit client.
+	// It fires for every trickle ICE candidate sent by the SFU, plus
+	// once with target=-1 for every SDP description (carrying inline
+	// candidates) before the description is applied to Pion.
+	OnRemoteCandidate func(target int, candidateOrSDP string)
 }
 
 func NewSession(cfg SessionConfig) *Session {
@@ -94,6 +99,16 @@ func (s *Session) Start() error {
 	s.lk.OnPubConnected = s.startTunnel
 	if s.cfg.AccessToken != "" && s.cfg.RoomID != "" {
 		s.lk.OnParticipantUpdate = s.onParticipantUpdate
+	}
+	s.lk.OnRemoteCandidate = func(target int, ic webrtc.ICECandidateInit) {
+		if s.OnRemoteCandidate != nil {
+			s.OnRemoteCandidate(target, ic.Candidate)
+		}
+	}
+	s.lk.OnRemoteSDP = func(target int, _, sdp string) {
+		if s.OnRemoteCandidate != nil {
+			s.OnRemoteCandidate(-1, sdp)
+		}
 	}
 
 	if err := s.lk.Connect(); err != nil {

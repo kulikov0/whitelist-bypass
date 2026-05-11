@@ -19,6 +19,10 @@ echo "=== Building Linux headless joiners ==="
 "$ROOT/build-joiners.sh"
 
 echo ""
+echo "=== Building Windows joiner (Go binary + wintun.dll) ==="
+"$ROOT/build-windows-joiner.sh"
+
+echo ""
 echo "=== Building Linux headless-vk-bot ==="
 "$ROOT/build-bot.sh"
 

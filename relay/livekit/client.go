@@ -77,6 +77,15 @@ type Client struct {
 	OnDataChannel        func(*webrtc.DataChannel)
 	OnPubConnected       func()
 	OnParticipantUpdate  func([]ParticipantInfo)
+	// OnRemoteCandidate fires once for every trickle ICE candidate
+	// arriving from the SFU. Used by the Windows joiner to install
+	// /32 bypass routes so the joiner's own media flows stay on the
+	// physical NIC instead of recursing through the tunnel.
+	OnRemoteCandidate    func(target int, candidate webrtc.ICECandidateInit)
+	// OnRemoteSDP fires when the SFU sends an SDP offer or answer.
+	// The SDP itself can carry candidates inline; the Windows joiner
+	// uses this to bypass them before any media starts flowing.
+	OnRemoteSDP          func(target int, sdpType, sdp string)
 }
 
 func NewClient(cfg Config) *Client {
@@ -362,6 +371,9 @@ func (c *Client) handleSignal(data []byte) {
 }
 
 func (c *Client) applyPubAnswer(sdp string) {
+	if c.OnRemoteSDP != nil {
+		c.OnRemoteSDP(TargetPublisher, "answer", sdp)
+	}
 	c.pubMu.Lock()
 	defer c.pubMu.Unlock()
 	if c.pubPC == nil {
@@ -375,6 +387,9 @@ func (c *Client) applyPubAnswer(sdp string) {
 }
 
 func (c *Client) applySubOfferAndAnswer(sdp string) {
+	if c.OnRemoteSDP != nil {
+		c.OnRemoteSDP(TargetSubscriber, "offer", sdp)
+	}
 	c.subMu.Lock()
 	defer c.subMu.Unlock()
 	if c.subPC == nil {
@@ -407,6 +422,9 @@ func (c *Client) applyRemoteTrickle(m trickleMsg) {
 	if err := json.Unmarshal([]byte(m.CandidateInit), &ic); err != nil {
 		c.logFn("[lk] decode trickle candidate: %v", err)
 		return
+	}
+	if c.OnRemoteCandidate != nil {
+		c.OnRemoteCandidate(m.Target, ic)
 	}
 	switch m.Target {
 	case TargetPublisher:

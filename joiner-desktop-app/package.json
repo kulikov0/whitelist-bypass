@@ -1,0 +1,49 @@
+{
+  "name": "whitelist-bypass-joiner",
+  "version": "0.3.1",
+  "main": "dist/main/index.js",
+  "scripts": {
+    "build": "tsc",
+    "start": "tsc && electron .",
+    "start:dev": "electron ."
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "electron": "^33.0.0",
+    "electron-builder": "^25.0.0",
+    "typescript": "^5.6.0"
+  },
+  "build": {
+    "appId": "whitelist.bypass.joiner",
+    "productName": "WhitelistBypass Joiner",
+    "directories": {
+      "output": "../prebuilts"
+    },
+    "files": [
+      "dist/**/*",
+      "index.html",
+      "styles/**/*"
+    ],
+    "win": {
+      "target": "nsis",
+      "artifactName": "${productName}-${version}-${arch}.${ext}",
+      "icon": "resources/icon.ico",
+      "requestedExecutionLevel": "requireAdministrator",
+      "extraResources": [
+        {
+          "from": "../prebuilts/windows-joiner-${arch}.exe",
+          "to": "windows-joiner.exe"
+        },
+        {
+          "from": "../prebuilts/wintun/${arch}/wintun.dll",
+          "to": "wintun.dll"
+        }
+      ]
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "perMachine": true
+    }
+  }
+}

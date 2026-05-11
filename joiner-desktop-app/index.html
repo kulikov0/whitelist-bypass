@@ -1,0 +1,88 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'" />
+    <title>WhitelistBypass Joiner</title>
+    <link rel="stylesheet" href="styles/app.css" />
+  </head>
+  <body>
+    <header>
+      <h1>WhitelistBypass Joiner</h1>
+      <div class="status" id="status" data-state="idle">idle</div>
+    </header>
+    <main>
+      <section class="form">
+        <label>
+          Join link
+          <input id="link" type="text" placeholder="Paste call link" />
+          <span class="hint" id="platformHint">Detected platform: -</span>
+        </label>
+        <label>
+          Display name
+          <input id="name" type="text" value="Joiner" />
+        </label>
+        <div class="row">
+          <label>
+            SOCKS5 port
+            <input id="socksPort" type="number" value="1080" min="1" max="65535" />
+          </label>
+          <label>
+            DNS
+            <input id="dns" type="text" value="1.1.1.1,8.8.8.8" />
+          </label>
+        </div>
+        <div class="row">
+          <label>
+            SOCKS5 user
+            <input id="socksUser" type="text" />
+          </label>
+          <label>
+            SOCKS5 password
+            <input id="socksPass" type="password" />
+          </label>
+        </div>
+        <div class="row">
+          <label>
+            Tunnel mode
+            <select id="tunnelMode">
+              <option value="video" selected>Video (VP8)</option>
+              <option value="dc">DataChannel</option>
+            </select>
+          </label>
+          <label>
+            Resources
+            <select id="resources">
+              <option value="moderate">Moderate</option>
+              <option value="default" selected>Default</option>
+              <option value="unlimited">Unlimited</option>
+            </select>
+          </label>
+        </div>
+        <div class="row">
+          <label>
+            VP8 FPS
+            <input id="vp8Fps" type="number" value="24" min="1" max="60" />
+          </label>
+          <label>
+            VP8 batch
+            <input id="vp8Batch" type="number" value="30" min="1" max="200" />
+          </label>
+        </div>
+        <label class="check">
+          <input id="noTun" type="checkbox" />
+          SOCKS5 only (do not bring up wintun adapter)
+        </label>
+        <div class="actions">
+          <button id="start">Start</button>
+          <button id="stop">Stop</button>
+        </div>
+      </section>
+      <section class="log-wrap">
+        <h2>Log</h2>
+        <pre id="log"></pre>
+      </section>
+    </main>
+    <script src="dist/renderer/index.js"></script>
+  </body>
+</html>
