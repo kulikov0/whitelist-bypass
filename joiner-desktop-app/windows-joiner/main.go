@@ -18,6 +18,7 @@ import (
 	"net/url"
 	"os"
 	"os/signal"
+	"path/filepath"
 	"runtime/debug"
 	"strings"
 	"sync"
@@ -34,8 +35,40 @@ import (
 
 type statusEmitter struct{}
 
-func (statusEmitter) EmitStatus(status string)   { log.Printf("[status] %s", status) }
+func (statusEmitter) EmitStatus(status string) {
+	log.Printf("[status] %s", status)
+	// CAPTCHA:url is fired by the VK auth path when an interactive
+	// captcha is required. The Electron wrapper watches stdout for
+	// this exact prefix and opens a BrowserWindow at the URL.
+	if strings.HasPrefix(status, "CAPTCHA:") {
+		fmt.Printf("STATUS:%s\n", status)
+	}
+}
 func (statusEmitter) EmitStatusError(msg string) { log.Printf("[status] ERROR: %s", msg) }
+
+type fileCacheStore struct{ dir string }
+
+func newFileCacheStore() *fileCacheStore {
+	dir, _ := os.UserCacheDir()
+	if dir == "" {
+		dir = os.TempDir()
+	}
+	cacheDir := filepath.Join(dir, "whitelist-bypass")
+	os.MkdirAll(cacheDir, 0755)
+	return &fileCacheStore{dir: cacheDir}
+}
+
+func (c *fileCacheStore) Save(key, value string) {
+	os.WriteFile(filepath.Join(c.dir, key), []byte(value), 0644)
+}
+
+func (c *fileCacheStore) Load(key string) string {
+	data, err := os.ReadFile(filepath.Join(c.dir, key))
+	if err != nil {
+		return ""
+	}
+	return string(data)
+}
 
 const (
 	tunAdapter = "WhitelistBypass"
@@ -46,8 +79,8 @@ const (
 )
 
 func main() {
-	platform := flag.String("platform", "", "wbstream | telemost (required)")
-	link := flag.String("link", "", "WB Stream room link or Telemost join URI (required)")
+	platform := flag.String("platform", "", "wbstream | telemost | vk (required)")
+	link := flag.String("link", "", "WB Stream room link, Telemost join URI, or VK call link (required)")
 	displayName := flag.String("name", "Joiner", "display name in the room")
 	socksPort := flag.Int("socks-port", 1080, "local SOCKS5 port")
 	socksUser := flag.String("socks-user", "", "optional SOCKS5 username")
@@ -194,6 +227,9 @@ func main() {
 	case "telemost", "tm":
 		runTelemost(*link, *displayName, *vp8FPS, *vp8Batch,
 			onConnected, addCandidate)
+	case "vk":
+		runVK(*link, *displayName, *tunnelMode, *vp8FPS, *vp8Batch,
+			onConnected, addCandidate)
 	default:
 		log.Fatalf("[config] unknown --platform %q", *platform)
 	}
@@ -224,6 +260,12 @@ func signalingHosts(platform, link string) []string {
 		return []string{"stream.wb.ru", "wbstream01-el.wb.ru"}
 	case "telemost", "tm":
 		hosts := []string{"telemost.yandex.ru", "telemost-api.yandex.ru"}
+		if u, err := url.Parse(strings.TrimSpace(link)); err == nil && u.Host != "" {
+			hosts = append(hosts, u.Host)
+		}
+		return hosts
+	case "vk":
+		hosts := []string{"vk.com", "login.vk.com", "api.vk.com", "ok.ru", "cloud-api.yandex.ru"}
 		if u, err := url.Parse(strings.TrimSpace(link)); err == nil && u.Host != "" {
 			hosts = append(hosts, u.Host)
 		}
@@ -292,6 +334,44 @@ func runTelemost(link, name string, fps, batch int,
 		VP8Batch:    batch,
 	})
 	go inner.RunWithParams(string(params))
+}
+
+func runVK(link, name, mode string, fps, batch int,
+	onConnected func(tunnel.DataTunnel),
+	onCandidate func(int, string),
+) {
+	emitter := statusEmitter{}
+	statusFn := func(s string) { emitter.EmitStatus(s) }
+
+	authJSON, err := joinerCommon.RunVKAuth(strings.TrimSpace(link), name,
+		log.Printf, statusFn, newFileCacheStore(), resolveHostname)
+	if err != nil {
+		log.Fatalf("[vk] auth: %v", err)
+	}
+
+	var authParams map[string]interface{}
+	if json.Unmarshal([]byte(authJSON), &authParams) != nil {
+		log.Fatalf("[vk] auth response not JSON: %s", authJSON)
+	}
+	authParams["tunnelMode"] = mode
+	authParams["vp8Fps"] = fps
+	authParams["vp8Batch"] = batch
+	patched, err := json.Marshal(authParams)
+	if err != nil {
+		log.Fatalf("[vk] auth marshal: %v", err)
+	}
+
+	inner := joinerCommon.NewVKHeadlessJoiner(
+		log.Printf,
+		resolveHostname,
+		emitter,
+		nil,
+		pion.AddTunnelTracks,
+		pion.ReadTrack,
+	)
+	inner.OnConnected = onConnected
+	inner.OnRemoteCandidate = onCandidate
+	go inner.RunWithParams(string(patched))
 }
 
 func resolveHostname(hostname string) (string, error) {

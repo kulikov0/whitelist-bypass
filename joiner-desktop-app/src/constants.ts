@@ -6,7 +6,7 @@ export const IPC = {
   RUNNING: 'joiner:running',
 } as const;
 
-export type JoinerPlatform = 'wbstream' | 'telemost';
+export type JoinerPlatform = 'wbstream' | 'telemost' | 'vk';
 
 export interface JoinerSettings {
   platform: JoinerPlatform;

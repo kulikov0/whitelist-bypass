@@ -1,17 +1,18 @@
-type JoinerPlatform = 'wbstream' | 'telemost';
+type JoinerPlatform = 'wbstream' | 'telemost' | 'vk';
 
 function detectPlatform(url: string): JoinerPlatform | null {
   const u = url.toLowerCase();
   if (!u) return null;
   if (u.includes('wbstream://') || u.includes('stream.wb.ru')) return 'wbstream';
   if (u.includes('telemost.yandex')) return 'telemost';
-  return null;
+  return 'vk';
 }
 
 function platformLabel(p: JoinerPlatform | null): string {
   switch (p) {
     case 'wbstream': return 'WB Stream';
     case 'telemost': return 'Telemost';
+    case 'vk': return 'VK';
     default: return '-';
   }
 }

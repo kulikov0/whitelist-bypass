@@ -47,6 +47,12 @@ type VKJoinResponse struct {
 type VKHeadlessJoiner struct {
 	logFn       func(string, ...any)
 	OnConnected func(tunnel.DataTunnel)
+	// OnRemoteCandidate is fired for every trickle ICE candidate the
+	// VK SFU sends and once per incoming SDP (target=-1) so the caller
+	// can extract any candidates carried inline. The Windows joiner
+	// uses this to install /32 bypass routes before the candidate
+	// reaches Pion.
+	OnRemoteCandidate func(target int, candidateOrSDP string)
 	ResolveFn      ResolveFunc
 	Status         StatusEmitter
 	PCConfig       PeerConnectionConfigurer
@@ -520,6 +526,9 @@ func (h *VKHeadlessJoiner) onTransmittedData(data map[string]interface{}) {
 		candidateJSON, _ := json.Marshal(candidate)
 		var candidateInit webrtc.ICECandidateInit
 		json.Unmarshal(candidateJSON, &candidateInit)
+		if h.OnRemoteCandidate != nil {
+			h.OnRemoteCandidate(0, candidateInit.Candidate)
+		}
 		if h.remoteSet {
 			h.pc.AddICECandidate(candidateInit)
 		} else {
@@ -530,6 +539,9 @@ func (h *VKHeadlessJoiner) onTransmittedData(data map[string]interface{}) {
 	if sdp, ok := data["sdp"].(map[string]interface{}); ok {
 		sdpType, _ := sdp["type"].(string)
 		sdpStr, _ := sdp["sdp"].(string)
+		if h.OnRemoteCandidate != nil {
+			h.OnRemoteCandidate(-1, sdpStr)
+		}
 		h.logFn("headless: remote SDP: %s", sdpType)
 
 		if sdpType == "answer" {

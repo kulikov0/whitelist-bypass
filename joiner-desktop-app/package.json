@@ -22,28 +22,24 @@
     "files": [
       "dist/**/*",
       "index.html",
-      "styles/**/*"
+      "styles/**/*",
+      "resources/**/*"
     ],
     "win": {
-      "target": "nsis",
+      "target": "portable",
       "artifactName": "${productName}-${version}-${arch}.${ext}",
       "icon": "resources/icon.ico",
       "requestedExecutionLevel": "requireAdministrator",
       "extraResources": [
         {
-          "from": "../prebuilts/windows-joiner-${arch}.exe",
+          "from": "windows-joiner/windows-joiner-bundle.exe",
           "to": "windows-joiner.exe"
         },
         {
-          "from": "../prebuilts/wintun/${arch}/wintun.dll",
+          "from": "windows-joiner/wintun-bundle.dll",
           "to": "wintun.dll"
         }
       ]
-    },
-    "nsis": {
-      "oneClick": false,
-      "allowToChangeInstallationDirectory": true,
-      "perMachine": true
     }
   }
 }

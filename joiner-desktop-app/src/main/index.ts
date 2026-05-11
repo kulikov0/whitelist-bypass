@@ -8,6 +8,32 @@ import { IPC, JoinerSettings } from '../constants';
 // wintun adapter and the route table are exclusive resources.
 let joinerProcess: ChildProcess | null = null;
 let mainWindow: BrowserWindow | null = null;
+let captchaWindow: BrowserWindow | null = null;
+
+function openCaptchaWindow(url: string) {
+  if (captchaWindow && !captchaWindow.isDestroyed()) {
+    captchaWindow.loadURL(url);
+    captchaWindow.focus();
+    return;
+  }
+  captchaWindow = new BrowserWindow({
+    width: 520,
+    height: 640,
+    title: 'Solve the captcha',
+    parent: mainWindow ?? undefined,
+    autoHideMenuBar: true,
+    webPreferences: { contextIsolation: true, nodeIntegration: false, sandbox: true },
+  });
+  captchaWindow.loadURL(url);
+  captchaWindow.on('closed', () => { captchaWindow = null; });
+}
+
+function closeCaptchaWindow() {
+  if (captchaWindow && !captchaWindow.isDestroyed()) {
+    captchaWindow.close();
+  }
+  captchaWindow = null;
+}
 
 function resolveJoinerExe(): string {
   // When packaged, electron-builder copies windows-joiner.exe into
@@ -29,6 +55,7 @@ function createWindow() {
     width: 900,
     height: 600,
     title: 'WhitelistBypass Joiner',
+    icon: join(__dirname, '..', '..', 'resources', 'icon.png'),
     webPreferences: {
       preload: join(__dirname, '..', 'preload', 'index.js'),
       contextIsolation: true,
@@ -91,14 +118,21 @@ ipcMain.handle(IPC.START, async (_e, settings: JoinerSettings) => {
     send(IPC.RUNNING, false);
     joinerProcess = null;
   });
-  joinerProcess.stdout?.on('data', (b: Buffer) => send(IPC.LOG, b.toString()));
-  joinerProcess.stderr?.on('data', (b: Buffer) => {
-    const text = b.toString();
+  const handleOutput = (text: string) => {
     send(IPC.LOG, text);
     if (text.includes('TUNNEL ACTIVE')) send(IPC.STATUS, 'active');
     if (text.includes('TUNNEL CONNECTED')) send(IPC.STATUS, 'connected');
-  });
+    const captchaMatch = text.match(/STATUS:CAPTCHA:(\S+)/);
+    if (captchaMatch) {
+      openCaptchaWindow(captchaMatch[1]);
+    } else if (captchaWindow && /captcha solved|Auth complete|TUNNEL/i.test(text)) {
+      closeCaptchaWindow();
+    }
+  };
+  joinerProcess.stdout?.on('data', (b: Buffer) => handleOutput(b.toString()));
+  joinerProcess.stderr?.on('data', (b: Buffer) => handleOutput(b.toString()));
   joinerProcess.on('exit', (code, signal) => {
+    closeCaptchaWindow();
     send(IPC.LOG, `\n[main] joiner exited code=${code} signal=${signal}\n`);
     send(IPC.STATUS, 'stopped');
     send(IPC.RUNNING, false);
@@ -113,6 +147,7 @@ ipcMain.handle(IPC.STOP, async () => {
 });
 
 function stopJoiner() {
+  closeCaptchaWindow();
   if (!joinerProcess) return;
   try {
     // SIGTERM on Windows ends up as TerminateProcess for the child.
