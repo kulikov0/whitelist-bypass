@@ -17,13 +17,15 @@ type udpClient struct {
 	udpConn    *net.UDPConn
 	clientAddr *net.UDPAddr
 	socksHdr   []byte
+	mapKey     string
 }
 
 type RelayBridge struct {
-	tunnel     DataTunnel
-	conns      sync.Map
-	udpClients sync.Map
-	nextID     atomic.Uint32
+	tunnel      DataTunnel
+	conns       sync.Map
+	udpClients  sync.Map
+	udpSessions sync.Map
+	nextID      atomic.Uint32
 	logFn      func(string, ...any)
 	mode       string
 	readBuf    int
@@ -141,7 +143,7 @@ func (rb *RelayBridge) handleJoinerMessage(connID uint32, msgType byte, payload 
 	if msgType == MsgUDPReply {
 		uval, ok := rb.udpClients.Load(connID)
 		if !ok {
-			rb.logFn("relay[joiner]: drop MsgUDPReply for unknown conn %d", connID)
+			rb.send(connID, MsgClose, nil)
 			return
 		}
 		uc := uval.(*udpClient)
@@ -149,14 +151,27 @@ func (rb *RelayBridge) handleJoinerMessage(connID uint32, msgType byte, payload 
 		copy(reply, uc.socksHdr)
 		copy(reply[len(uc.socksHdr):], payload)
 		uc.udpConn.WriteToUDP(reply, uc.clientAddr)
-		rb.udpClients.Delete(connID)
+		// DO NOT delete connID here, UDP sessions are persistent
 		return
 	}
+	
 	val, ok := rb.conns.Load(connID)
 	if !ok {
-		rb.logFn("relay[joiner]: drop msgType=%d for unknown conn %d (payload=%dB)", msgType, connID, len(payload))
+		// If it's a UDP close, handle it
+		if msgType == MsgClose {
+			if uval, ok := rb.udpClients.LoadAndDelete(connID); ok {
+				uc := uval.(*udpClient)
+				rb.udpSessions.Delete(uc.mapKey)
+			}
+		} else {
+			rb.logFn("relay[joiner]: drop msgType=%d for unknown conn %d (payload=%dB)", msgType, connID, len(payload))
+			if msgType == MsgData {
+				rb.send(connID, MsgClose, nil)
+			}
+		}
 		return
 	}
+	
 	sc := val.(*socksConn)
 	switch msgType {
 	case MsgConnectOK:
@@ -186,11 +201,14 @@ func (rb *RelayBridge) handleCreatorMessage(connID uint32, msgType byte, payload
 	case MsgConnect:
 		go rb.connectTCP(connID, string(payload))
 	case MsgUDP:
-		go rb.handleUDP(connID, payload)
+		payloadCopy := make([]byte, len(payload))
+		copy(payloadCopy, payload)
+		go rb.handleUDP(connID, payloadCopy)
 	case MsgData:
 		val, ok := rb.conns.Load(connID)
 		if !ok {
 			rb.logFn("relay[creator]: drop MsgData for unknown conn %d (payload=%dB)", connID, len(payload))
+			rb.send(connID, MsgClose, nil)
 			return
 		}
 		if c, ok := val.(net.Conn); ok {
@@ -199,11 +217,20 @@ func (rb *RelayBridge) handleCreatorMessage(connID uint32, msgType byte, payload
 			}
 		}
 	case MsgClose:
+		found := false
 		if val, ok := rb.conns.LoadAndDelete(connID); ok {
+			found = true
 			if c, ok := val.(net.Conn); ok {
 				c.Close()
 			}
-		} else {
+		}
+		if uval, ok := rb.udpClients.LoadAndDelete(connID); ok {
+			found = true
+			if uc, ok := uval.(*net.UDPConn); ok {
+				uc.Close()
+			}
+		}
+		if !found {
 			rb.logFn("relay[creator]: drop MsgClose for unknown conn %d", connID)
 		}
 	}
@@ -222,23 +249,40 @@ func (rb *RelayBridge) handleUDP(connID uint32, payload []byte) {
 	}
 	addr := string(payload[1 : 1+addrLen])
 	data := payload[1+addrLen:]
-	udpAddr, err := net.ResolveUDPAddr("udp", addr)
-	if err != nil {
-		return
+
+	var conn *net.UDPConn
+	if val, ok := rb.udpClients.Load(connID); ok {
+		conn = val.(*net.UDPConn)
+	} else {
+		udpAddr, err := net.ResolveUDPAddr("udp", addr)
+		if err != nil {
+			return
+		}
+		conn, err = net.DialUDP("udp", nil, udpAddr)
+		if err != nil {
+			return
+		}
+		rb.udpClients.Store(connID, conn)
+
+		go func(c *net.UDPConn, id uint32) {
+			defer c.Close()
+			defer rb.udpClients.Delete(id)
+			defer rb.send(id, MsgClose, nil)
+
+			buf := make([]byte, common.UDPBufSize)
+			for {
+				c.SetReadDeadline(time.Now().Add(60 * time.Second))
+				n, err := c.Read(buf)
+				if err != nil {
+					break
+				}
+				rb.send(id, MsgUDPReply, buf[:n])
+			}
+		}(conn, connID)
 	}
-	conn, err := net.DialUDP("udp", nil, udpAddr)
-	if err != nil {
-		return
-	}
-	defer conn.Close()
-	conn.SetDeadline(time.Now().Add(5 * time.Second))
+
+	conn.SetWriteDeadline(time.Now().Add(5 * time.Second))
 	conn.Write(data)
-	buf := make([]byte, common.UDPBufSize)
-	n, err := conn.Read(buf)
-	if err != nil {
-		return
-	}
-	rb.send(connID, MsgUDPReply, buf[:n])
 }
 
 func (rb *RelayBridge) connectTCP(connID uint32, addr string) {
@@ -466,8 +510,25 @@ func (rb *RelayBridge) handleUDPAssociate(tcpConn net.Conn) {
 	}()
 
 	go func() {
+		var sessionKeys []string
+		var mu sync.Mutex
+
 		defer udpConn.Close()
 		defer tcpConn.Close()
+		
+		defer func() {
+			mu.Lock()
+			for _, k := range sessionKeys {
+				if idVal, ok := rb.udpSessions.Load(k); ok {
+					id := idVal.(uint32)
+					rb.send(id, MsgClose, nil)
+					rb.udpClients.Delete(id)
+					rb.udpSessions.Delete(k)
+				}
+			}
+			mu.Unlock()
+		}()
+
 		buf := make([]byte, common.UDPBufSize)
 		for {
 			n, addr, err := udpConn.ReadFromUDP(buf)
@@ -485,12 +546,27 @@ func (rb *RelayBridge) handleUDPAssociate(tcpConn net.Conn) {
 			if addrErr != nil {
 				continue
 			}
-			id := rb.nextID.Add(1)
+			
+			mapKey := addr.String() + "|" + string(dstAddr)
+			var id uint32
+			if idVal, ok := rb.udpSessions.Load(mapKey); ok {
+				id = idVal.(uint32)
+			} else {
+				id = rb.nextID.Add(1)
+				hdrCopy := make([]byte, headerLen)
+				copy(hdrCopy, buf[:headerLen])
+				rb.udpClients.Store(id, &udpClient{udpConn: udpConn, clientAddr: addr, socksHdr: hdrCopy, mapKey: mapKey})
+				rb.udpSessions.Store(mapKey, id)
+				
+				mu.Lock()
+				sessionKeys = append(sessionKeys, mapKey)
+				mu.Unlock()
+			}
+
 			payload := make([]byte, len(dstAddr)+1+n-headerLen)
 			payload[0] = byte(len(dstAddr))
 			copy(payload[1:], dstAddr)
 			copy(payload[1+len(dstAddr):], buf[headerLen:n])
-			rb.udpClients.Store(id, &udpClient{udpConn: udpConn, clientAddr: addr, socksHdr: buf[:headerLen]})
 			rb.send(id, MsgUDP, payload)
 		}
 	}()

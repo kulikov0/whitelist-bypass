@@ -43,7 +43,6 @@ class HeadlessWBStreamFragment : Fragment() {
                         val params = JSONObject().apply {
                             put("roomId", roomId)
                             put("displayName", displayName)
-                            put("tunnelMode", Prefs.tunnelMode.relayArg)
                             put("vp8Fps", Prefs.vp8Fps)
                             put("vp8Batch", Prefs.vp8Batch)
                         }

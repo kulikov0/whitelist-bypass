@@ -91,6 +91,31 @@ class MainActivity : AppCompatActivity(), SettingsDialogFragment.Listener, JoinF
 
         previousUrl = Prefs.lastUrl
         urlInput.setText(previousUrl)
+
+        val profileSpinner = findViewById<android.widget.Spinner>(R.id.profileSpinner)
+        val profiles = arrayOf("Profile 1", "Profile 2", "Profile 3")
+        profileSpinner.adapter = android.widget.ArrayAdapter(this, android.R.layout.simple_spinner_dropdown_item, profiles)
+        profileSpinner.setSelection(Prefs.currentProfileId)
+
+        profileSpinner.onItemSelectedListener = object : android.widget.AdapterView.OnItemSelectedListener {
+            override fun onItemSelected(parent: android.widget.AdapterView<*>?, view: View?, position: Int, id: Long) {
+                if (Prefs.currentProfileId != position) {
+                    Prefs.currentProfileId = position
+                    previousUrl = Prefs.lastUrl
+                    urlInput.setText(previousUrl)
+                }
+            }
+            override fun onNothingSelected(parent: android.widget.AdapterView<*>?) {}
+        }
+
+        urlInput.addTextChangedListener(object: android.text.TextWatcher {
+            override fun afterTextChanged(s: android.text.Editable?) {
+                Prefs.lastUrl = s.toString()
+            }
+            override fun beforeTextChanged(s: CharSequence?, start: Int, count: Int, after: Int) {}
+            override fun onTextChanged(s: CharSequence?, start: Int, before: Int, count: Int) {}
+        })
+
         statusCtrl.tunnelMode = Prefs.tunnelMode
         statusCtrl.setIdle()
         logContainer.visibility = if (Prefs.showLogs) View.VISIBLE else View.GONE
@@ -200,7 +225,7 @@ class MainActivity : AppCompatActivity(), SettingsDialogFragment.Listener, JoinF
         if (url.isEmpty()) return
 
         val platform = CallPlatform.fromUrl(url)
-        if (Prefs.tunnelMode == TunnelMode.DC && (platform == CallPlatform.TELEMOST || platform == CallPlatform.DION)) {
+        if (Prefs.tunnelMode == TunnelMode.DC && (platform == CallPlatform.TELEMOST || platform == CallPlatform.DION || platform == CallPlatform.WBSTREAM)) {
             Prefs.tunnelMode = TunnelMode.VIDEO
             statusCtrl.tunnelMode = TunnelMode.VIDEO
             Toast.makeText(this, R.string.dc_mode_not_supported, Toast.LENGTH_SHORT).show()

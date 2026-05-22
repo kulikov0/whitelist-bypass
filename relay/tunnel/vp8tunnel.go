@@ -13,7 +13,7 @@ const (
 	defaultVP8FPS       = 24
 	defaultVP8Batch     = 30
 	keepaliveIdlePeriod = 100 * time.Millisecond
-	sendQueueDepth      = 1024
+	sendQueueDepth      = 128
 )
 
 type VP8DataTunnel struct {

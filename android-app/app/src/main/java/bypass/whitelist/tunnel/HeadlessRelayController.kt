@@ -47,59 +47,73 @@ class HeadlessRelayController(
                 return@Thread
             }
             try {
-                val processBuilder = ProcessBuilder(
-                    relayBin.absolutePath,
-                    "--mode", relayMode,
-                    "--ws-port", "${Ports.PION_SIGNALING}",
-                    "--socks-port", "${Prefs.socksPort}",
-                    "--socks-user", SocksAuth.user,
-                    "--socks-pass", SocksAuth.pass
-                )
-                processBuilder.redirectErrorStream(true)
-                val proc = processBuilder.start()
-                synchronized(this) {
-                    process = proc
-                    stdinWriter = BufferedWriter(OutputStreamWriter(proc.outputStream))
-                    pendingCommands.forEach { writeStdin(it) }
-                    pendingCommands.clear()
-                }
-                onLog("Headless relay started (signaling :${Ports.PION_SIGNALING}, SOCKS5 ${SocksAuth.user}:${SocksAuth.pass}@127.0.0.1:${Prefs.socksPort})")
-
-                proc.inputStream.bufferedReader().forEachLine { line ->
-                    if (line.startsWith("RESOLVE:")) {
-                        val hostname = line.removePrefix("RESOLVE:")
-                        try {
-                            val all = InetAddress.getAllByName(hostname)
-                            val address = all.firstOrNull { it is Inet4Address } ?: all.first()
-                            val resolvedIP = address.hostAddress ?: ""
-                            Log.d("RELAY", "Resolved $hostname -> $resolvedIP")
-                            writeStdin(resolvedIP)
-                        } catch (e: Exception) {
-                            Log.e("RELAY", "DNS resolve failed for $hostname", e)
-                            writeStdin("")
-                        }
-                    } else if (line.startsWith("STATUS:")) {
-                        val status = line.removePrefix("STATUS:")
-                        Log.d("RELAY", "status: $status")
-                        when {
-                            status == "READY" -> onStatus(VpnStatus.STARTING)
-                            status == "CONNECTING" -> onStatus(VpnStatus.CONNECTING)
-                            status == "TUNNEL_CONNECTED" -> onStatus(VpnStatus.TUNNEL_ACTIVE)
-                            status == "TUNNEL_LOST" -> onStatus(VpnStatus.TUNNEL_LOST)
-                            status.startsWith("CAPTCHA:") -> {
-                                val captchaUrl = status.removePrefix("CAPTCHA:")
-                                onStatus(VpnStatus.ACTION_REQUIRED_CAPTCHA)
-                                onCaptchaUrl?.invoke(captchaUrl)
-                            }
-                            status.startsWith("ERROR:") -> onStatus(VpnStatus.CALL_FAILED)
-                        }
-                    } else {
-                        Log.d("RELAY", line)
-                        onLog(line)
+                var attempt = 0
+                while (isRunning) {
+                    val processBuilder = ProcessBuilder(
+                        relayBin.absolutePath,
+                        "--mode", relayMode,
+                        "--ws-port", "${Ports.PION_SIGNALING}",
+                        "--socks-port", "${Prefs.socksPort}",
+                        "--socks-user", SocksAuth.user,
+                        "--socks-pass", SocksAuth.pass
+                    )
+                    processBuilder.redirectErrorStream(true)
+                    val proc = processBuilder.start()
+                    synchronized(this) {
+                        process = proc
+                        stdinWriter = BufferedWriter(OutputStreamWriter(proc.outputStream))
+                        pendingCommands.forEach { writeStdin(it) }
+                        pendingCommands.clear()
                     }
+                    onLog("Headless relay started (signaling :${Ports.PION_SIGNALING}, SOCKS5 ${SocksAuth.user}:${SocksAuth.pass}@127.0.0.1:${Prefs.socksPort})")
+
+                    proc.inputStream.bufferedReader().forEachLine { line ->
+                        if (line.startsWith("RESOLVE:")) {
+                            val hostname = line.removePrefix("RESOLVE:")
+                            try {
+                                val all = InetAddress.getAllByName(hostname)
+                                val address = all.firstOrNull { it is Inet4Address } ?: all.first()
+                                val resolvedIP = address.hostAddress ?: ""
+                                Log.d("RELAY", "Resolved $hostname -> $resolvedIP")
+                                writeStdin(resolvedIP)
+                            } catch (e: Exception) {
+                                Log.e("RELAY", "DNS resolve failed for $hostname", e)
+                                writeStdin("")
+                            }
+                        } else if (line.startsWith("STATUS:")) {
+                            val status = line.removePrefix("STATUS:")
+                            Log.d("RELAY", "status: $status")
+                            when {
+                                status == "READY" -> onStatus(VpnStatus.STARTING)
+                                status == "CONNECTING" -> onStatus(VpnStatus.CONNECTING)
+                                status == "TUNNEL_CONNECTED" -> {
+                                    attempt = 0 // Reset attempts on successful connection
+                                    onStatus(VpnStatus.TUNNEL_ACTIVE)
+                                }
+                                status == "TUNNEL_LOST" -> onStatus(VpnStatus.TUNNEL_LOST)
+                                status.startsWith("CAPTCHA:") -> {
+                                    val captchaUrl = status.removePrefix("CAPTCHA:")
+                                    onStatus(VpnStatus.ACTION_REQUIRED_CAPTCHA)
+                                    onCaptchaUrl?.invoke(captchaUrl)
+                                }
+                                status.startsWith("ERROR:") -> onStatus(VpnStatus.CALL_FAILED)
+                            }
+                        } else {
+                            Log.d("RELAY", line)
+                            onLog(line)
+                        }
+                    }
+                    proc.waitFor()
+                    Log.d("RELAY", "Headless relay exited: ${proc.exitValue()}")
+
+                    if (!isRunning) break
+
+                    attempt++
+                    val delayMs = (attempt * 1000L).coerceAtMost(5000L)
+                    onLog("Relay disconnected, reconnecting in ${delayMs / 1000}s...")
+                    onStatus(VpnStatus.CONNECTING)
+                    Thread.sleep(delayMs)
                 }
-                proc.waitFor()
-                Log.d("RELAY", "Headless relay exited: ${proc.exitValue()}")
             } catch (e: Exception) {
                 if (isRunning) {
                     Log.e("RELAY", "Headless relay error", e)

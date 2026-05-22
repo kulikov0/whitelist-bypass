@@ -66,13 +66,13 @@ type VKHeadlessJoiner struct {
 	vkSeq        int
 	remotePeerID *int64
 
-	pc          *webrtc.PeerConnection
-	sampleTrack *webrtc.TrackLocalStaticSample
-	dc          *webrtc.DataChannel
-	vp8tunnel   *tunnel.VP8DataTunnel
-	obf         *tunnel.TunnelObfuscator
-	vp8FPS      int
-	vp8Batch    int
+	pc           *webrtc.PeerConnection
+	sampleTracks []*webrtc.TrackLocalStaticSample
+	dc           *webrtc.DataChannel
+	vp8tunnel    *tunnel.MultiTrackTunnel
+	obf          *tunnel.TunnelObfuscator
+	vp8FPS       int
+	vp8Batch     int
 	remoteSet   bool
 	pendingICE  []webrtc.ICECandidateInit
 }
@@ -432,7 +432,7 @@ func (h *VKHeadlessJoiner) initPC() {
 	h.logFn("headless: tunnel mode: %s", mode)
 
 	if mode == "video" {
-		h.sampleTrack = h.AddTracks(pc, h.logFn, "headless")
+		h.sampleTracks = h.AddTracks(pc, h.logFn, "headless", true)
 	}
 
 	negotiated := true
@@ -476,12 +476,16 @@ func (h *VKHeadlessJoiner) initPC() {
 			h.Status.EmitStatus(common.StatusTunnelLost)
 		}
 		if mode == "video" && state == webrtc.PeerConnectionStateConnected && h.vp8tunnel == nil {
-			h.logFn("headless: === TUNNEL CONNECTED ===")
+			h.logFn("headless: === TUNNEL CONNECTED (dual-track) ===")
 			h.Status.EmitStatus(common.StatusTunnelConnected)
-			h.vp8tunnel = tunnel.NewVP8DataTunnel(h.sampleTrack, h.obf, h.logFn)
+			var subTunnels []*tunnel.VP8DataTunnel
+			for _, track := range h.sampleTracks {
+				subTunnels = append(subTunnels, tunnel.NewVP8DataTunnel(track, h.obf, h.logFn))
+			}
+			h.vp8tunnel = tunnel.NewMultiTrackTunnel(subTunnels)
 			h.vp8tunnel.Start(h.vp8FPS, h.vp8Batch)
-			h.vp8tunnel.SendData(tunnel.EncodeVP8Config(h.vp8tunnel.FPS(), h.vp8tunnel.Batch()))
-			h.logFn("headless: pushed vp8 config to creator fps=%d batch=%d", h.vp8tunnel.FPS(), h.vp8tunnel.Batch())
+			h.vp8tunnel.SendData(tunnel.EncodeVP8Config(h.vp8FPS, h.vp8Batch))
+			h.logFn("headless: pushed vp8 config to creator fps=%d batch=%d", h.vp8FPS, h.vp8Batch)
 			if h.OnConnected != nil {
 				h.OnConnected(h.vp8tunnel)
 			}

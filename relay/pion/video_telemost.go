@@ -20,9 +20,9 @@ type tmPCState struct {
 
 type TelemostClient struct {
 	WSHelper
-	pcs         map[string]*tmPCState
-	pcMu        sync.Mutex
-	sampleTrack *webrtc.TrackLocalStaticSample
+	pcs          map[string]*tmPCState
+	pcMu         sync.Mutex
+	sampleTracks []*webrtc.TrackLocalStaticSample
 	vp8tunnel   *tunnel.VP8LegacyTunnel
 	logFn       func(string, ...any)
 	LocalIP     string
@@ -146,7 +146,7 @@ func (c *TelemostClient) handleICEServers(data json.RawMessage, role string) {
 	c.pcMu.Unlock()
 
 	if role == "pub" {
-		c.sampleTrack = AddTunnelTracks(pc, c.logFn, "telemost [pub]")
+		c.sampleTracks = AddTunnelTracks(pc, c.logFn, "telemost [pub]", false)
 	}
 
 	pc.OnICECandidate(func(cand *webrtc.ICECandidate) {
@@ -161,11 +161,11 @@ func (c *TelemostClient) handleICEServers(data json.RawMessage, role string) {
 	pc.OnConnectionStateChange(func(state webrtc.PeerConnectionState) {
 		c.logFn("telemost [%s]: connection state: %s", role, state.String())
 		c.SendToHook("connection-state", state.String())
-		if state == webrtc.PeerConnectionStateConnected && role == "pub" && c.vp8tunnel == nil {
+		if state == webrtc.PeerConnectionStateConnected && role == "pub" && c.vp8tunnel == nil && len(c.sampleTracks) > 0 {
 			c.logFn("telemost: === CONNECTED - starting VP8 tunnel ===")
-			c.logFn("telemost: sampleTrack id=%s kind=%s", c.sampleTrack.ID(), c.sampleTrack.Kind().String())
+			c.logFn("telemost: sampleTrack id=%s kind=%s", c.sampleTracks[0].ID(), c.sampleTracks[0].Kind().String())
 			c.logFn("telemost: pub senders=%d receivers=%d", len(pc.GetSenders()), len(pc.GetReceivers()))
-			c.vp8tunnel = tunnel.NewVP8LegacyTunnel(c.sampleTrack, c.logFn)
+			c.vp8tunnel = tunnel.NewVP8LegacyTunnel(c.sampleTracks[0], c.logFn)
 			c.vp8tunnel.Start(0, 0)
 			if c.OnConnected != nil {
 				c.OnConnected(c.vp8tunnel)

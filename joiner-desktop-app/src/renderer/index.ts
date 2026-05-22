@@ -51,6 +51,75 @@ downloadLogsBtn.addEventListener('click', () => {
   URL.revokeObjectURL(anchor.href);
 });
 
+const profileSelect = select('profile');
+
+const DEFAULT_PROFILE = {
+  link: '',
+  name: 'Joiner',
+  socksPort: '1080',
+  dns: '1.1.1.1,8.8.8.8',
+  socksUser: '',
+  socksPass: '',
+  tunnelMode: 'video',
+  resources: 'default',
+  vp8Fps: '24',
+  vp8Batch: '30',
+  noTun: false
+};
+
+function loadProfile(id: string) {
+  try {
+    const raw = localStorage.getItem('profile_' + id);
+    const p = raw ? { ...DEFAULT_PROFILE, ...JSON.parse(raw) } : DEFAULT_PROFILE;
+    linkInput.value = p.link || '';
+    input('name').value = p.name || 'Joiner';
+    input('socksPort').value = p.socksPort || '1080';
+    input('dns').value = p.dns || '1.1.1.1,8.8.8.8';
+    input('socksUser').value = p.socksUser || '';
+    input('socksPass').value = p.socksPass || '';
+    select('tunnelMode').value = p.tunnelMode || 'video';
+    select('resources').value = p.resources || 'default';
+    input('vp8Fps').value = p.vp8Fps || '24';
+    input('vp8Batch').value = p.vp8Batch || '30';
+    input('noTun').checked = !!p.noTun;
+    refreshPlatformHint();
+  } catch (e) {
+    console.error('Failed to load profile', e);
+  }
+}
+
+function saveProfile() {
+  const id = profileSelect.value;
+  const p = {
+    link: linkInput.value,
+    name: input('name').value,
+    socksPort: input('socksPort').value,
+    dns: input('dns').value,
+    socksUser: input('socksUser').value,
+    socksPass: input('socksPass').value,
+    tunnelMode: select('tunnelMode').value,
+    resources: select('resources').value,
+    vp8Fps: input('vp8Fps').value,
+    vp8Batch: input('vp8Batch').value,
+    noTun: input('noTun').checked
+  };
+  localStorage.setItem('profile_' + id, JSON.stringify(p));
+}
+
+profileSelect.addEventListener('change', () => loadProfile(profileSelect.value));
+
+document.querySelectorAll('input, select').forEach(el => {
+  if (el.id !== 'profile') {
+    el.addEventListener('change', saveProfile);
+    el.addEventListener('input', saveProfile);
+  }
+});
+
+const lastProfile = localStorage.getItem('last_profile') || '1';
+profileSelect.value = lastProfile;
+profileSelect.addEventListener('change', () => localStorage.setItem('last_profile', profileSelect.value));
+loadProfile(lastProfile);
+
 function refreshPlatformHint() {
   const p = detectPlatform(linkInput.value.trim());
   platformHint.textContent = `Detected platform: ${platformLabel(p)}`;

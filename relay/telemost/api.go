@@ -302,8 +302,9 @@ func SdkCodecsInfoMessage() map[string]interface{} {
 	}
 }
 
-func UpdatePublisherTrackDescriptionMessage(pc *webrtc.PeerConnection, audioLabel, videoLabel string) map[string]interface{} {
+func UpdatePublisherTrackDescriptionMessage(pc *webrtc.PeerConnection, audioLabel, videoLabel, sharingLabel string) map[string]interface{} {
 	descs := []map[string]interface{}{}
+	videoCount := 0
 	for _, tr := range pc.GetTransceivers() {
 		sender := tr.Sender()
 		if sender == nil || sender.Track() == nil {
@@ -313,15 +314,28 @@ func UpdatePublisherTrackDescriptionMessage(pc *webrtc.PeerConnection, audioLabe
 		if kind == "AUDIO" {
 			continue
 		}
+		
+		var kindOut = kind
+		var label = videoLabel
+		var groupId = 2
+		if kind == "VIDEO" {
+			videoCount++
+			if videoCount == 2 {
+				kindOut = "VIDEO" // Changed back to VIDEO
+				label = sharingLabel
+				groupId = 3
+			}
+		}
+
 		mid := tr.Mid()
 		descs = append(descs, map[string]interface{}{
 			"mid":            mid,
 			"transceiverMid": mid,
-			"kind":           kind,
+			"kind":           kindOut,
 			"priority":       0,
-			"label":          videoLabel,
+			"label":          label,
 			"codecs":         map[string]interface{}{},
-			"groupId":        1,
+			"groupId":        groupId,
 			"description":    "",
 		})
 	}

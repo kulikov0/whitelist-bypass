@@ -21,19 +21,59 @@ class LogViewController(
         logView.movementMethod = ScrollingMovementMethod.getInstance()
     }
 
+    private val pendingLogs = mutableListOf<String>()
+    private var isUpdateScheduled = false
+    private val handler = android.os.Handler(android.os.Looper.getMainLooper())
+
     fun append(msg: String) {
         val (line, evicted) = logWriter.append(msg)
-        activity.runOnUiThread {
+        
+        synchronized(pendingLogs) {
             if (evicted) {
-                logView.text = logWriter.displayText()
+                pendingLogs.clear()
+                pendingLogs.add(logWriter.displayText())
             } else {
-                logView.append("$line\n")
+                pendingLogs.add("$line\n")
             }
-            val scrollAmount = logView.layout?.let {
-                it.getLineTop(logView.lineCount) - logView.height
-            } ?: 0
-            if (scrollAmount > 0) logView.scrollTo(0, scrollAmount)
+            
+            if (!isUpdateScheduled) {
+                isUpdateScheduled = true
+                handler.postDelayed({ flushLogs() }, 200)
+            }
         }
+    }
+
+    private fun flushLogs() {
+        val textToAppend: String
+        val isEvicted: Boolean
+        
+        synchronized(pendingLogs) {
+            if (pendingLogs.isEmpty()) return
+            isEvicted = pendingLogs.size == 1 && pendingLogs[0].length > 1000 // Heuristic for evicted
+            
+            if (isEvicted) {
+                textToAppend = pendingLogs[0]
+            } else {
+                val sb = StringBuilder()
+                for (s in pendingLogs) {
+                    sb.append(s)
+                }
+                textToAppend = sb.toString()
+            }
+            pendingLogs.clear()
+            isUpdateScheduled = false
+        }
+        
+        if (isEvicted) {
+            logView.text = textToAppend
+        } else {
+            logView.append(textToAppend)
+        }
+        
+        val scrollAmount = logView.layout?.let {
+            it.getLineTop(logView.lineCount) - logView.height
+        } ?: 0
+        if (scrollAmount > 0) logView.scrollTo(0, scrollAmount)
     }
 
     fun reset() {

@@ -5,6 +5,7 @@ ROOT="$(cd "$(dirname "$0")" && pwd)"
 cd "$ROOT/android-app"
 
 [ -f "./gradlew" ] || { echo "gradlew not found"; exit 1; }
+chmod +x ./gradlew
 
 echo "Cleaning..."
 find app/build -name .DS_Store -delete 2>/dev/null || true # dont fail trying to clean last build!

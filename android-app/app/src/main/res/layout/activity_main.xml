@@ -6,54 +6,71 @@
     android:layout_height="match_parent"
     android:orientation="vertical">
 
-    <LinearLayout
+    <com.google.android.material.card.MaterialCardView
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:gravity="center_vertical"
-        android:orientation="horizontal"
-        android:padding="4dp">
+        android:layout_margin="8dp"
+        app:cardCornerRadius="16dp"
+        app:cardElevation="2dp">
 
-        <EditText
-            android:id="@+id/urlInput"
-            android:layout_width="0dp"
+        <LinearLayout
+            android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:layout_weight="1"
-            android:hint="@string/hint_call_link"
-            android:inputType="textUri"
-            android:singleLine="true"
-            android:textSize="14sp" />
+            android:gravity="center_vertical"
+            android:orientation="horizontal"
+            android:padding="8dp">
 
-        <ImageButton
-            android:id="@+id/clearButton"
-            android:layout_width="36dp"
-            android:layout_height="36dp"
-            android:layout_margin="2dp"
-            android:background="?attr/selectableItemBackgroundBorderless"
-            android:contentDescription="@string/cd_clear"
-            android:padding="6dp"
-            android:scaleType="fitXY"
-            android:src="@android:drawable/ic_menu_close_clear_cancel"
-            app:tint="#888888" />
+            <Spinner
+                android:id="@+id/profileSpinner"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:minHeight="48dp" />
 
-        <Button
-            android:id="@+id/goButton"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:minWidth="64dp"
-            android:text="@string/btn_go" />
+            <EditText
+                android:id="@+id/urlInput"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:hint="@string/hint_call_link"
+                android:inputType="textUri"
+                android:background="@null"
+                android:paddingHorizontal="8dp"
+                android:singleLine="true"
+                android:textSize="14sp" />
 
-        <ImageButton
-            android:id="@+id/gearButton"
-            android:layout_width="36dp"
-            android:layout_height="36dp"
-            android:layout_margin="2dp"
-            android:background="?attr/selectableItemBackgroundBorderless"
-            android:contentDescription="@string/cd_settings"
-            android:padding="6dp"
-            android:scaleType="fitXY"
-            android:src="@android:drawable/ic_menu_manage"
-            app:tint="#888888" />
-    </LinearLayout>
+            <ImageButton
+                android:id="@+id/clearButton"
+                android:layout_width="36dp"
+                android:layout_height="36dp"
+                android:layout_margin="2dp"
+                android:background="?attr/selectableItemBackgroundBorderless"
+                android:contentDescription="@string/cd_clear"
+                android:padding="6dp"
+                android:scaleType="fitXY"
+                android:src="@android:drawable/ic_menu_close_clear_cancel"
+                app:tint="#888888" />
+
+            <Button
+                android:id="@+id/goButton"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginHorizontal="4dp"
+                android:minWidth="64dp"
+                android:text="@string/btn_go" />
+
+            <ImageButton
+                android:id="@+id/gearButton"
+                android:layout_width="36dp"
+                android:layout_height="36dp"
+                android:layout_margin="2dp"
+                android:background="?attr/selectableItemBackgroundBorderless"
+                android:contentDescription="@string/cd_settings"
+                android:padding="6dp"
+                android:scaleType="fitXY"
+                android:src="@android:drawable/ic_menu_manage"
+                app:tint="#888888" />
+        </LinearLayout>
+    </com.google.android.material.card.MaterialCardView>
 
     <TextView
         android:id="@+id/statusBar"

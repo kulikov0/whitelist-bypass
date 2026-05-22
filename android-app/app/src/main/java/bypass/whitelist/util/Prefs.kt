@@ -14,24 +14,33 @@ object Prefs {
         prefs = context.getSharedPreferences("app_prefs", Context.MODE_PRIVATE)
     }
 
+    private fun profileKey(baseKey: String): String {
+        val pId = currentProfileId
+        return if (pId == 0) baseKey else "${baseKey}_$pId"
+    }
+
     var connectOnStart: Boolean
         get() = prefs.getBoolean(PrefsKeys.CONNECT_ON_START, false)
         set(value) = prefs.edit { putBoolean(PrefsKeys.CONNECT_ON_START, value) }
 
+    var currentProfileId: Int
+        get() = prefs.getInt(PrefsKeys.CURRENT_PROFILE, 0)
+        set(value) = prefs.edit { putInt(PrefsKeys.CURRENT_PROFILE, value) }
+
     var lastUrl: String
-        get() = prefs.getString(PrefsKeys.URL, "")!!
-        set(value) = prefs.edit { putString(PrefsKeys.URL, value) }
+        get() = prefs.getString(profileKey(PrefsKeys.URL), "")!!
+        set(value) = prefs.edit { putString(profileKey(PrefsKeys.URL), value) }
 
     var tunnelMode: TunnelMode
         get() {
-            val name = prefs.getString(PrefsKeys.TUNNEL_MODE, TunnelMode.VIDEO.name)!!
+            val name = prefs.getString(profileKey(PrefsKeys.TUNNEL_MODE), TunnelMode.VIDEO.name)!!
             return try {
                 TunnelMode.valueOf(name)
             } catch (_: IllegalArgumentException) {
                 TunnelMode.VIDEO
             }
         }
-        set(value) = prefs.edit { putString(PrefsKeys.TUNNEL_MODE, value.name) }
+        set(value) = prefs.edit { putString(profileKey(PrefsKeys.TUNNEL_MODE), value.name) }
 
     var showLogs: Boolean
         get() = prefs.getBoolean(PrefsKeys.SHOW_LOGS, false)
@@ -39,18 +48,18 @@ object Prefs {
 
     var splitTunnelingMode: SplitTunnelingMode
         get() {
-            val title = prefs.getString(PrefsKeys.SPLIT_TUNNELING_MODE, SplitTunnelingMode.NONE.name)!!
+            val title = prefs.getString(profileKey(PrefsKeys.SPLIT_TUNNELING_MODE), SplitTunnelingMode.NONE.name)!!
             return try {
                 SplitTunnelingMode.valueOf(title)
             } catch (_: IllegalArgumentException) {
                 SplitTunnelingMode.NONE
             }
         }
-        set(value) = prefs.edit { putString(PrefsKeys.SPLIT_TUNNELING_MODE, value.name) }
+        set(value) = prefs.edit { putString(profileKey(PrefsKeys.SPLIT_TUNNELING_MODE), value.name) }
 
     var splitTunnelingPackages: Set<String>
-        get() = prefs.getStringSet(PrefsKeys.SPLIT_TUNNELING_PACKAGES, emptySet()) ?: emptySet()
-        set(value) = prefs.edit { putStringSet(PrefsKeys.SPLIT_TUNNELING_PACKAGES, value) }
+        get() = prefs.getStringSet(profileKey(PrefsKeys.SPLIT_TUNNELING_PACKAGES), emptySet()) ?: emptySet()
+        set(value) = prefs.edit { putStringSet(profileKey(PrefsKeys.SPLIT_TUNNELING_PACKAGES), value) }
 
     var autoclickEnabled: Boolean
         get() = prefs.getBoolean(PrefsKeys.AUTOCLICK_ENABLED, true)
@@ -61,60 +70,60 @@ object Prefs {
         set(value) = prefs.edit { putString(PrefsKeys.AUTOCLICK_NAME, value) }
 
     var headless: Boolean
-        get() = prefs.getBoolean(PrefsKeys.HEADLESS, true)
-        set(value) = prefs.edit { putBoolean(PrefsKeys.HEADLESS, value) }
+        get() = prefs.getBoolean(profileKey(PrefsKeys.HEADLESS), true)
+        set(value) = prefs.edit { putBoolean(profileKey(PrefsKeys.HEADLESS), value) }
 
     var socksPort: Long
-        get() = prefs.getLong(PrefsKeys.SOCKS_PORT, Ports.DEFAULT_SOCKS)
-        set(value) = prefs.edit { putLong(PrefsKeys.SOCKS_PORT, value) }
+        get() = prefs.getLong(profileKey(PrefsKeys.SOCKS_PORT), Ports.DEFAULT_SOCKS)
+        set(value) = prefs.edit { putLong(profileKey(PrefsKeys.SOCKS_PORT), value) }
 
     var socksAuthMode: SocksAuthMode
         get() {
-            val name = prefs.getString(PrefsKeys.SOCKS_AUTH_MODE, SocksAuthMode.AUTO.name)!!
+            val name = prefs.getString(profileKey(PrefsKeys.SOCKS_AUTH_MODE), SocksAuthMode.AUTO.name)!!
             return try {
                 SocksAuthMode.valueOf(name)
             } catch (_: IllegalArgumentException) {
                 SocksAuthMode.AUTO
             }
         }
-        set(value) = prefs.edit { putString(PrefsKeys.SOCKS_AUTH_MODE, value.name) }
+        set(value) = prefs.edit { putString(profileKey(PrefsKeys.SOCKS_AUTH_MODE), value.name) }
 
     var socksUser: String
-        get() = prefs.getString(PrefsKeys.SOCKS_USER, "")!!
-        set(value) = prefs.edit { putString(PrefsKeys.SOCKS_USER, value) }
+        get() = prefs.getString(profileKey(PrefsKeys.SOCKS_USER), "")!!
+        set(value) = prefs.edit { putString(profileKey(PrefsKeys.SOCKS_USER), value) }
 
     var socksPass: String
-        get() = prefs.getString(PrefsKeys.SOCKS_PASS, "")!!
-        set(value) = prefs.edit { putString(PrefsKeys.SOCKS_PASS, value) }
+        get() = prefs.getString(profileKey(PrefsKeys.SOCKS_PASS), "")!!
+        set(value) = prefs.edit { putString(profileKey(PrefsKeys.SOCKS_PASS), value) }
 
     var proxyOnly: Boolean
-        get() = prefs.getBoolean(PrefsKeys.PROXY_ONLY, false)
-        set(value) = prefs.edit { putBoolean(PrefsKeys.PROXY_ONLY, value) }
+        get() = prefs.getBoolean(profileKey(PrefsKeys.PROXY_ONLY), false)
+        set(value) = prefs.edit { putBoolean(profileKey(PrefsKeys.PROXY_ONLY), value) }
 
     var dnsMode: DnsMode
         get() {
-            val name = prefs.getString(PrefsKeys.DNS_MODE, DnsMode.SYSTEM.name)!!
+            val name = prefs.getString(profileKey(PrefsKeys.DNS_MODE), DnsMode.SYSTEM.name)!!
             return try {
                 DnsMode.valueOf(name)
             } catch (_: IllegalArgumentException) {
                 DnsMode.SYSTEM
             }
         }
-        set(value) = prefs.edit { putString(PrefsKeys.DNS_MODE, value.name) }
+        set(value) = prefs.edit { putString(profileKey(PrefsKeys.DNS_MODE), value.name) }
 
     var dnsPrimary: String
-        get() = prefs.getString(PrefsKeys.DNS_PRIMARY, Vpn.DNS_PRIMARY)!!
-        set(value) = prefs.edit { putString(PrefsKeys.DNS_PRIMARY, value) }
+        get() = prefs.getString(profileKey(PrefsKeys.DNS_PRIMARY), Vpn.DNS_PRIMARY)!!
+        set(value) = prefs.edit { putString(profileKey(PrefsKeys.DNS_PRIMARY), value) }
 
     var dnsSecondary: String
-        get() = prefs.getString(PrefsKeys.DNS_SECONDARY, Vpn.DNS_SECONDARY)!!
-        set(value) = prefs.edit { putString(PrefsKeys.DNS_SECONDARY, value) }
+        get() = prefs.getString(profileKey(PrefsKeys.DNS_SECONDARY), Vpn.DNS_SECONDARY)!!
+        set(value) = prefs.edit { putString(profileKey(PrefsKeys.DNS_SECONDARY), value) }
 
     var vp8Fps: Int
-        get() = prefs.getInt(PrefsKeys.VP8_FPS, VP8Defaults.FPS)
-        set(value) = prefs.edit { putInt(PrefsKeys.VP8_FPS, value) }
+        get() = prefs.getInt(profileKey(PrefsKeys.VP8_FPS), VP8Defaults.FPS)
+        set(value) = prefs.edit { putInt(profileKey(PrefsKeys.VP8_FPS), value) }
 
     var vp8Batch: Int
-        get() = prefs.getInt(PrefsKeys.VP8_BATCH, VP8Defaults.BATCH)
-        set(value) = prefs.edit { putInt(PrefsKeys.VP8_BATCH, value) }
+        get() = prefs.getInt(profileKey(PrefsKeys.VP8_BATCH), VP8Defaults.BATCH)
+        set(value) = prefs.edit { putInt(profileKey(PrefsKeys.VP8_BATCH), value) }
 }

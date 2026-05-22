@@ -39,6 +39,7 @@ enum class DnsMode(val label: String) {
 object PrefsKeys {
     const val CONNECT_ON_START = "connect_on_start"
     const val URL = "url"
+    const val CURRENT_PROFILE = "current_profile"
     const val TUNNEL_MODE = "tunnel_mode"
     const val SHOW_LOGS = "show_logs"
     const val SPLIT_TUNNELING_MODE = "split_tunneling_mode"

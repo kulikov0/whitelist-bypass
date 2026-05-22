@@ -21,6 +21,7 @@ func main() {
 	customReadBuf := flag.Int("read-buf", 0, "DC read buffer size in bytes, used with -resources custom")
 	customMemLimit := flag.Int64("mem-limit", 0, "memory limit in bytes, used with -resources custom")
 	writeFile := flag.String("write-file", "", "path to file where active room id is appended")
+	screenShare := flag.Bool("screen-share", true, "enable dual-track (camera+screen) multiplexing for double bandwidth")
 	flag.Parse()
 
 	var readBuf int
@@ -101,19 +102,14 @@ func main() {
 			RoomID:      roomID,
 			AccessToken: access,
 			ReadBuf:     readBuf,
+			ScreenShare: *screenShare,
 		})
 		sess.OnConnected = func(tun tunnel.DataTunnel) {
 			if activeBridge != nil {
 				activeBridge.Reset()
 			}
-			bridgeReadBuf := common.VP8BufSize
-			mode := "video"
-			if _, ok := tun.(*tunnel.DCTunnel); ok {
-				bridgeReadBuf = readBuf
-				mode = "dc"
-			}
-			activeBridge = tunnel.NewRelayBridge(tun, "creator", bridgeReadBuf, log.Printf)
-			fmt.Printf("\n  TUNNEL CONNECTED mode=%s\n", mode)
+			activeBridge = tunnel.NewRelayBridge(tun, "creator", common.VP8BufSize, log.Printf)
+			fmt.Printf("\n  TUNNEL CONNECTED\n")
 		}
 		sess.OnPeerRestart = func() {
 			if activeBridge != nil {

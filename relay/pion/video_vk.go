@@ -13,7 +13,7 @@ import (
 type VKClient struct {
 	WSHelper
 	pc              *webrtc.PeerConnection
-	sampleTrack     *webrtc.TrackLocalStaticSample
+	sampleTracks    []*webrtc.TrackLocalStaticSample
 	vp8tunnel       *tunnel.VP8LegacyTunnel
 	logFn           func(string, ...any)
 	remoteSet       bool
@@ -81,8 +81,8 @@ func (c *VKClient) createPC(config webrtc.Configuration) error {
 	}
 	c.pc = pc
 
-	sampleTrack := AddTunnelTracks(pc, c.logFn, "vk")
-	c.sampleTrack = sampleTrack
+	sampleTracks := AddTunnelTracks(pc, c.logFn, "vk", true)
+	c.sampleTracks = sampleTracks
 
 	// Create DataChannels required by VK SFU.
 	// The SFU sends producer-updated (SDP offer) via producerNotification DC.
@@ -136,11 +136,10 @@ func (c *VKClient) createPC(config webrtc.Configuration) error {
 	pc.OnConnectionStateChange(func(state webrtc.PeerConnectionState) {
 		c.logFn("vk: connection state: %s", state.String())
 		c.SendToHook("connection-state", state.String())
-		if state == webrtc.PeerConnectionStateConnected && c.vp8tunnel == nil {
+		if state == webrtc.PeerConnectionStateConnected && c.vp8tunnel == nil && len(c.sampleTracks) > 0 {
 			c.logFn("vk: === CONNECTED - starting VP8 tunnel ===")
-			c.logFn("vk: sampleTrack id=%s kind=%s", sampleTrack.ID(), sampleTrack.Kind().String())
-			c.logFn("vk: PC senders=%d receivers=%d signalingState=%s", len(pc.GetSenders()), len(pc.GetReceivers()), pc.SignalingState().String())
-			c.vp8tunnel = tunnel.NewVP8LegacyTunnel(sampleTrack, c.logFn)
+			c.logFn("vk: sampleTrack id=%s kind=%s", c.sampleTracks[0].ID(), c.sampleTracks[0].Kind().String())
+			c.vp8tunnel = tunnel.NewVP8LegacyTunnel(c.sampleTracks[0], c.logFn)
 			c.vp8tunnel.Start(0, 0)
 			if c.OnConnected != nil {
 				c.OnConnected(c.vp8tunnel)
@@ -320,7 +319,7 @@ func (c *VKClient) handleReset(id int) {
 	c.pending = nil
 	c.dcProducerNotif = nil
 	c.dcProducerCmd = nil
-	c.sampleTrack = nil
+	c.sampleTracks = nil
 	if id > 0 {
 		c.SendResponse(id, "ok")
 	}

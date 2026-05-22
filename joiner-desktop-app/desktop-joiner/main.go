@@ -100,7 +100,7 @@ func main() {
 	socksUser := flag.String("socks-user", "", "optional SOCKS5 username")
 	socksPass := flag.String("socks-pass", "", "optional SOCKS5 password")
 	resources := flag.String("resources", "default", "moderate | default | unlimited")
-	tunnelMode := flag.String("tunnel-mode", "video", "tunnel mode for WB Stream: video | dc")
+	tunnelMode := flag.String("tunnel-mode", "video", "tunnel mode for VK: video | dc")
 	vp8FPS := flag.Int("vp8-fps", 24, "VP8 frame rate")
 	vp8Batch := flag.Int("vp8-batch", 30, "VP8 batch multiplier")
 	dns := flag.String("dns", "1.1.1.1,8.8.8.8", "comma-separated DNS servers for the tunnel adapter")
@@ -258,7 +258,7 @@ func main() {
 
 	switch strings.ToLower(*platform) {
 	case "wbstream", "wb":
-		runWBStream(*link, *displayName, *tunnelMode, *vp8FPS, *vp8Batch,
+		runWBStream(*link, *displayName, *vp8FPS, *vp8Batch,
 			onConnected, addCandidate)
 	case "telemost", "tm":
 		runTelemost(*link, *displayName, *vp8FPS, *vp8Batch,
@@ -323,7 +323,7 @@ func signalingHosts(platform, link string) []string {
 	return nil
 }
 
-func runWBStream(link, name, mode string, fps, batch int,
+func runWBStream(link, name string, fps, batch int,
 	onConnected func(tunnel.DataTunnel),
 	onCandidate func(int, string),
 ) {
@@ -332,7 +332,7 @@ func runWBStream(link, name, mode string, fps, batch int,
 	if err != nil {
 		log.Fatalf("[wb] auth: %v", err)
 	}
-	log.Printf("[wb] room=%s server=%s mode=%s", roomID, serverURL, mode)
+	log.Printf("[wb] room=%s server=%s", roomID, serverURL)
 
 	obf, err := tunnel.NewTunnelObfuscator(tunnel.DeriveSecretFromJoinLink(roomID))
 	if err != nil {
@@ -343,7 +343,6 @@ func runWBStream(link, name, mode string, fps, batch int,
 		RoomToken:   roomToken,
 		ServerURL:   serverURL,
 		DisplayName: name,
-		TunnelMode:  mode,
 		Obfuscator:  obf,
 		LogFn:       log.Printf,
 		VP8FPS:      fps,

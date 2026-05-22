@@ -1,0 +1,34 @@
+name: Build Windows Binaries
+
+on:
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: windows-latest
+
+    steps:
+    - name: Checkout Code
+      uses: actions/checkout@v4
+
+    - name: Setup Go
+      uses: actions/setup-go@v5
+      with:
+        go-version: '1.26.1'
+
+    - name: Build Windows Binaries
+      run: |
+        mkdir prebuilts -ErrorAction SilentlyContinue
+        cd headless/wbstream
+        go build -trimpath -ldflags="-s -w" -o ../../prebuilts/headless-wbstream-creator.exe .
+        cd ../telemost
+        go build -trimpath -ldflags="-s -w" -o ../../prebuilts/headless-telemost-creator.exe .
+        cd ../vk
+        go build -trimpath -ldflags="-s -w" -o ../../prebuilts/headless-vk-creator.exe .
+        cd ../../
+
+    - name: Upload Artifacts
+      uses: actions/upload-artifact@v4
+      with:
+        name: windows-binaries
+        path: prebuilts/*.exe

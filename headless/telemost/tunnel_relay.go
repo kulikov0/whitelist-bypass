@@ -21,10 +21,10 @@ type SFURelay struct {
 	subPending   []webrtc.ICECandidateInit
 	mu           sync.Mutex
 
-	sampleTrack   *webrtc.TrackLocalStaticSample
-	tun           *tunnel.VP8DataTunnel
+	sampleTracks  []*webrtc.TrackLocalStaticSample
+	tun           *tunnel.MultiTrackTunnel
 	obf           *tunnel.TunnelObfuscator
-	OnConnected   func(*tunnel.VP8DataTunnel)
+	OnConnected   func(tunnel.DataTunnel)
 	OnPubReady    func()
 	OnPeerRestart func()
 	OnPubICE      func(*webrtc.ICECandidate)
@@ -48,18 +48,25 @@ func (r *SFURelay) Init(iceServers []webrtc.ICEServer) error {
 	}
 	r.pubPC = pubPC
 
-	sampleTrack, _ := webrtc.NewTrackLocalStaticSample(
+	trackVideo, _ := webrtc.NewTrackLocalStaticSample(
 		webrtc.RTPCodecCapability{MimeType: webrtc.MimeTypeVP8},
 		"video", "tunnel-video",
 	)
-	r.sampleTrack = sampleTrack
+	r.sampleTracks = append(r.sampleTracks, trackVideo)
+
+	trackScreen, _ := webrtc.NewTrackLocalStaticSample(
+		webrtc.RTPCodecCapability{MimeType: webrtc.MimeTypeVP8},
+		"video", "tunnel-screen",
+	)
+	r.sampleTracks = append(r.sampleTracks, trackScreen)
 
 	audioTrack, _ := webrtc.NewTrackLocalStaticRTP(
 		webrtc.RTPCodecCapability{MimeType: webrtc.MimeTypeOpus},
 		"audio", "tunnel-audio",
 	)
 	pubPC.AddTransceiverFromTrack(audioTrack, webrtc.RTPTransceiverInit{Direction: webrtc.RTPTransceiverDirectionSendonly})
-	pubPC.AddTransceiverFromTrack(sampleTrack, webrtc.RTPTransceiverInit{Direction: webrtc.RTPTransceiverDirectionSendonly})
+	pubPC.AddTransceiverFromTrack(trackVideo, webrtc.RTPTransceiverInit{Direction: webrtc.RTPTransceiverDirectionSendonly})
+	pubPC.AddTransceiverFromTrack(trackScreen, webrtc.RTPTransceiverInit{Direction: webrtc.RTPTransceiverDirectionSendonly})
 
 	pubPC.OnICECandidate(func(cand *webrtc.ICECandidate) {
 		if cand == nil || r.OnPubICE == nil {
@@ -72,8 +79,12 @@ func (r *SFURelay) Init(iceServers []webrtc.ICEServer) error {
 		log.Printf("[pub] connection state: %s", state.String())
 		if state == webrtc.PeerConnectionStateConnected {
 			if r.tun == nil {
-				log.Println("[relay] starting VP8 publish tunnel on pub PC connected")
-				r.tun = tunnel.NewVP8DataTunnel(r.sampleTrack, r.obf, log.Printf)
+				log.Println("[relay] starting VP8 publish tunnel on pub PC connected (dual-track)")
+				var subTunnels []*tunnel.VP8DataTunnel
+				for _, track := range r.sampleTracks {
+					subTunnels = append(subTunnels, tunnel.NewVP8DataTunnel(track, r.obf, log.Printf))
+				}
+				r.tun = tunnel.NewMultiTrackTunnel(subTunnels)
 				r.tun.Start(0, 0)
 				if r.OnConnected != nil {
 					r.OnConnected(r.tun)
@@ -275,24 +286,10 @@ func (r *SFURelay) readTrack(track *webrtc.TrackRemote) {
 			log.Printf("[video] recv vp8 frame #%d %d bytes", recvCount, len(frameBuf))
 		}
 
-		res := r.obf.Decode(frameBuf)
+		if r.tun != nil {
+			r.tun.HandleFrame(frameBuf)
+		}
 		frameBuf = frameBuf[:0]
 		frameValid = false
-
-		if !res.HasFrame || res.SelfEcho {
-			continue
-		}
-		if res.PeerRestart {
-			log.Printf("[video] peer restart detected, new epoch=0x%08x", res.PeerEpoch)
-			if r.OnPeerRestart != nil {
-				r.OnPeerRestart()
-			}
-		}
-		if res.Keepalive || len(res.Payload) == 0 {
-			continue
-		}
-		if r.tun != nil && r.tun.OnData != nil {
-			r.tun.OnData(res.Payload)
-		}
 	}
 }

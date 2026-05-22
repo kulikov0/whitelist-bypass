@@ -22,7 +22,6 @@ type peerEntry struct {
 	identity  string
 	firstSeen time.Time
 	state     int32
-	promoted  bool
 }
 
 const (
@@ -45,19 +44,20 @@ type SessionConfig struct {
 	RoomID         string
 	AccessToken    string
 	ReadBuf        int
+	ScreenShare    bool
 }
 
 type Session struct {
 	cfg SessionConfig
 
-	lk          *livekit.Client
-	sampleTrack *webrtc.TrackLocalStaticSample
+	lk           *livekit.Client
+	sampleTracks []*webrtc.TrackLocalStaticSample
 
 	pubReliableDC      *webrtc.DataChannel
 	pubReliableDCReady bool
 	subReliableDC      *webrtc.DataChannel
 
-	vp8tun       *tunnel.VP8DataTunnel
+	vp8tun       *tunnel.MultiTrackTunnel
 	dctun        *tunnel.DCTunnel
 	mu           sync.Mutex
 	tunFired     bool
@@ -97,7 +97,8 @@ func (s *Session) Start() error {
 	})
 	s.lk.OnReady = s.onLKReady
 	s.lk.OnTrack = s.onRemoteTrack
-	s.lk.OnDataChannel = s.onRemoteDataChannel
+	// DC tunnel disabled: WB Stream DC mode is dead.
+	// s.lk.OnDataChannel = s.onRemoteDataChannel
 	s.lk.OnPubConnected = s.startTunnel
 	if s.cfg.AccessToken != "" && s.cfg.RoomID != "" {
 		s.lk.OnParticipantUpdate = s.onParticipantUpdate
@@ -132,48 +133,53 @@ func (s *Session) onLKReady() {
 		return
 	}
 
-	trackID := "videochannel-" + uuid.New().String()
-	track, err := webrtc.NewTrackLocalStaticSample(
+	var tracks []*webrtc.TrackLocalStaticSample
+	
+	trackCamID := "videochannel-" + uuid.New().String()
+	trackCam, err := webrtc.NewTrackLocalStaticSample(
 		webrtc.RTPCodecCapability{MimeType: webrtc.MimeTypeVP8, ClockRate: 90000},
-		trackID, "tunnel-video-"+uuid.New().String(),
+		trackCamID, "tunnel-video-"+uuid.New().String(),
 	)
 	if err != nil {
 		s.cfg.LogFn("[lk] create local track: %v", err)
 		return
 	}
-	s.mu.Lock()
-	s.sampleTrack = track
-	s.mu.Unlock()
+	tracks = append(tracks, trackCam)
 
-	if _, err := pubPC.AddTransceiverFromTrack(track,
-		webrtc.RTPTransceiverInit{Direction: webrtc.RTPTransceiverDirectionSendonly}); err != nil {
-		s.cfg.LogFn("[lk] add transceiver: %v", err)
-		return
+	if s.cfg.ScreenShare {
+		trackScreenID := "screenchannel-" + uuid.New().String()
+		trackScreen, err := webrtc.NewTrackLocalStaticSample(
+			webrtc.RTPCodecCapability{MimeType: webrtc.MimeTypeVP8, ClockRate: 90000},
+			trackScreenID, "tunnel-screen-"+uuid.New().String(),
+		)
+		if err != nil {
+			s.cfg.LogFn("[lk] create screen track: %v", err)
+			return
+		}
+		tracks = append(tracks, trackScreen)
 	}
 
-	ordered := true
-	dc, err := pubPC.CreateDataChannel("_reliable", &webrtc.DataChannelInit{
-		Ordered: &ordered,
-	})
-	if err != nil {
-		s.cfg.LogFn("[lk] create reliable DC: %v", err)
-		return
-	}
 	s.mu.Lock()
-	s.pubReliableDC = dc
+	s.sampleTracks = tracks
 	s.mu.Unlock()
-	dc.OnOpen(func() {
-		s.cfg.LogFn("[lk] reliable DC open")
-		s.mu.Lock()
-		s.pubReliableDCReady = true
-		s.mu.Unlock()
-		s.maybeStartDCTunnel()
-	})
 
-	if err := s.lk.SendAddTrack(track.ID(), "videochannel",
-		livekit.TrackTypeVideo, livekit.TrackSourceCamera, 1280, 720); err != nil {
-		s.cfg.LogFn("[lk] send add-track: %v", err)
-		return
+	for i, track := range tracks {
+		if _, err := pubPC.AddTransceiverFromTrack(track,
+			webrtc.RTPTransceiverInit{Direction: webrtc.RTPTransceiverDirectionSendonly}); err != nil {
+			s.cfg.LogFn("[lk] add transceiver: %v", err)
+			return
+		}
+		
+		source := livekit.TrackSourceCamera
+		if i == 1 {
+			source = 3 // TrackSourceScreenShare = 3 in livekit-protocol
+		}
+		
+		if err := s.lk.SendAddTrack(track.ID(), "videochannel",
+			livekit.TrackTypeVideo, source, 1280, 720); err != nil {
+			s.cfg.LogFn("[lk] send add-track: %v", err)
+			return
+		}
 	}
 
 	offer, err := pubPC.CreateOffer(nil)
@@ -194,22 +200,29 @@ func (s *Session) onLKReady() {
 
 func (s *Session) startTunnel() {
 	s.mu.Lock()
-	if s.vp8tun != nil || s.sampleTrack == nil {
+	if s.vp8tun != nil || len(s.sampleTracks) == 0 {
 		s.mu.Unlock()
 		return
 	}
-	s.vp8tun = tunnel.NewVP8DataTunnel(s.sampleTrack, s.cfg.Obfuscator, s.cfg.LogFn)
+	var subTunnels []*tunnel.VP8DataTunnel
+	for _, track := range s.sampleTracks {
+		tun := tunnel.NewVP8DataTunnel(track, s.cfg.Obfuscator, s.cfg.LogFn)
+		subTunnels = append(subTunnels, tun)
+	}
+	s.vp8tun = tunnel.NewMultiTrackTunnel(subTunnels)
 	s.vp8tun.Start(s.cfg.VP8FPS, s.cfg.VP8Batch)
 	s.mu.Unlock()
-	s.cfg.LogFn("[lk] vp8 tunnel writer started")
+	s.cfg.LogFn("[lk] vp8 multi-track tunnel writer started (tracks: %d)", len(subTunnels))
 
-	if s.cfg.TunnelMode == TunnelModeVideo {
-		s.fireOnConnected(s.vp8tun)
-		return
-	}
-	if s.cfg.TunnelMode == "" {
-		s.vp8tun.SetOnData(func(payload []byte) { s.activate(s.vp8tun, payload) })
-	}
+	// DC tunnel disabled: only video mode is supported.
+	s.fireOnConnected(s.vp8tun)
+	// if s.cfg.TunnelMode == TunnelModeVideo {
+	// 	s.fireOnConnected(s.vp8tun)
+	// 	return
+	// }
+	// if s.cfg.TunnelMode == "" {
+	// 	s.vp8tun.SetOnData(func(payload []byte) { s.activate(s.vp8tun, payload) })
+	// }
 }
 
 func (s *Session) maybeStartDCTunnel() {
@@ -291,6 +304,10 @@ func (s *Session) activate(tun tunnel.DataTunnel, payload []byte) {
 	switch v := tun.(type) {
 	case *tunnel.VP8DataTunnel:
 		fwd = v.OnData
+	case *tunnel.MultiTrackTunnel:
+		// Since we didn't add a getter, we could just ignore this.
+		// Wait, WB Stream mode doesn't use `activate` anyway (only video mode is supported now).
+		// But let's be safe.
 	case *tunnel.DCTunnel:
 		fwd = v.OnData()
 	}
@@ -299,7 +316,7 @@ func (s *Session) activate(tun tunnel.DataTunnel, payload []byte) {
 	}
 }
 
-func (s *Session) currentVP8Tun() *tunnel.VP8DataTunnel {
+func (s *Session) currentVP8Tun() *tunnel.MultiTrackTunnel {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	return s.vp8tun
@@ -340,7 +357,6 @@ func (s *Session) onRemoteTrack(track *webrtc.TrackRemote, _ *webrtc.RTPReceiver
 	s.mu.Unlock()
 	if count > 1 {
 		s.cfg.LogFn("[wb] new peer track #%d, signalling peer-restart", count)
-		s.rearmAutoDetect()
 		if s.OnPeerRestart != nil {
 			s.OnPeerRestart()
 		}
@@ -425,8 +441,6 @@ func (s *Session) onParticipantUpdate(updates []livekit.ParticipantInfo) {
 		s.peersBySID = make(map[string]peerEntry)
 	}
 	newcomerSIDs := make(map[string]bool)
-	var toPromote []peerEntry
-	canPromote := s.cfg.AccessToken != "" && s.cfg.RoomID != ""
 	for _, p := range updates {
 		if p.SID == "" || p.SID == selfSID {
 			continue
@@ -444,10 +458,6 @@ func (s *Session) onParticipantUpdate(updates []livekit.ParticipantInfo) {
 			entry.identity = p.Identity
 		}
 		entry.state = p.State
-		if canPromote && !entry.promoted && entry.state == livekit.ParticipantStateActive && entry.identity != "" {
-			entry.promoted = true
-			toPromote = append(toPromote, entry)
-		}
 		s.peersBySID[p.SID] = entry
 	}
 
@@ -460,11 +470,6 @@ func (s *Session) onParticipantUpdate(updates []livekit.ParticipantInfo) {
 		}
 	}
 	s.mu.Unlock()
-
-	for _, e := range toPromote {
-		go s.promotePeer(e.sid, e.identity)
-	}
-
 	if len(stale) == 0 {
 		return
 	}
@@ -482,20 +487,6 @@ func (s *Session) onParticipantUpdate(updates []livekit.ParticipantInfo) {
 		delete(s.peersBySID, e.sid)
 		s.mu.Unlock()
 	}
-}
-
-func (s *Session) promotePeer(sid, identity string) {
-	if err := SetParticipantPermissions(http.DefaultClient, s.cfg.AccessToken, s.cfg.RoomID, identity, ModeratorPermissions); err != nil {
-		s.cfg.LogFn("[wb] promote failed identity=%s: %v", identity, err)
-		s.mu.Lock()
-		if entry, ok := s.peersBySID[sid]; ok {
-			entry.promoted = false
-			s.peersBySID[sid] = entry
-		}
-		s.mu.Unlock()
-		return
-	}
-	s.cfg.LogFn("[wb] promoted to moderator identity=%s sid=%s", identity, sid)
 }
 
 func (s *Session) Close() {

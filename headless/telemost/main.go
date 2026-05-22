@@ -195,9 +195,9 @@ func (b *Bridge) sendHello() {
 	b.wsSend(map[string]interface{}{
 		"uid": uuid.New().String(),
 		"hello": map[string]interface{}{
-			"participantMeta":       map[string]interface{}{"name": "Headless", "role": "SPEAKER", "description": "", "sendAudio": false, "sendVideo": true},
+			"participantMeta":       map[string]interface{}{"name": "Headless", "role": "SPEAKER", "description": "", "sendAudio": false, "sendVideo": true, "sendSharing": true},
 			"participantAttributes": map[string]interface{}{"name": "Headless", "role": "SPEAKER", "description": ""},
-			"sendAudio": false, "sendVideo": true, "sendSharing": false,
+			"sendAudio": false, "sendVideo": true, "sendSharing": true,
 			"participantId": b.connInfo.PeerID, "roomId": b.connInfo.RoomID,
 			"serviceName": b.connInfo.ServiceName, "credentials": b.connInfo.Credentials,
 			"capabilitiesOffer": tmapi.CapabilitiesOffer,
@@ -215,7 +215,7 @@ func (b *Bridge) sendPubOffer() {
 		log.Printf("[tm-ws] pub offer failed: %v", err)
 		return
 	}
-	audioMid, videoMid := parseMids(offer.SDP)
+	audioMid, videoMid, screenMid := parseMids(offer.SDP)
 	log.Printf("[tm-ws] -> publisherSdpOffer pcSeq=%d", b.pubSeq)
 
 	var tracks []map[string]interface{}
@@ -224,6 +224,9 @@ func (b *Bridge) sendPubOffer() {
 	}
 	if videoMid != "" {
 		tracks = append(tracks, map[string]interface{}{"mid": videoMid, "transceiverMid": videoMid, "kind": "VIDEO", "priority": 0, "label": "", "codecs": map[string]interface{}{}, "groupId": 2, "description": ""})
+	}
+	if screenMid != "" {
+		tracks = append(tracks, map[string]interface{}{"mid": screenMid, "transceiverMid": screenMid, "kind": "VIDEO", "priority": 0, "label": "", "codecs": map[string]interface{}{}, "groupId": 3, "description": ""})
 	}
 	b.wsSend(map[string]interface{}{
 		"uid":               uuid.New().String(),
@@ -283,7 +286,7 @@ func (b *Bridge) sendInitBundle() {
 	b.initBundleSent = true
 	log.Printf("[tm-ws] -> sdkCodecsInfo + updatePublisherTrackDescription")
 	b.wsSend(tmapi.SdkCodecsInfoMessage())
-	b.wsSend(tmapi.UpdatePublisherTrackDescriptionMessage(b.relay.pubPC, "Microphone", "MacBook Pro Camera (0000:0001)"))
+	b.wsSend(tmapi.UpdatePublisherTrackDescriptionMessage(b.relay.pubPC, "Microphone", "MacBook Pro Camera (0000:0001)", "Screen Share"))
 	b.sendStartupSlotsRamp()
 }
 
@@ -705,7 +708,7 @@ func (b *Bridge) initRelay() {
 	relay.OnPubReady = func() {
 		log.Printf("[relay] pub PC connected")
 	}
-	relay.OnConnected = func(tun *tunnel.VP8DataTunnel) {
+	relay.OnConnected = func(tun tunnel.DataTunnel) {
 		if b.activeBridge != nil {
 			b.activeBridge.Reset()
 		}
@@ -846,20 +849,26 @@ func (b *Bridge) run() {
 	}
 }
 
-func parseMids(sdp string) (audioMid, videoMid string) {
+func parseMids(sdp string) (audioMid, videoMid, screenMid string) {
 	var media string
+	var videoIndex int
 	for _, line := range strings.Split(sdp, "\r\n") {
 		if strings.HasPrefix(line, "m=audio") {
 			media = "audio"
 		} else if strings.HasPrefix(line, "m=video") {
 			media = "video"
+			videoIndex++
 		}
 		if strings.HasPrefix(line, "a=mid:") {
 			mid := strings.TrimPrefix(line, "a=mid:")
 			if media == "audio" && audioMid == "" {
 				audioMid = mid
-			} else if media == "video" && videoMid == "" {
-				videoMid = mid
+			} else if media == "video" {
+				if videoIndex == 1 && videoMid == "" {
+					videoMid = mid
+				} else if videoIndex == 2 && screenMid == "" {
+					screenMid = mid
+				}
 			}
 		}
 	}

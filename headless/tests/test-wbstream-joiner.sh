@@ -10,7 +10,6 @@ set -u
 ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
 CREATOR="$ROOT/headless/wbstream/headless-wbstream-creator"
 JOINER="$ROOT/headless/wbstream-joiner/headless-wbstream-joiner"
-COOKIES="${WBSTREAM_COOKIES:-$ROOT/cookies-wbstream.json}"
 SOCKS_PORT=11080
 TARGET_URL="https://api.ipify.org"
 PROBE_TIMEOUT=15
@@ -48,15 +47,9 @@ require_bin() {
 require_bin "$CREATOR"
 require_bin "$JOINER"
 
-if [ ! -f "$COOKIES" ]; then
-    echo "FAIL: cookies file not found at $COOKIES" >&2
-    echo "Set WBSTREAM_COOKIES or place cookies-wbstream.json at repo root." >&2
-    exit 2
-fi
-
 echo "=== mode=$mode_arg ==="
 
-"$CREATOR" --cookies "$COOKIES" > "$CREATOR_LOG" 2>&1 &
+"$CREATOR" > "$CREATOR_LOG" 2>&1 &
 CREATOR_PID=$!
 
 waited=0

@@ -142,21 +142,36 @@ func (h *WSHelper) ReadMessages(handler func([]byte), onDisconnect func()) {
 	}
 }
 
-func AddTunnelTracks(pc *webrtc.PeerConnection, logFn func(string, ...any), prefix string) *webrtc.TrackLocalStaticSample {
-	sampleTrack, _ := webrtc.NewTrackLocalStaticSample(
+func AddTunnelTracks(pc *webrtc.PeerConnection, logFn func(string, ...any), prefix string, dualTrack bool) []*webrtc.TrackLocalStaticSample {
+	trackVideo, _ := webrtc.NewTrackLocalStaticSample(
 		webrtc.RTPCodecCapability{MimeType: webrtc.MimeTypeVP8},
 		"video", "tunnel-video",
 	)
+	
 	audioTrack, _ := webrtc.NewTrackLocalStaticRTP(
 		webrtc.RTPCodecCapability{MimeType: webrtc.MimeTypeOpus},
 		"audio", "tunnel-audio",
 	)
 	audioSender, audioErr := pc.AddTrack(audioTrack)
-	videoSender, videoErr := pc.AddTrack(sampleTrack)
+	videoSender, videoErr := pc.AddTrack(trackVideo)
+	
 	logFn("%s: AddTrack audio: sender=%v err=%v", prefix, audioSender != nil, audioErr)
 	logFn("%s: AddTrack video: sender=%v err=%v", prefix, videoSender != nil, videoErr)
+	
+	tracks := []*webrtc.TrackLocalStaticSample{trackVideo}
+
+	if dualTrack {
+		trackScreen, _ := webrtc.NewTrackLocalStaticSample(
+			webrtc.RTPCodecCapability{MimeType: webrtc.MimeTypeVP8},
+			"video", "tunnel-screen",
+		)
+		screenSender, screenErr := pc.AddTrack(trackScreen)
+		logFn("%s: AddTrack screen: sender=%v err=%v", prefix, screenSender != nil, screenErr)
+		tracks = append(tracks, trackScreen)
+	}
+
 	logFn("%s: senders count: %d", prefix, len(pc.GetSenders()))
-	return sampleTrack
+	return tracks
 }
 
 func ParseSDPType(t string) webrtc.SDPType {

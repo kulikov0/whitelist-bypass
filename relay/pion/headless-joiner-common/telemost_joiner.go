@@ -57,11 +57,11 @@ type TelemostHeadlessJoiner struct {
 	pubRemoteSet bool
 	pubPending   []webrtc.ICECandidateInit
 
-	sampleTrack *webrtc.TrackLocalStaticSample
-	vp8tunnel   *tunnel.VP8DataTunnel
-	obf         *tunnel.TunnelObfuscator
-	vp8FPS      int
-	vp8Batch    int
+	sampleTracks []*webrtc.TrackLocalStaticSample
+	vp8tunnel    *tunnel.MultiTrackTunnel
+	obf          *tunnel.TunnelObfuscator
+	vp8FPS       int
+	vp8Batch     int
 
 	httpClient *http.Client
 	instanceID string
@@ -158,7 +158,7 @@ func (j *TelemostHeadlessJoiner) resetSessionState() {
 	j.pubSeq = 0
 	j.pubRemoteSet = false
 	j.pubPending = nil
-	j.sampleTrack = nil
+	j.sampleTracks = nil
 	j.vp8tunnel = nil
 	j.initBundleSent = false
 }
@@ -349,9 +349,9 @@ func (j *TelemostHeadlessJoiner) sendHello() {
 	j.wsSend(map[string]interface{}{
 		"uid": uuid.New().String(),
 		"hello": map[string]interface{}{
-			"participantMeta":       map[string]interface{}{"name": j.displayName, "role": "SPEAKER", "description": "", "sendAudio": false, "sendVideo": true},
+			"participantMeta":       map[string]interface{}{"name": j.displayName, "role": "SPEAKER", "description": "", "sendAudio": false, "sendVideo": true, "sendSharing": true},
 			"participantAttributes": map[string]interface{}{"name": j.displayName, "role": "SPEAKER", "description": ""},
-			"sendAudio": false, "sendVideo": true, "sendSharing": false,
+			"sendAudio": false, "sendVideo": true, "sendSharing": true,
 			"participantId": j.peerID, "roomId": j.roomID,
 			"serviceName": j.serviceName, "credentials": j.credentials,
 			"capabilitiesOffer": tmapi.CapabilitiesOffer,
@@ -426,7 +426,7 @@ func (j *TelemostHeadlessJoiner) initPC() {
 	j.pubPC = pubPC
 	j.pubSeq = 1
 
-	j.sampleTrack = j.AddTracks(pubPC, j.logFn, "telemost-joiner [pub]")
+	j.sampleTracks = j.AddTracks(pubPC, j.logFn, "telemost-joiner [pub]", false)
 
 	pubPC.OnICECandidate(func(cand *webrtc.ICECandidate) {
 		if cand != nil {
@@ -437,12 +437,16 @@ func (j *TelemostHeadlessJoiner) initPC() {
 	pubPC.OnConnectionStateChange(func(state webrtc.PeerConnectionState) {
 		j.logFn("telemost-joiner: pub PC state: %s", state.String())
 		if state == webrtc.PeerConnectionStateConnected && j.vp8tunnel == nil {
-			j.logFn("telemost-joiner: === VP8 TUNNEL CONNECTED ===")
+			j.logFn("telemost-joiner: === VP8 TUNNEL CONNECTED (dual-track) ===")
 			j.Status.EmitStatus(common.StatusTunnelConnected)
-			j.vp8tunnel = tunnel.NewVP8DataTunnel(j.sampleTrack, j.obf, j.logFn)
+			var subTunnels []*tunnel.VP8DataTunnel
+			for _, track := range j.sampleTracks {
+				subTunnels = append(subTunnels, tunnel.NewVP8DataTunnel(track, j.obf, j.logFn))
+			}
+			j.vp8tunnel = tunnel.NewMultiTrackTunnel(subTunnels)
 			j.vp8tunnel.Start(j.vp8FPS, j.vp8Batch)
-			j.vp8tunnel.SendData(tunnel.EncodeVP8Config(j.vp8tunnel.FPS(), j.vp8tunnel.Batch()))
-			j.logFn("telemost-joiner: pushed vp8 config to creator fps=%d batch=%d", j.vp8tunnel.FPS(), j.vp8tunnel.Batch())
+			j.vp8tunnel.SendData(tunnel.EncodeVP8Config(j.vp8FPS, j.vp8Batch))
+			j.logFn("telemost-joiner: pushed vp8 config to creator fps=%d batch=%d", j.vp8FPS, j.vp8Batch)
 			if j.OnConnected != nil {
 				j.OnConnected(j.vp8tunnel)
 			}
@@ -468,8 +472,8 @@ func (j *TelemostHeadlessJoiner) sendPubOffer() {
 	}
 	offer.SDP = tmapi.MungeSDPAddVideoContent(offer.SDP)
 
-	audioMid, videoMid := TmParseMids(offer.SDP)
-	j.logFn("telemost-joiner: -> publisherSdpOffer pcSeq=%d audioMid=%s videoMid=%s", j.pubSeq, audioMid, videoMid)
+	audioMid, videoMid, screenMid := TmParseMids(offer.SDP)
+	j.logFn("telemost-joiner: -> publisherSdpOffer pcSeq=%d", j.pubSeq)
 
 	var tracks []map[string]interface{}
 	if audioMid != "" {
@@ -477,6 +481,9 @@ func (j *TelemostHeadlessJoiner) sendPubOffer() {
 	}
 	if videoMid != "" {
 		tracks = append(tracks, map[string]interface{}{"mid": videoMid, "transceiverMid": videoMid, "kind": "VIDEO", "priority": 0, "label": "", "codecs": map[string]interface{}{}, "groupId": 2, "description": ""})
+	}
+	if screenMid != "" {
+		tracks = append(tracks, map[string]interface{}{"mid": screenMid, "transceiverMid": screenMid, "kind": "VIDEO", "priority": 0, "label": "", "codecs": map[string]interface{}{}, "groupId": 3, "description": ""})
 	}
 	j.wsSend(map[string]interface{}{
 		"uid":               uuid.New().String(),
@@ -514,7 +521,7 @@ func (j *TelemostHeadlessJoiner) sendInitBundle() {
 	j.initBundleSent = true
 	j.logFn("telemost-joiner: -> sdkCodecsInfo + updatePublisherTrackDescription")
 	j.wsSend(tmapi.SdkCodecsInfoMessage())
-	j.wsSend(tmapi.UpdatePublisherTrackDescriptionMessage(j.pubPC, "Microphone", "MacBook Pro Camera (0000:0001)"))
+	j.wsSend(tmapi.UpdatePublisherTrackDescriptionMessage(j.pubPC, "Microphone", "MacBook Pro Camera (0000:0001)", "Screen Share"))
 	j.sendStartupSlotsRamp()
 }
 

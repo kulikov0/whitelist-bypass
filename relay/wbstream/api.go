@@ -240,17 +240,6 @@ var WBStreamCookieAllowlist = []string{
 	"wbx-validation-key",
 }
 
-var ModeratorPermissions = []string{
-	"ROOM_PERMISSION_SEND_CHAT",
-	"ROOM_PERMISSION_SHARE_AUDIO",
-	"ROOM_PERMISSION_SHARE_SCREEN",
-	"ROOM_PERMISSION_SHARE_VIDEO",
-	"ROOM_PERMISSION_MODIFY_PERMISSIONS",
-	"ROOM_PERMISSION_MODERATE_ROOM",
-	"ROOM_PERMISSION_CALL_DATA_ACCESS",
-	"ROOM_PERMISSION_LOCAL_RECORD",
-}
-
 type slideV3Response struct {
 	Payload struct {
 		AccessToken string `json:"access_token"`
@@ -322,31 +311,6 @@ func joinAndGetDetails(client *http.Client, accessToken, roomID, displayName str
 		return "", "", "", "", fmt.Errorf("get connection details: %w", err)
 	}
 	return roomID, roomToken, accessToken, serverURL, nil
-}
-
-func SetParticipantPermissions(client *http.Client, accessToken, roomID, participantID string, permissions []string) error {
-	setURL := fmt.Sprintf("%s/api-room-manager/api/v1/room/%s/participant/%s/set-permissions", APIBase, roomID, participantID)
-	body, err := json.Marshal(map[string]any{"permissions": permissions})
-	if err != nil {
-		return err
-	}
-	req, err := http.NewRequest(http.MethodPut, setURL, bytes.NewReader(body))
-	if err != nil {
-		return err
-	}
-	req.Header.Set("Content-Type", "application/json")
-	setBearer(req, accessToken)
-
-	resp, err := httpDo(client, req)
-	if err != nil {
-		return err
-	}
-	defer resp.Body.Close()
-	respBody, _ := io.ReadAll(resp.Body)
-	if resp.StatusCode >= 400 {
-		return fmt.Errorf("set-permissions %s -> %d %s", participantID, resp.StatusCode, string(respBody))
-	}
-	return nil
 }
 
 func KickParticipant(client *http.Client, accessToken, roomID, participantID string) error {
