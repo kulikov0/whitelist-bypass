@@ -155,6 +155,8 @@ class TunnelVpnService : VpnService() {
             .setSession(Vpn.SESSION_NAME)
             .addAddress(Vpn.ADDRESS, Vpn.PREFIX_LENGTH)
             .addRoute(Vpn.ROUTE, 0)
+            .addAddress(Vpn.ADDRESS6, Vpn.PREFIX_LENGTH6)
+            .addRoute(Vpn.ROUTE6, 0)
             .setMtu(Vpn.MTU)
 
         when (Prefs.dnsMode) {
