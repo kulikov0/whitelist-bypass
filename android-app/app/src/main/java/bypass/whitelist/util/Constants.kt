@@ -84,6 +84,12 @@ object Vpn {
     const val ADDRESS = "10.0.0.2"
     const val PREFIX_LENGTH = 32
     const val ROUTE = "0.0.0.0"
+    // IPv6: capture all v6 into the tun too, otherwise v6 traffic leaks out the
+    // real interface (Happy Eyeballs picks the leaking v6 path and aborts the
+    // tunneled v4 connections). tun2socks (xjasonlyu/gVisor) routes v6 to SOCKS.
+    const val ADDRESS6 = "fd00::2"
+    const val PREFIX_LENGTH6 = 128
+    const val ROUTE6 = "::"
     const val MTU = 1500
     const val DNS_PRIMARY = "8.8.8.8"
     const val DNS_SECONDARY = "8.8.4.4"
