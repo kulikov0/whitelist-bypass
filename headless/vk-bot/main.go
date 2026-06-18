@@ -497,6 +497,13 @@ func main() {
 	upstreamPass := flag.String("upstream-pass", "", "upstream SOCKS5 password forwarded to spawned creators")
 	flag.Parse()
 
+	if *token == "" {
+		*token = os.Getenv("VK_TOKEN")
+	}
+	if *upstreamPass == "" {
+		*upstreamPass = os.Getenv("VK_UPSTREAM_PASS")
+	}
+
 	switch *resources {
 	case "default", "moderate", "unlimited":
 	default:
