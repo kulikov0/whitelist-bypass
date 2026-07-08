@@ -25,17 +25,18 @@ const (
 	RTPBufSize   = 65536
 	// VP8BufSize fits one RTP packet: 1200 MTU - 1 VP8 descriptor - 64 tunnel wrapper - 9 protocol frame
 	// (tunnel wrapper = 20 vp8 keepalive header + 4 epoch + 24 XChaCha20 nonce + 16 Poly1305 tag)
-	VP8BufSize   = 1126
-	DCBufSize    = 32768
+	VP8BufSize = 1126
+	DCBufSize  = 32768
 )
 
 var (
-	NoAuth   = []byte{Ver, AuthNone}
-	OK       = []byte{Ver, 0x00, 0x00, AtypIPv4, 0, 0, 0, 0, 0, 0}
-	ConnFail = []byte{Ver, 0x05, 0x00, AtypIPv4, 0, 0, 0, 0, 0, 0}
-	CmdErr   = []byte{Ver, 0x07, 0x00, AtypIPv4, 0, 0, 0, 0, 0, 0}
-	AddrErr  = []byte{Ver, 0x08, 0x00, AtypIPv4, 0, 0, 0, 0, 0, 0}
-	GenFail  = []byte{Ver, 0x01, 0x00, AtypIPv4, 0, 0, 0, 0, 0, 0}
+	NoAuth     = []byte{Ver, AuthNone}
+	OK         = []byte{Ver, 0x00, 0x00, AtypIPv4, 0, 0, 0, 0, 0, 0}
+	ConnFail   = []byte{Ver, 0x05, 0x00, AtypIPv4, 0, 0, 0, 0, 0, 0}
+	NetUnreach = []byte{Ver, 0x03, 0x00, AtypIPv4, 0, 0, 0, 0, 0, 0}
+	CmdErr     = []byte{Ver, 0x07, 0x00, AtypIPv4, 0, 0, 0, 0, 0, 0}
+	AddrErr    = []byte{Ver, 0x08, 0x00, AtypIPv4, 0, 0, 0, 0, 0, 0}
+	GenFail    = []byte{Ver, 0x01, 0x00, AtypIPv4, 0, 0, 0, 0, 0, 0}
 )
 
 func NegotiateAuth(conn net.Conn, buf []byte, n int, wantUser, wantPass string) bool {

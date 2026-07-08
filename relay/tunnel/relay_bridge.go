@@ -583,6 +583,11 @@ func (rb *RelayBridge) handleSOCKS(conn net.Conn) {
 		conn.Close()
 		return
 	}
+	if buf[3] == common.AtypIPv6 {
+		conn.Write(common.NetUnreach)
+		conn.Close()
+		return
+	}
 	host, _, err := common.ParseAddress(buf, n)
 	if err != nil {
 		conn.Write(common.AddrErr)
@@ -598,7 +603,7 @@ func (rb *RelayBridge) handleSOCKS(conn net.Conn) {
 	}
 	// Dial local/private addresses directly instead of tunneling to the creator,
 	// which cannot reach the joiner's local network. Disabled for now until
-	// there is a real use case for local network access through the proxy. So idk if 
+	// there is a real use case for local network access through the proxy. So idk if
 	// this is a bug or a feature
 	// if ip := net.ParseIP(hostOnly); ip != nil && !ip.IsGlobalUnicast() {
 	// 	rb.logFn("relay: SOCKS local dial %s", common.MaskAddr(host))
@@ -735,6 +740,9 @@ func (rb *RelayBridge) handleUDPAssociate(tcpConn net.Conn) {
 			}
 			frag := buf[2]
 			if frag != 0 {
+				continue
+			}
+			if buf[3] == common.AtypIPv6 {
 				continue
 			}
 			dstAddr, headerLen, addrErr := common.ParseAddress(buf, n)

@@ -27,7 +27,8 @@ import (
 )
 
 var (
-	tunReady sync.WaitGroup
+	tunReady     sync.WaitGroup
+	activeFilter *v6Filter
 )
 
 func StartTun2Socks(fd, mtu, socksPort int, socksUser, socksPass string) error {
@@ -41,9 +42,20 @@ func StartTun2Socks(fd, mtu, socksPort int, socksUser, socksPass string) error {
 	os.Setenv("TUN2SOCKS_LOG_LEVEL", "info")
 	tunReady.Add(1)
 	defer tunReady.Done()
+
+	deviceFd := fd
+	filter, stackFd, err := startV6Filter(fd, mtu)
+	if err != nil {
+		logMsg("tun2socks: v6 filter setup failed: %v, capturing IPv4 only", err)
+	} else {
+		activeFilter = filter
+		deviceFd = stackFd
+		logMsg("tun2socks: v6 reject filter active")
+	}
+
 	key := &engine.Key{
 		Proxy:  proxy,
-		Device: fmt.Sprintf("fd://%d", fd),
+		Device: fmt.Sprintf("fd://%d", deviceFd),
 		MTU:    mtu,
 	}
 	engine.Insert(key)
@@ -56,5 +68,9 @@ func StopTun2Socks() {
 	tunReady.Wait()
 	C.disable_fdsan()
 	engine.Stop()
+	if activeFilter != nil {
+		activeFilter.stop()
+		activeFilter = nil
+	}
 	logMsg("tun2socks: stopped")
 }

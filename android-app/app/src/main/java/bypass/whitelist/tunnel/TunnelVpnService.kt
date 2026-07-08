@@ -157,6 +157,13 @@ class TunnelVpnService : VpnService() {
             .addRoute(Vpn.ROUTE, 0)
             .setMtu(Vpn.MTU)
 
+        try {
+            builder.addAddress(Vpn.ADDRESS6, Vpn.PREFIX_LENGTH6)
+            builder.addRoute(Vpn.ROUTE6, 0)
+        } catch (e: Exception) {
+            Log.w(TAG, "IPv6 capture setup failed: ${e.message}")
+        }
+
         when (Prefs.dnsMode) {
             DnsMode.SYSTEM -> {
                 val systemDns = getSystemDnsServers()
