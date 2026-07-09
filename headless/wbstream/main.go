@@ -111,9 +111,12 @@ func main() {
 			}
 			bridgeReadBuf := common.VP8BufSize
 			mode := "video"
-			if _, ok := tun.(*tunnel.DCTunnel); ok {
+			switch tun.(type) {
+			case *tunnel.DCTunnel:
 				bridgeReadBuf = readBuf
 				mode = "dc"
+			case *tunnel.KCPTunnel:
+				mode = "video+kcp"
 			}
 			activeBridge = tunnel.NewRelayBridge(tun, "creator", bridgeReadBuf, log.Printf)
 			activeBridge.SetUpstreamSocks(*upstreamSocks, *upstreamUser, *upstreamPass)

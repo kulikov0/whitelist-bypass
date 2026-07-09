@@ -62,6 +62,7 @@ type Session struct {
 	subReliableDC      *webrtc.DataChannel
 
 	vp8tun       *tunnel.MultiTrackTunnel
+	kcptun       *tunnel.KCPTunnel
 	dctun        *tunnel.DCTunnel
 	mu           sync.Mutex
 	tunFired     bool
@@ -149,7 +150,11 @@ func (s *Session) Start() error {
 func (s *Session) stopTunnels() {
 	s.mu.Lock()
 	vp8 := s.vp8tun
+	kcptun := s.kcptun
 	s.mu.Unlock()
+	if kcptun != nil {
+		kcptun.Stop()
+	}
 	if vp8 != nil {
 		vp8.Stop()
 	}
@@ -263,12 +268,16 @@ func (s *Session) startTunnel() {
 	tun := s.vp8tun
 	s.mu.Unlock()
 	s.cfg.LogFn("[lk] vp8 tunnel writer started tracks=%d", len(subs))
+	var active tunnel.DataTunnel = tun
+	if s.cfg.TunnelMode == TunnelModeVideo {
+		active = s.maybeWrapReliable(tun)
+	}
 	if s.cfg.IsJoiner && s.cfg.TunnelMode != TunnelModeDC {
-		go s.configPingPong(tun, len(subs))
+		go s.configPingPong(active, len(subs))
 	}
 
 	if s.cfg.TunnelMode == TunnelModeVideo {
-		s.fireOnConnected(tun)
+		s.fireOnConnected(active)
 		return
 	}
 	if s.cfg.TunnelMode == "" {
@@ -276,7 +285,7 @@ func (s *Session) startTunnel() {
 	}
 }
 
-func (s *Session) configPingPong(tun *tunnel.MultiTrackTunnel, trackCount int) {
+func (s *Session) configPingPong(tun tunnel.DataTunnel, trackCount int) {
 	frame := tunnel.EncodeVP8Config(s.cfg.VP8FPS, s.cfg.VP8Batch, trackCount)
 	tun.SendData(frame)
 	ticker := time.NewTicker(3 * time.Second)
@@ -365,9 +374,10 @@ func (s *Session) activate(tun tunnel.DataTunnel, payload []byte) {
 	}
 	s.tunFired = true
 	s.mu.Unlock()
-	s.cfg.LogFn("[lk] auto-detected active tunnel: %T", tun)
+	delivered := s.maybeWrapReliable(tun)
+	s.cfg.LogFn("[lk] auto-detected active tunnel: %T", delivered)
 	if s.OnConnected != nil {
-		s.OnConnected(tun)
+		s.OnConnected(delivered)
 	}
 	var fwd func([]byte)
 	switch v := tun.(type) {
@@ -381,6 +391,19 @@ func (s *Session) activate(tun tunnel.DataTunnel, payload []byte) {
 	if fwd != nil {
 		fwd(payload)
 	}
+}
+
+func (s *Session) maybeWrapReliable(tun tunnel.DataTunnel) tunnel.DataTunnel {
+	vp8, ok := tun.(*tunnel.MultiTrackTunnel)
+	if !ok {
+		return tun
+	}
+	wrapped := tunnel.NewKCPTunnel(vp8, s.cfg.LogFn)
+	s.mu.Lock()
+	s.kcptun = wrapped
+	s.mu.Unlock()
+	s.cfg.LogFn("[lk] kcp reliability wrapper active over video tunnel")
+	return wrapped
 }
 
 func (s *Session) currentVP8Tun() *tunnel.MultiTrackTunnel {
