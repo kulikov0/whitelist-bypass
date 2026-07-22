@@ -75,7 +75,8 @@ func main() {
 		)
 		return func(tun tunnel.DataTunnel) {
 			readBuf := common.VP8BufSize
-			if _, ok := tun.(*tunnel.DCTunnel); ok {
+			switch tun.(type) {
+			case *tunnel.DCTunnel, *tunnel.MultiTrackKCPTunnel:
 				readBuf = common.DCBufSize
 			}
 			bridgeMu.Lock()

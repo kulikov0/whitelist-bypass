@@ -66,7 +66,8 @@ func makeOnConnected(socksPort int, socksUser, socksPass string, logFn func(stri
 		}
 
 		readBuf := common.VP8BufSize
-		if _, ok := tun.(*tunnel.DCTunnel); ok {
+		switch tun.(type) {
+		case *tunnel.DCTunnel, *tunnel.MultiTrackKCPTunnel:
 			readBuf = common.DCBufSize
 		}
 		bridge := tunnel.NewRelayBridgeWithAuth(tun, "joiner", readBuf, logFn, socksUser, socksPass)

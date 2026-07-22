@@ -31,23 +31,33 @@ type VP8DataTunnel struct {
 	fps   int
 	batch int
 
-	sentFrames atomic.Uint64
-	recvFrames atomic.Uint64
+	sentFrames      atomic.Uint64
+	recvFrames      atomic.Uint64
+	keepaliveFrames atomic.Uint64
 
-	OnData  func([]byte)
-	OnClose func()
+	OnData        func([]byte)
+	OnClose       func()
+	OnPeerRestart func()
 }
 
-func (t *VP8DataTunnel) SetOnData(fn func([]byte)) { t.OnData = fn }
+func (t *VP8DataTunnel) SetOnData(fn func([]byte))  { t.OnData = fn }
 func (t *VP8DataTunnel) SetOnClose(fn func())       { t.OnClose = fn }
+func (t *VP8DataTunnel) SetOnPeerRestart(fn func()) { t.OnPeerRestart = fn }
 
 func NewVP8DataTunnel(track *webrtc.TrackLocalStaticSample, obf *TunnelObfuscator, logFn func(string, ...any)) *VP8DataTunnel {
+	return NewVP8DataTunnelWithQueue(track, obf, logFn, sendQueueDepth)
+}
+
+func NewVP8DataTunnelWithQueue(track *webrtc.TrackLocalStaticSample, obf *TunnelObfuscator, logFn func(string, ...any), queueDepth int) *VP8DataTunnel {
+	if queueDepth < sendQueueDepth {
+		queueDepth = sendQueueDepth
+	}
 	return &VP8DataTunnel{
 		track:     track,
 		obf:       obf,
 		logFn:     logFn,
 		stopCh:    make(chan struct{}),
-		sendQueue: make(chan []byte, sendQueueDepth),
+		sendQueue: make(chan []byte, queueDepth),
 		cfgChan:   make(chan struct{}, 1),
 		fps:       defaultVP8FPS,
 		batch:     defaultVP8Batch,
@@ -99,6 +109,20 @@ func (t *VP8DataTunnel) SendData(data []byte) {
 	select {
 	case t.sendQueue <- data:
 	case <-t.stopCh:
+	}
+}
+
+func (t *VP8DataTunnel) TrySendData(data []byte) bool {
+	if len(data) == 0 {
+		return true
+	}
+	select {
+	case t.sendQueue <- data:
+		return true
+	case <-t.stopCh:
+		return false
+	default:
+		return false
 	}
 }
 
@@ -168,6 +192,7 @@ func (t *VP8DataTunnel) writerLoop() {
 				reconfigure = true
 			case <-ticker.C:
 				var sample []byte
+				isKeepalive := false
 				select {
 				case data := <-t.sendQueue:
 					sample = t.obf.EncodeData(data)
@@ -179,6 +204,7 @@ func (t *VP8DataTunnel) writerLoop() {
 					}
 					idleTicks = 0
 					sample = t.obf.EncodeKeepalive()
+					isKeepalive = true
 				}
 				if sample == nil {
 					continue
@@ -188,8 +214,12 @@ func (t *VP8DataTunnel) writerLoop() {
 					continue
 				}
 				n := t.sentFrames.Add(1)
+				if isKeepalive {
+					t.keepaliveFrames.Add(1)
+				}
 				if n <= 5 || n%500 == 0 {
-					t.logFn("vp8tunnel: sent frame #%d size=%d", n, len(sample))
+					keepalives := t.keepaliveFrames.Load()
+					t.logFn("vp8tunnel: sent frame #%d size=%d data=%d keepalive=%d", n, len(sample), n-keepalives, keepalives)
 				}
 			}
 		}
@@ -207,6 +237,9 @@ func (t *VP8DataTunnel) HandleFrame(frame []byte) {
 	}
 	if res.PeerRestart {
 		t.logFn("vp8tunnel: peer restart detected, new epoch=0x%08x", res.PeerEpoch)
+		if t.OnPeerRestart != nil {
+			t.OnPeerRestart()
+		}
 	}
 	if res.Keepalive || len(res.Payload) == 0 {
 		return

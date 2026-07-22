@@ -115,7 +115,8 @@ func main() {
 			case *tunnel.DCTunnel:
 				bridgeReadBuf = readBuf
 				mode = "dc"
-			case *tunnel.KCPTunnel:
+			case *tunnel.MultiTrackKCPTunnel:
+				bridgeReadBuf = readBuf
 				mode = "video+kcp"
 			}
 			activeBridge = tunnel.NewRelayBridge(tun, "creator", bridgeReadBuf, log.Printf)
