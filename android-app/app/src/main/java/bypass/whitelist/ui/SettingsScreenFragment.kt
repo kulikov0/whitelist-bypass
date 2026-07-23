@@ -89,12 +89,17 @@ class SettingsScreenFragment : Fragment(R.layout.fragment_settings_screen) {
             }
         }
 
-        val vp8SubRes = if (Prefs.dualTrack) R.string.settings_row_vp8_sub_dual else R.string.settings_row_vp8_sub
-        addRow(card, R.drawable.ic_setting_vp8, getString(R.string.settings_row_vp8), getString(vp8SubRes, Prefs.vp8Fps, Prefs.vp8Batch), null) {
-            Vp8ActionSheet.show(parentFragmentManager, Prefs.vp8Fps, Prefs.vp8Batch, Prefs.dualTrack) { fps, batch, dual ->
+        val vp8Sub = buildString {
+            append(getString(R.string.settings_row_vp8_sub, Prefs.vp8Fps, Prefs.vp8Batch))
+            if (Prefs.dualTrack) append(" / ").append(getString(R.string.settings_row_vp8_flag_dual))
+            if (Prefs.reliable) append(" / ").append(getString(R.string.settings_row_vp8_flag_kcp))
+        }
+        addRow(card, R.drawable.ic_setting_vp8, getString(R.string.settings_row_vp8), vp8Sub, null) {
+            Vp8ActionSheet.show(parentFragmentManager, Prefs.vp8Fps, Prefs.vp8Batch, Prefs.dualTrack, Prefs.reliable) { fps, batch, dual, reliable ->
                 Prefs.vp8Fps = fps
                 Prefs.vp8Batch = batch
                 Prefs.dualTrack = dual
+                Prefs.reliable = reliable
                 rebuild()
             }
         }

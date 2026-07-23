@@ -38,6 +38,8 @@
     <string name="vp8_batch_label">Batch</string>
     <string name="vp8_dual_track_title">Dual track</string>
     <string name="vp8_dual_track_sub">Publish a second VP8 track as screen-share and shard outbound across both.</string>
+    <string name="vp8_reliable_title">Reliable (KCP)</string>
+    <string name="vp8_reliable_sub">Wrap the video tunnel with KCP reliability. Off = raw VP8, faster but lossy.</string>
     <string name="notification_vpn_title">VPN active</string>
     <string name="notification_proxy_title">Proxy active</string>
     <string name="notification_session_connecting">Starting headless session</string>
@@ -100,7 +102,8 @@
     <string name="settings_row_tunnel_mode">Tunnel mode</string>
     <string name="settings_row_vp8">VP8 settings</string>
     <string name="settings_row_vp8_sub" tools:ignore="PluralsCandidate">%1$d fps / %2$d batch</string>
-    <string name="settings_row_vp8_sub_dual" tools:ignore="PluralsCandidate">%1$d fps / %2$d batch / dual</string>
+    <string name="settings_row_vp8_flag_dual">dual</string>
+    <string name="settings_row_vp8_flag_kcp">kcp</string>
     <string name="settings_row_autofill">Autofill</string>
     <string name="settings_row_autofill_off">Off</string>
     <string name="settings_row_split">Split tunneling</string>

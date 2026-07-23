@@ -12,6 +12,7 @@ data class CallConfig(
     val vp8Fps: Int? = null,
     val vp8Batch: Int? = null,
     val dualTrack: Boolean? = null,
+    val reliable: Boolean? = null,
 ) {
     val platform: CallPlatform get() = CallPlatform.fromUrl(url)
 
@@ -37,6 +38,7 @@ data class CallConfig(
         vp8Fps?.let { put("vp8Fps", it) }
         vp8Batch?.let { put("vp8Batch", it) }
         dualTrack?.let { put("dualTrack", it) }
+        reliable?.let { put("reliable", it) }
     }
 
     companion object {
@@ -51,6 +53,7 @@ data class CallConfig(
             vp8Fps = if (obj.has("vp8Fps")) obj.getInt("vp8Fps") else null,
             vp8Batch = if (obj.has("vp8Batch")) obj.getInt("vp8Batch") else null,
             dualTrack = if (obj.has("dualTrack")) obj.getBoolean("dualTrack") else null,
+            reliable = if (obj.has("reliable")) obj.getBoolean("reliable") else null,
         )
 
         fun listToJson(items: List<CallConfig>): String {

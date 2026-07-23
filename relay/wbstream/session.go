@@ -47,8 +47,8 @@ type SessionConfig struct {
 	ReadBuf        int
 	ScreenShare    bool // when true, publish a second VP8 track as ScreenShare and shard outbound across both
 	IsJoiner       bool // when true, run the configPingPong loop; only the joiner sends VP8 config to the peer
+	Reliable       bool
 }
-
 
 type Session struct {
 	cfg SessionConfig
@@ -61,12 +61,12 @@ type Session struct {
 	pubReliableDCReady bool
 	subReliableDC      *webrtc.DataChannel
 
-	vp8tun       *tunnel.MultiTrackTunnel
-	kcptun       *tunnel.MultiTrackKCPTunnel
-	dctun        *tunnel.DCTunnel
-	mu           sync.Mutex
-	tunFired     bool
-	done         chan struct{}
+	vp8tun   *tunnel.MultiTrackTunnel
+	kcptun   *tunnel.MultiTrackKCPTunnel
+	dctun    *tunnel.DCTunnel
+	mu       sync.Mutex
+	tunFired bool
+	done     chan struct{}
 
 	peersBySID map[string]peerEntry // SID -> first-seen time + state
 	kickedSIDs map[string]bool      // SIDs we kicked; SFU may still echo them as Active until it processes the kick
@@ -275,7 +275,7 @@ func (s *Session) startTunnel() {
 	s.mu.Unlock()
 	s.cfg.LogFn("[lk] vp8 tunnel writer started tracks=%d", len(subs))
 	var active tunnel.DataTunnel = tun
-	if s.cfg.TunnelMode == TunnelModeVideo {
+	if s.cfg.TunnelMode == TunnelModeVideo && s.cfg.Reliable {
 		active = s.maybeWrapReliable(tun)
 	}
 	if s.cfg.IsJoiner && s.cfg.TunnelMode != TunnelModeDC {
@@ -380,22 +380,29 @@ func (s *Session) activate(tun tunnel.DataTunnel, payload []byte) {
 	}
 	s.tunFired = true
 	s.mu.Unlock()
-	delivered := s.maybeWrapReliable(tun)
+	var delivered tunnel.DataTunnel = tun
+	useKCP := false
+	if _, ok := tun.(*tunnel.MultiTrackTunnel); ok && !tunnel.LooksLikeRelayFrame(payload) {
+		delivered = s.maybeWrapReliable(tun)
+		useKCP = true
+	}
 	s.cfg.LogFn("[lk] auto-detected active tunnel: %T", delivered)
 	if s.OnConnected != nil {
 		s.OnConnected(delivered)
 	}
-	var fwd func([]byte)
 	switch v := tun.(type) {
 	case *tunnel.DCTunnel:
-		fwd = v.OnData()
-	case *tunnel.MultiTrackTunnel:
-		if kcptun, ok := delivered.(*tunnel.MultiTrackKCPTunnel); ok {
-			kcptun.InjectSegment(payload)
+		if fwd := v.OnData(); fwd != nil {
+			fwd(payload)
 		}
-	}
-	if fwd != nil {
-		fwd(payload)
+	case *tunnel.MultiTrackTunnel:
+		if useKCP {
+			if kcptun, ok := delivered.(*tunnel.MultiTrackKCPTunnel); ok {
+				kcptun.InjectSegment(payload)
+			}
+		} else {
+			v.DeliverData(payload)
+		}
 	}
 }
 

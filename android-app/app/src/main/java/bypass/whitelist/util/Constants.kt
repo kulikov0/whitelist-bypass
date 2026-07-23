@@ -66,6 +66,7 @@ object PrefsKeys {
     const val VP8_FPS = "vp8_fps"
     const val VP8_BATCH = "vp8_batch"
     const val DUAL_TRACK = "dual_track"
+    const val RELIABLE = "reliable"
     const val SAVED_DESTINATIONS = "saved_destinations"
     const val ACTIVE_DESTINATION_ID = "active_destination_id"
     const val THEME_MODE = "theme_mode"

@@ -16,7 +16,8 @@ class Vp8ActionSheet : BottomSheetDialogFragment() {
     private var initialFps: Int = 0
     private var initialBatch: Int = 0
     private var initialDualTrack: Boolean = false
-    private var onSaved: ((fps: Int, batch: Int, dualTrack: Boolean) -> Unit)? = null
+    private var initialReliable: Boolean = false
+    private var onSaved: ((fps: Int, batch: Int, dualTrack: Boolean, reliable: Boolean) -> Unit)? = null
 
     override fun onCreateView(
         inflater: LayoutInflater,
@@ -28,15 +29,17 @@ class Vp8ActionSheet : BottomSheetDialogFragment() {
         val fps = view.findViewById<EditText>(R.id.vp8FpsInput)
         val batch = view.findViewById<EditText>(R.id.vp8BatchInput)
         val dualSwitch = view.findViewById<MaterialSwitch>(R.id.vp8DualTrackSwitch)
+        val reliableSwitch = view.findViewById<MaterialSwitch>(R.id.vp8ReliableSwitch)
         fps.setText(initialFps.toString())
         batch.setText(initialBatch.toString())
         dualSwitch.isChecked = initialDualTrack
+        reliableSwitch.isChecked = initialReliable
 
         view.findViewById<MaterialButton>(R.id.vp8CancelButton).setOnClickListener { dismiss() }
         view.findViewById<MaterialButton>(R.id.vp8SaveButton).setOnClickListener {
             val newFps = fps.text.toString().toIntOrNull()?.takeIf { it in 1..240 } ?: initialFps
             val newBatch = batch.text.toString().toIntOrNull()?.takeIf { it in 1..256 } ?: initialBatch
-            onSaved?.invoke(newFps, newBatch, dualSwitch.isChecked)
+            onSaved?.invoke(newFps, newBatch, dualSwitch.isChecked, reliableSwitch.isChecked)
             dismiss()
         }
     }
@@ -47,12 +50,14 @@ class Vp8ActionSheet : BottomSheetDialogFragment() {
             fps: Int,
             batch: Int,
             dualTrack: Boolean,
-            onSaved: (fps: Int, batch: Int, dualTrack: Boolean) -> Unit,
+            reliable: Boolean,
+            onSaved: (fps: Int, batch: Int, dualTrack: Boolean, reliable: Boolean) -> Unit,
         ) {
             Vp8ActionSheet().apply {
                 this.initialFps = fps
                 this.initialBatch = batch
                 this.initialDualTrack = dualTrack
+                this.initialReliable = reliable
                 this.onSaved = onSaved
             }.show(manager, "Vp8ActionSheet")
         }

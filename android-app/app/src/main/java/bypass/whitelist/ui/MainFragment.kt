@@ -131,16 +131,18 @@ class MainFragment : Fragment(R.layout.fragment_main_screen) {
 
     private fun showRowMenu(config: CallConfig) {
         val tunnelMode = (config.tunnelMode ?: Prefs.tunnelMode).forPlatform(config.platform)
-        val vp8Fps = config.vp8Fps ?: Prefs.vp8Fps
-        val vp8Batch = config.vp8Batch ?: Prefs.vp8Batch
-        val vp8SubRes = if (config.dualTrack ?: Prefs.dualTrack) R.string.settings_row_vp8_sub_dual else R.string.settings_row_vp8_sub
+        val vp8Sub = buildString {
+            append(getString(R.string.settings_row_vp8_sub, config.vp8Fps ?: Prefs.vp8Fps, config.vp8Batch ?: Prefs.vp8Batch))
+            if (config.dualTrack ?: Prefs.dualTrack) append(" / ").append(getString(R.string.settings_row_vp8_flag_dual))
+            if (config.reliable ?: Prefs.reliable) append(" / ").append(getString(R.string.settings_row_vp8_flag_kcp))
+        }
         MenuActionSheet.show(
             manager = parentFragmentManager,
             title = config.name,
             subtitle = config.url,
             items = listOf(
                 MenuActionSheet.MenuItem("tunnel", getString(R.string.settings_row_tunnel_mode), R.drawable.ic_setting_tunnel, value = tunnelMode.label),
-                MenuActionSheet.MenuItem("vp8", getString(R.string.settings_row_vp8), R.drawable.ic_setting_vp8, value = getString(vp8SubRes, vp8Fps, vp8Batch)),
+                MenuActionSheet.MenuItem("vp8", getString(R.string.settings_row_vp8), R.drawable.ic_setting_vp8, value = vp8Sub),
                 MenuActionSheet.MenuItem("rename", getString(R.string.destination_menu_rename), R.drawable.ic_action_pencil),
                 MenuActionSheet.MenuItem("delete", getString(R.string.destination_menu_delete), R.drawable.ic_setting_trash, danger = true),
             ),
@@ -177,8 +179,9 @@ class MainFragment : Fragment(R.layout.fragment_main_screen) {
             config.vp8Fps ?: Prefs.vp8Fps,
             config.vp8Batch ?: Prefs.vp8Batch,
             config.dualTrack ?: Prefs.dualTrack,
-        ) { fps, batch, dual ->
-            Prefs.updateDestination(config.copy(vp8Fps = fps, vp8Batch = batch, dualTrack = dual))
+            config.reliable ?: Prefs.reliable,
+        ) { fps, batch, dual, reliable ->
+            Prefs.updateDestination(config.copy(vp8Fps = fps, vp8Batch = batch, dualTrack = dual, reliable = reliable))
             onDestinationsChanged()
         }
     }

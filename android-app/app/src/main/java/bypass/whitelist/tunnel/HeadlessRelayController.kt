@@ -140,6 +140,7 @@ class HeadlessRelayController(
             put("vp8Fps", Prefs.activeVp8Fps)
             put("vp8Batch", Prefs.activeVp8Batch)
             put("dualTrack", Prefs.activeDualTrack)
+            put("reliable", Prefs.activeReliable)
         }
         writeStdin("AUTH:$json")
     }

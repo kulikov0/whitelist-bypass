@@ -119,6 +119,10 @@ object Prefs {
         get() = prefs.getBoolean(PrefsKeys.DUAL_TRACK, false)
         set(value) = prefs.edit { putBoolean(PrefsKeys.DUAL_TRACK, value) }
 
+    var reliable: Boolean
+        get() = prefs.getBoolean(PrefsKeys.RELIABLE, false)
+        set(value) = prefs.edit { putBoolean(PrefsKeys.RELIABLE, value) }
+
     var savedDestinations: List<CallConfig>
         get() = CallConfig.listFromJson(prefs.getString(PrefsKeys.SAVED_DESTINATIONS, "") ?: "")
         set(value) = prefs.edit { putString(PrefsKeys.SAVED_DESTINATIONS, CallConfig.listToJson(value)) }
@@ -152,6 +156,9 @@ object Prefs {
 
     val activeDualTrack: Boolean
         get() = activeDestination?.dualTrack ?: dualTrack
+
+    val activeReliable: Boolean
+        get() = activeDestination?.reliable ?: reliable
 
     fun updateDestination(config: CallConfig) {
         val list = savedDestinations.toMutableList()

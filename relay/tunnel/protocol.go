@@ -71,6 +71,14 @@ func EncodeFrame(connID uint32, msgType byte, payload []byte) []byte {
 	return buf
 }
 
+func LooksLikeRelayFrame(payload []byte) bool {
+	if len(payload) < 9 {
+		return false
+	}
+	frameLen := binary.BigEndian.Uint32(payload[0:4])
+	return frameLen >= 5 && int(frameLen)+4 <= len(payload)
+}
+
 func DecodeFrames(data []byte, cb func(connID uint32, msgType byte, payload []byte)) {
 	for len(data) >= 4 {
 		frameLen := int(binary.BigEndian.Uint32(data[0:4]))

@@ -120,6 +120,15 @@ func (m *MultiTrackTunnel) SendData(data []byte) {
 	tunnels[idx].SendData(data)
 }
 
+func (m *MultiTrackTunnel) DeliverData(data []byte) {
+	m.mu.Lock()
+	handler := m.onData
+	m.mu.Unlock()
+	if handler != nil {
+		handler(data)
+	}
+}
+
 func (m *MultiTrackTunnel) SubTunnels() []*VP8DataTunnel {
 	m.mu.Lock()
 	defer m.mu.Unlock()
