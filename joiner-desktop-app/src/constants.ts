@@ -22,4 +22,5 @@ export interface JoinerSettings {
   dns: string;
   noTun: boolean;
   dualTrack: boolean;
+  reliable: boolean;
 }

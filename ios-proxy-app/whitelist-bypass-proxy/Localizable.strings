@@ -30,6 +30,8 @@
 "settings_vp8_batch" = "Batch";
 "vp8_dual_track_title" = "Dual track";
 "vp8_dual_track_sub" = "Publish a second VP8 track as screen-share and shard outbound across both.";
+"vp8_reliable_title" = "Reliable (KCP)";
+"vp8_reliable_sub" = "Wrap the video tunnel with KCP reliability. Off = raw VP8, faster but lossy.";
 "proxy_url_copied" = "Proxy URL copied";
 "toast_happ_params_copied" = "v2ray URL copied";
 "dc_mode_not_supported" = "DC mode not supported - falling back to video";

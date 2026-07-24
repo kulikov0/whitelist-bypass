@@ -122,6 +122,9 @@ function spawnJoiner(settings: JoinerSettings): { ok: boolean; error?: string } 
   if (settings.dualTrack && (settings.platform === 'vk' || settings.platform === 'wbstream')) {
     args.push('--dual-track');
   }
+  if (settings.reliable && settings.platform === 'wbstream') {
+    args.push('--reliable');
+  }
 
   const elevateOnLinux =
     process.platform === 'linux' && !noTun &&

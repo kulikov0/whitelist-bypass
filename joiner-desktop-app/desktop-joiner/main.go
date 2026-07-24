@@ -108,6 +108,7 @@ func main() {
 	dns := flag.String("dns", "1.1.1.1,8.8.8.8", "comma-separated DNS servers for the tunnel adapter")
 	noTun := flag.Bool("no-tun", false, "expose SOCKS5 only, do not bring up the wintun adapter")
 	dualTrack := flag.Bool("dual-track", false, "VK/WB Stream: dual-track tunnel (second screenshare channel) for higher throughput")
+	reliable := flag.Bool("reliable", false, "WB Stream: wrap the video tunnel with KCP reliability (video mode only)")
 	flag.Parse()
 
 	if *platform == "" || *link == "" {
@@ -274,7 +275,7 @@ func main() {
 
 	switch strings.ToLower(*platform) {
 	case "wbstream", "wb":
-		runWBStream(*link, *displayName, *tunnelMode, *vp8FPS, *vp8Batch, *dualTrack,
+		runWBStream(*link, *displayName, *tunnelMode, *vp8FPS, *vp8Batch, *dualTrack, *reliable,
 			onConnected, addCandidate)
 	case "telemost", "tm":
 		runTelemost(*link, *displayName, *vp8FPS, *vp8Batch,
@@ -340,7 +341,7 @@ func signalingHosts(platform, link string) []string {
 	return nil
 }
 
-func runWBStream(link, name, mode string, fps, batch int, dualTrack bool,
+func runWBStream(link, name, mode string, fps, batch int, dualTrack, reliable bool,
 	onConnected func(tunnel.DataTunnel),
 	onCandidate func(int, string),
 ) {
@@ -366,6 +367,7 @@ func runWBStream(link, name, mode string, fps, batch int, dualTrack bool,
 		VP8FPS:      fps,
 		VP8Batch:    batch,
 		ScreenShare: dualTrack,
+		Reliable:    reliable,
 	})
 	sess.OnConnected = onConnected
 	sess.OnRemoteCandidate = onCandidate

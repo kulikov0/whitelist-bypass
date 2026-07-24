@@ -263,6 +263,14 @@ struct SettingsView: View {
                                 .foregroundColor(.secondary)
                         }
                     }
+                    Toggle(isOn: $proxyManager.reliable) {
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text(NSLocalizedString("vp8_reliable_title", comment: ""))
+                            Text(NSLocalizedString("vp8_reliable_sub", comment: ""))
+                                .font(.caption)
+                                .foregroundColor(.secondary)
+                        }
+                    }
                 }
 
             }

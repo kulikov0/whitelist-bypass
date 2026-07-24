@@ -12,6 +12,7 @@ enum DefaultsKeys {
     static let vp8Fps = "vp8Fps"
     static let vp8Batch = "vp8Batch"
     static let dualTrack = "dualTrack"
+    static let reliable = "reliable"
 }
 
 enum VP8Defaults {
@@ -75,5 +76,10 @@ struct AppDefaults {
     static var dualTrack: Bool {
         get { defaults.object(forKey: DefaultsKeys.dualTrack) as? Bool ?? false }
         set { defaults.set(newValue, forKey: DefaultsKeys.dualTrack) }
+    }
+
+    static var reliable: Bool {
+        get { defaults.object(forKey: DefaultsKeys.reliable) as? Bool ?? false }
+        set { defaults.set(newValue, forKey: DefaultsKeys.reliable) }
     }
 }
