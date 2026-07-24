@@ -413,6 +413,9 @@ func (s *Session) maybeWrapReliable(tun tunnel.DataTunnel) tunnel.DataTunnel {
 	}
 	wrapped := tunnel.NewMultiTrackKCPTunnel(vp8, s.cfg.LogFn)
 	s.mu.Lock()
+	if s.kcptun != nil {
+		s.kcptun.StopLayer()
+	}
 	s.kcptun = wrapped
 	s.mu.Unlock()
 	s.cfg.LogFn("[lk] per-track kcp reliability active over video tunnel")
@@ -552,9 +555,14 @@ func (s *Session) rearmAutoDetect() {
 	}
 	s.mu.Lock()
 	s.tunFired = false
+	orphanKCP := s.kcptun
+	s.kcptun = nil
 	vp8 := s.vp8tun
 	dc := s.dctun
 	s.mu.Unlock()
+	if orphanKCP != nil {
+		orphanKCP.StopLayer()
+	}
 	if vp8 != nil {
 		vp8.SetOnData(func(payload []byte) { s.activate(vp8, payload) })
 	}

@@ -352,6 +352,10 @@ func (t *MultiTrackKCPTunnel) Stop() {
 	t.mt.Stop()
 }
 
+func (t *MultiTrackKCPTunnel) StopLayer() {
+	t.stopOnce.Do(func() { close(t.stopCh) })
+}
+
 func (t *MultiTrackKCPTunnel) handleInnerClose() {
 	t.stopOnce.Do(func() { close(t.stopCh) })
 	t.mu.Lock()
