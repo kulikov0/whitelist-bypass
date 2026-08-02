@@ -41,8 +41,13 @@ class HeadlessCallbackBridge: NSObject, IosHeadlessCallbackProtocol {
 
     func onLog(_ msg: String?) {
         guard let msg = msg else { return }
+        #if DEBUG
         print("[GO] \(msg)")
-        let mgr = manager
+        #endif
+        // Go calls this for every log line, and an active tunnel produces hundreds
+        // per minute. With the log hidden any work here is pointless: previously
+        // each line woke the main thread and triggered a SwiftUI redraw.
+        guard let mgr = manager, mgr.logsEnabled else { return }
         DispatchQueue.main.async { [weak mgr] in
             mgr?.appendLog(msg)
         }
@@ -170,7 +175,16 @@ class ProxyManager: ObservableObject {
     @Published var socksPort: Int = AppDefaults.socksPort { didSet { AppDefaults.socksPort = socksPort } }
     @Published var tunnelMode: TunnelMode = AppDefaults.tunnelMode { didSet { AppDefaults.tunnelMode = tunnelMode } }
     @Published var displayName: String = AppDefaults.displayName { didSet { AppDefaults.displayName = displayName } }
-    @Published var showLogs: Bool = AppDefaults.showLogs { didSet { AppDefaults.showLogs = showLogs } }
+    @Published var showLogs: Bool = AppDefaults.showLogs {
+        didSet {
+            AppDefaults.showLogs = showLogs
+            logsEnabled = showLogs
+        }
+    }
+
+    // Plain mirror of showLogs: @Published must not be read from the Go thread,
+    // yet that is where the "log or not" decision belongs, before hopping to main.
+    private(set) var logsEnabled: Bool = AppDefaults.showLogs
     @Published var socksAuthMode: SocksAuthMode = AppDefaults.socksAuthMode { didSet { AppDefaults.socksAuthMode = socksAuthMode } }
     @Published var manualSocksUser: String = AppDefaults.socksUser { didSet { AppDefaults.socksUser = manualSocksUser } }
     @Published var manualSocksPass: String = AppDefaults.socksPass { didSet { AppDefaults.socksPass = manualSocksPass } }
@@ -179,6 +193,10 @@ class ProxyManager: ObservableObject {
     @Published var dualTrack: Bool = AppDefaults.dualTrack { didSet { AppDefaults.dualTrack = dualTrack } }
     @Published var reliable: Bool = AppDefaults.reliable { didSet { AppDefaults.reliable = reliable } }
     @Published var debug: Bool = AppDefaults.debug { didSet { AppDefaults.debug = debug } }
+    @Published var keepaliveMinMs: Int = AppDefaults.keepaliveMinMs { didSet { AppDefaults.keepaliveMinMs = keepaliveMinMs } }
+    @Published var keepaliveMaxMs: Int = AppDefaults.keepaliveMaxMs { didSet { AppDefaults.keepaliveMaxMs = keepaliveMaxMs } }
+    @Published var skipVideoTrack: Bool = AppDefaults.skipVideoTrack { didSet { AppDefaults.skipVideoTrack = skipVideoTrack } }
+    @Published var disableMdns: Bool = AppDefaults.disableMdns { didSet { AppDefaults.disableMdns = disableMdns } }
 
     private let autoSocksUser: String
     private let autoSocksPass: String
@@ -329,6 +347,10 @@ class ProxyManager: ObservableObject {
                 "vp8Batch": vp8Batch,
                 "dualTrack": dualTrack,
                 "reliable": reliable,
+                "keepaliveMinMs": keepaliveMinMs,
+                "keepaliveMaxMs": keepaliveMaxMs,
+                "skipVideoTrack": skipVideoTrack,
+                "disableMdns": disableMdns,
             ]
             if let jsonData = try? JSONSerialization.data(withJSONObject: joinParams),
                let jsonString = String(data: jsonData, encoding: .utf8) {
