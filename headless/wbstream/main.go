@@ -25,9 +25,32 @@ func main() {
 	upstreamSocks := flag.String("upstream-socks", "", "route tunneled egress through this SOCKS5 proxy (host:port), e.g. a local VPN client")
 	upstreamUser := flag.String("upstream-user", "", "upstream SOCKS5 username")
 	upstreamPass := flag.String("upstream-pass", "", "upstream SOCKS5 password")
+	keepaliveFlag := flag.String("keepalive", "", "idle keepalive frame period as min,max in milliseconds (e.g. 3000,8000); empty keeps the 60-200ms default")
+	modeFlag := flag.String("mode", "", "tunnel mode: dc, video, or empty to auto-detect")
+	skipVideo := flag.Bool("skip-video", false, "publish no video track at all; requires -mode dc and a joiner in DC mode")
 	debugFlag := flag.Bool("debug", false, "verbose debug logging")
 	flag.Parse()
 	common.Debug = *debugFlag
+
+	switch *modeFlag {
+	case "", wbstream.TunnelModeDC, wbstream.TunnelModeVideo:
+	default:
+		log.Fatalf("[config] unknown mode: %s (use dc, video, or leave empty)", *modeFlag)
+	}
+	if *skipVideo && *modeFlag != wbstream.TunnelModeDC {
+		log.Fatalf("[config] -skip-video requires -mode dc")
+	}
+
+	var keepaliveMin, keepaliveMax time.Duration
+	if *keepaliveFlag != "" {
+		var lo, hi int
+		if n, err := fmt.Sscanf(*keepaliveFlag, "%d,%d", &lo, &hi); n != 2 || err != nil || lo <= 0 || hi < lo {
+			log.Fatalf("[config] bad -keepalive %q: expected min,max in milliseconds with max >= min", *keepaliveFlag)
+		}
+		keepaliveMin = time.Duration(lo) * time.Millisecond
+		keepaliveMax = time.Duration(hi) * time.Millisecond
+		log.Printf("[config] keepalive %s-%s", keepaliveMin, keepaliveMax)
+	}
 
 	var readBuf int
 	var memLimit int64
@@ -98,14 +121,18 @@ func main() {
 	var activeBridge *tunnel.RelayBridge
 	makeSession := func(token, access, server string) *wbstream.Session {
 		sess := wbstream.NewSession(wbstream.SessionConfig{
-			RoomToken:   token,
-			ServerURL:   server,
-			DisplayName: *displayName,
-			Obfuscator:  obf,
-			LogFn:       log.Printf,
-			RoomID:      roomID,
-			AccessToken: access,
-			ReadBuf:     readBuf,
+			RoomToken:      token,
+			ServerURL:      server,
+			DisplayName:    *displayName,
+			Obfuscator:     obf,
+			LogFn:          log.Printf,
+			RoomID:         roomID,
+			AccessToken:    access,
+			ReadBuf:        readBuf,
+			KeepaliveMin:   keepaliveMin,
+			KeepaliveMax:   keepaliveMax,
+			TunnelMode:     *modeFlag,
+			SkipVideoTrack: *skipVideo,
 		})
 		sess.OnConnected = func(tun tunnel.DataTunnel) {
 			if activeBridge != nil {
