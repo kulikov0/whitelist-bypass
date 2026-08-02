@@ -14,11 +14,17 @@ import (
 const (
 	kcpConvBase       = 0x77627374
 	kcpUpdateInterval = 10 * time.Millisecond
+	// While idle KCP has nothing to retransmit, yet the loop still called Update
+	// a hundred times a second and kept the CPU awake. Idle switches to a rare
+	// tick; sends and receives wake the loop immediately, so the first packet
+	// after silence is not delayed.
+	kcpIdleUpdateInterval = 500 * time.Millisecond
+	kcpIdleAfterTicks     = 50
 	// One KCP segment must ride in a single RTP packet so a dropped packet
 	// loses only its own frame, not a two-packet frame that readVP8Track
 	// would discard whole. 1200 RTP budget - 1 VP8 descriptor - interframe
 	// header - 24 XChaCha20 nonce - 16 Poly1305 tag - 1 channel tag.
-	kcpSegmentMTU = 1200 - 1 - interframeHdrLen - 24 - 16 - 1
+	kcpSegmentMTU     = 1200 - 1 - interframeHdrLen - 24 - 16 - 1
 	kcpReceiveBufSize = 128 * 1024
 	kcpStatsEvery     = 500
 
@@ -146,6 +152,7 @@ type MultiTrackKCPTunnel struct {
 
 	stopCh   chan struct{}
 	stopOnce sync.Once
+	nudge    chan struct{} // wakes updateLoop when there is work to do
 
 	currentWindow atomic.Int32
 
@@ -165,6 +172,7 @@ func NewMultiTrackKCPTunnel(mt *MultiTrackTunnel, logFn func(string, ...any)) *M
 		convMap: make(map[uint32]*trackKCPSession),
 		connPin: make(map[uint32]int),
 		stopCh:  make(chan struct{}),
+		nudge:   make(chan struct{}, 1),
 	}
 	subs := mt.SubTunnels()
 	window := kcpWindowFloor
@@ -191,6 +199,7 @@ func (t *MultiTrackKCPTunnel) SendData(frame []byte) {
 	if len(frame) < 9 {
 		return
 	}
+	t.wake()
 	connID := binary.BigEndian.Uint32(frame[4:8])
 	msgType := frame[8]
 
@@ -285,6 +294,7 @@ func (t *MultiTrackKCPTunnel) handleDecodedSegment(payload []byte) {
 		return
 	}
 	t.inputSegments.Add(1)
+	t.wake()
 	messages := session.input(body)
 	if callback == nil {
 		return
@@ -368,21 +378,54 @@ func (t *MultiTrackKCPTunnel) handleInnerClose() {
 	}
 }
 
+// wake returns the update loop to the fast cadence. Called on send and on
+// receive so a packet after idle does not wait for the slow tick.
+func (t *MultiTrackKCPTunnel) wake() {
+	select {
+	case t.nudge <- struct{}{}:
+	default:
+	}
+}
+
 func (t *MultiTrackKCPTunnel) updateLoop() {
 	ticker := time.NewTicker(kcpUpdateInterval)
 	defer ticker.Stop()
 	ticks := 0
+	idleTicks := 0
+	fast := true
 	for {
 		select {
 		case <-t.stopCh:
 			return
+		case <-t.nudge:
+			if !fast {
+				fast = true
+				idleTicks = 0
+				ticker.Reset(kcpUpdateInterval)
+			}
 		case <-ticker.C:
 			t.mu.Lock()
 			sessions := make([]*trackKCPSession, len(t.sessions))
 			copy(sessions, t.sessions)
 			t.mu.Unlock()
+			pending := 0
 			for _, session := range sessions {
 				session.update()
+				pending += session.waitSnd()
+			}
+			if pending > 0 {
+				idleTicks = 0
+				if !fast {
+					fast = true
+					ticker.Reset(kcpUpdateInterval)
+				}
+			} else if fast {
+				idleTicks++
+				if idleTicks >= kcpIdleAfterTicks {
+					fast = false
+					idleTicks = 0
+					ticker.Reset(kcpIdleUpdateInterval)
+				}
 			}
 			ticks++
 			if common.Debug && ticks%kcpStatsEvery == 0 && t.logFn != nil {
