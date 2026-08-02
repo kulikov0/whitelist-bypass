@@ -191,6 +191,11 @@ All four creators need cookies exported from the desktop creator app (`Export Co
 | `--read-buf <bytes>` | yes | yes | yes | DC/RTP read buffer; only consulted with `--resources custom` |
 | `--max-dc-buf <bytes>` | yes | - | - | DataChannel `BufferedAmountLowThreshold`; only with `--resources custom` |
 | `--mem-limit <bytes>` | yes | yes | yes | Go soft memory limit (`debug.SetMemoryLimit`); only with `--resources custom` |
+| `--keepalive <min,max>` | - | - | yes | idle keepalive frame period in milliseconds, e.g. `3000,8000`; unset keeps the 60–200ms default |
+| `--mode <dc\|video>` | - | - | yes | pin the tunnel mode instead of auto-detecting it from the joiner |
+| `--skip-video` | - | - | yes | publish no video track at all; requires `--mode dc` and a joiner in DC mode |
+
+The last three matter when the joiner is a phone. While the tunnel is idle the creator still publishes its video track and pads it with keepalive frames every 60–200ms, and joiners subscribe to everything in the room — that is ~7.7 packets per second arriving at the device for no reason, which keeps its radio awake. `--keepalive 3000,8000` thins that stream out; `--skip-video` removes it entirely, at the cost of no longer serving joiners in Video mode.
 
 #### Joining an existing call
 
