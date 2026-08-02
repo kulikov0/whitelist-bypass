@@ -10,6 +10,7 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/pion/ice/v4"
 	"github.com/pion/webrtc/v4"
 	"whitelist-bypass/relay/common"
 	"whitelist-bypass/relay/tunnel"
@@ -22,6 +23,11 @@ type WBStreamHeadlessJoiner struct {
 	ResolveFn   ResolveFunc
 	Status      StatusEmitter
 	PCConfig    PeerConnectionConfigurer
+
+	// Idle keepalive period supplied by the app. Zero keeps the default.
+	keepaliveMin time.Duration
+	keepaliveMax time.Duration
+	skipVideo    bool
 
 	mu       sync.Mutex
 	session  *wbstream.Session
@@ -42,18 +48,31 @@ func NewWBStreamHeadlessJoiner(logFn func(string, ...any), resolveFn ResolveFunc
 
 func (j *WBStreamHeadlessJoiner) RunWithParams(jsonParams string) {
 	var params struct {
-		RoomID      string `json:"roomId"`
-		DisplayName string `json:"displayName"`
-		TunnelMode  string `json:"tunnelMode"`
-		VP8FPS      int    `json:"vp8Fps"`
-		VP8Batch    int    `json:"vp8Batch"`
-		DualTrack   bool   `json:"dualTrack"`
-		Reliable    *bool  `json:"reliable"`
+		RoomID         string `json:"roomId"`
+		DisplayName    string `json:"displayName"`
+		TunnelMode     string `json:"tunnelMode"`
+		VP8FPS         int    `json:"vp8Fps"`
+		VP8Batch       int    `json:"vp8Batch"`
+		DualTrack      bool   `json:"dualTrack"`
+		Reliable       *bool  `json:"reliable"`
+		KeepaliveMinMs int    `json:"keepaliveMinMs"`
+		KeepaliveMaxMs int    `json:"keepaliveMaxMs"`
+		SkipVideoTrack bool   `json:"skipVideoTrack"`
+		DisableMDNS    bool   `json:"disableMdns"`
 	}
 	if err := json.Unmarshal([]byte(jsonParams), &params); err != nil {
 		j.logFn("wbstream-joiner: failed to parse params: %v", err)
 		j.Status.EmitStatusError("bad params: " + err.Error())
 		return
+	}
+	if params.KeepaliveMinMs > 0 && params.KeepaliveMaxMs >= params.KeepaliveMinMs {
+		j.keepaliveMin = time.Duration(params.KeepaliveMinMs) * time.Millisecond
+		j.keepaliveMax = time.Duration(params.KeepaliveMaxMs) * time.Millisecond
+		j.logFn("wbstream-joiner: keepalive %s..%s", j.keepaliveMin, j.keepaliveMax)
+	}
+	j.skipVideo = params.SkipVideoTrack
+	if j.skipVideo {
+		j.logFn("wbstream-joiner: video track disabled (DC only)")
 	}
 	if params.RoomID == "" {
 		j.logFn("wbstream-joiner: missing roomId")
@@ -81,6 +100,15 @@ func (j *WBStreamHeadlessJoiner) RunWithParams(jsonParams string) {
 		se := webrtc.SettingEngine{}
 		j.PCConfig.ConfigureSettingEngine(&se)
 		settingEngine = &se
+	}
+	if params.DisableMDNS {
+		if settingEngine == nil {
+			settingEngine = &webrtc.SettingEngine{}
+		}
+		// Local .local candidates are useless here: the peer is always on the
+		// internet. Listeners on 224.0.0.251:5353 only wake the network.
+		settingEngine.SetICEMulticastDNSMode(ice.MulticastDNSModeDisabled)
+		j.logFn("wbstream-joiner: mDNS candidates disabled")
 	}
 
 	var attempt atomic.Int32
@@ -134,6 +162,9 @@ func (j *WBStreamHeadlessJoiner) runOnce(httpClient *http.Client, roomID, displa
 		ScreenShare:    dualTrack,
 		IsJoiner:       true,
 		Reliable:       reliable,
+		KeepaliveMin:   j.keepaliveMin,
+		KeepaliveMax:   j.keepaliveMax,
+		SkipVideoTrack: j.skipVideo,
 	})
 	sess.OnConnected = func(tun tunnel.DataTunnel) {
 		attempt.Store(0)

@@ -48,6 +48,18 @@ type SessionConfig struct {
 	ScreenShare    bool // when true, publish a second VP8 track as ScreenShare and shard outbound across both
 	IsJoiner       bool // when true, run the configPingPong loop; only the joiner sends VP8 config to the peer
 	Reliable       bool
+
+	// Spread of the keepalive frame period while idle. Zero keeps the default
+	// (60-200ms). On a mobile client this is the dominant drain: every frame
+	// keeps the radio awake, and while idle nothing else is sent.
+	KeepaliveMin time.Duration
+	KeepaliveMax time.Duration
+
+	// In DC mode the payload rides the data channel and the video track is
+	// published only because that is what a streamer does. If the platform
+	// tolerates a participant without video, the whole VP8 path can stay down:
+	// that drops both the encoding and the RTP stream keeping the radio awake.
+	SkipVideoTrack bool
 }
 
 type Session struct {
@@ -165,6 +177,12 @@ func (s *Session) onLKReady() {
 		return
 	}
 
+	if s.cfg.SkipVideoTrack && s.cfg.TunnelMode == TunnelModeDC {
+		s.cfg.LogFn("[lk] dc mode: publishing no video track")
+		s.publishDataOnly(pubPC)
+		return
+	}
+
 	camID := "videochannel-" + uuid.New().String()
 	trackCam, err := webrtc.NewTrackLocalStaticSample(
 		webrtc.RTPCodecCapability{MimeType: webrtc.MimeTypeVP8, ClockRate: 90000},
@@ -252,6 +270,42 @@ func (s *Session) onLKReady() {
 	s.cfg.LogFn("[lk] sent publisher offer (%d bytes)", len(offer.SDP))
 }
 
+// publishDataOnly brings the publisher up with no media tracks at all: the
+// offer carries only the application section for the data channel.
+func (s *Session) publishDataOnly(pubPC *webrtc.PeerConnection) {
+	ordered := true
+	dc, err := pubPC.CreateDataChannel("_reliable", &webrtc.DataChannelInit{Ordered: &ordered})
+	if err != nil {
+		s.cfg.LogFn("[lk] create reliable DC: %v", err)
+		return
+	}
+	s.mu.Lock()
+	s.pubReliableDC = dc
+	s.mu.Unlock()
+	dc.OnOpen(func() {
+		s.cfg.LogFn("[lk] reliable DC open")
+		s.mu.Lock()
+		s.pubReliableDCReady = true
+		s.mu.Unlock()
+		s.maybeStartDCTunnel()
+	})
+
+	offer, err := pubPC.CreateOffer(nil)
+	if err != nil {
+		s.cfg.LogFn("[lk] create offer: %v", err)
+		return
+	}
+	if err := pubPC.SetLocalDescription(offer); err != nil {
+		s.cfg.LogFn("[lk] set local offer: %v", err)
+		return
+	}
+	if err := s.lk.SendOffer(offer.SDP); err != nil {
+		s.cfg.LogFn("[lk] send offer: %v", err)
+		return
+	}
+	s.cfg.LogFn("[lk] sent publisher offer, data-only (%d bytes)", len(offer.SDP))
+}
+
 func (s *Session) startTunnel() {
 	s.mu.Lock()
 	if s.vp8tun != nil || len(s.sampleTracks) == 0 {
@@ -260,7 +314,11 @@ func (s *Session) startTunnel() {
 	}
 	subs := make([]*tunnel.VP8DataTunnel, 0, len(s.sampleTracks))
 	for _, t := range s.sampleTracks {
-		subs = append(subs, tunnel.NewVP8DataTunnelWithQueue(t, s.cfg.Obfuscator, s.cfg.LogFn, tunnel.KCPCarrierQueueDepth))
+		sub := tunnel.NewVP8DataTunnelWithQueue(t, s.cfg.Obfuscator, s.cfg.LogFn, tunnel.KCPCarrierQueueDepth)
+		if s.cfg.KeepaliveMin > 0 && s.cfg.KeepaliveMax >= s.cfg.KeepaliveMin {
+			sub.SetKeepaliveShape(s.cfg.KeepaliveMin, s.cfg.KeepaliveMax, -1)
+		}
+		subs = append(subs, sub)
 	}
 	s.vp8tun = tunnel.NewMultiTrackTunnel(subs)
 	s.vp8tun.SetOnPeerRestart(func() {
