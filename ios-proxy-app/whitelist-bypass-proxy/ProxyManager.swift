@@ -1,6 +1,7 @@
 import Foundation
 import UIKit
 import Combine
+import Network
 import Mobile
 
 
@@ -180,6 +181,14 @@ class ProxyManager: ObservableObject {
     @Published var reliable: Bool = AppDefaults.reliable { didSet { AppDefaults.reliable = reliable } }
     @Published var debug: Bool = AppDefaults.debug { didSet { AppDefaults.debug = debug } }
 
+    /// User intent: stays true across reconnects until Stop is pressed.
+    @Published var isArmed: Bool = false
+    /// Set when the SOCKS port had to move - the Happ profile is stale until re-imported.
+    @Published var portDrifted: Bool = false
+    /// Restarts stopped helping: the VPN in Happ is holding the network the joiner needs.
+    @Published var needsHappToggle: Bool = false
+    @Published var restartCount: Int = 0
+
     private let autoSocksUser: String
     private let autoSocksPass: String
     private var callbackBridge: HeadlessCallbackBridge?
@@ -187,6 +196,20 @@ class ProxyManager: ObservableObject {
 
     private var pendingLogs: [String] = []
     private var logFlushScheduled = false
+
+    // Supervisor: keeps the tunnel alive without the user touching anything.
+    private var supervisorTimer: Timer?
+    private var pendingRestart: DispatchWorkItem?
+    private var pathMonitor: NWPathMonitor?
+    private var networkUp = true
+    private var downSince: Date?
+    private var restartAttempt = 0
+
+    /// No TUNNEL_CONNECTED for this long while armed -> tear the joiner down and start it clean.
+    private let stuckTimeout: TimeInterval = 45
+    /// Outage this long means restarts aren't helping - most likely Happ owns the network.
+    private let happHintTimeout: TimeInterval = 100
+    private let restartBackoff: [TimeInterval] = [3, 6, 12, 20, 30]
 
     var activeSocksUser: String {
         socksAuthMode == .manual ? manualSocksUser : autoSocksUser
@@ -197,92 +220,124 @@ class ProxyManager: ObservableObject {
     }
 
     init() {
+        // Credentials are generated once and kept forever: a Happ profile imported today
+        // has to keep working after the app is restarted.
         let chars = "abcdefghijklmnopqrstuvwxyz0123456789"
-        autoSocksUser = String((0..<16).map { _ in chars.randomElement()! })
-        autoSocksPass = String((0..<24).map { _ in chars.randomElement()! })
+        if AppDefaults.autoSocksUser.isEmpty || AppDefaults.autoSocksPass.isEmpty {
+            AppDefaults.autoSocksUser = String((0..<16).map { _ in chars.randomElement()! })
+            AppDefaults.autoSocksPass = String((0..<24).map { _ in chars.randomElement()! })
+        }
+        autoSocksUser = AppDefaults.autoSocksUser
+        autoSocksPass = AppDefaults.autoSocksPass
+
+        startPathMonitor()
+        NotificationCenter.default.addObserver(
+            self,
+            selector: #selector(appDidBecomeActive),
+            name: UIApplication.didBecomeActiveNotification,
+            object: nil
+        )
     }
 
     var socksUrl: String {
         "socks5://\(activeSocksUser):\(activeSocksPass)@127.0.0.1:\(socksPort)"
     }
 
+    /// Mirrors what Go's net.Listen does: loopback bind with SO_REUSEADDR, then an actual
+    /// listen(). Probing 0.0.0.0 without SO_REUSEADDR used to report the port as busy while
+    /// old connections sat in TIME_WAIT, which is what made the port creep 1080 -> 1081 -> 1082.
     private func isPortAvailable(_ port: Int) -> Bool {
         let socketFD = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP)
         if socketFD == -1 { return false }
         defer { close(socketFD) }
 
+        var reuse: Int32 = 1
+        setsockopt(socketFD, SOL_SOCKET, SO_REUSEADDR, &reuse, socklen_t(MemoryLayout<Int32>.size))
+
         var addr = sockaddr_in()
         addr.sin_len = UInt8(MemoryLayout<sockaddr_in>.size)
         addr.sin_family = sa_family_t(AF_INET)
         addr.sin_port = in_port_t(port).bigEndian
-        addr.sin_addr.s_addr = INADDR_ANY
+        addr.sin_addr.s_addr = in_addr_t(INADDR_LOOPBACK).bigEndian
 
         let result = withUnsafePointer(to: &addr) { addrPtr in
             addrPtr.withMemoryRebound(to: sockaddr.self, capacity: 1) { sockaddrPtr in
                 bind(socketFD, sockaddrPtr, socklen_t(MemoryLayout<sockaddr_in>.size))
             }
         }
-        return result == 0
+        if result != 0 { return false }
+        return listen(socketFD, 1) == 0
+    }
+
+    /// Waits for the previous listener to go away instead of grabbing a new port, so the
+    /// port stays the one the Happ profile points at. Runs off the main thread.
+    private func acquirePort(preferred: Int) -> (port: Int, drifted: Bool) {
+        for attempt in 0..<16 {
+            if isPortAvailable(preferred) { return (preferred, false) }
+            if attempt == 0 {
+                appendLogAsync("Port \(preferred) still held, waiting for the old listener")
+            }
+            Thread.sleep(forTimeInterval: 0.25)
+        }
+
+        let ranges: [ClosedRange<Int>] = [
+            preferred...min(preferred + 100, 65535),
+            1080...1380,
+            8080...8380,
+            9080...9380,
+        ]
+        for range in ranges {
+            for candidate in range where isPortAvailable(candidate) {
+                appendLogAsync("Port \(preferred) busy, falling back to \(candidate) - re-import the profile in Happ")
+                return (candidate, true)
+            }
+        }
+        appendLogAsync("No free port found, retrying on \(preferred)")
+        return (preferred, false)
     }
 
     func connect() {
         guard !callUrl.isEmpty else { return }
 
-        if !isPortAvailable(socksPort) {
-            let originalPort = socksPort
-            let ranges: [ClosedRange<Int>] = [
-                originalPort...min(originalPort + 100, 65535),
-                1080...1380,
-                8080...8380,
-                9080...9380,
-                49152...65535
-            ]
-            var foundPort = false
-            for range in ranges {
-                for candidatePort in range {
-                    if isPortAvailable(candidatePort) {
-                        socksPort = candidatePort
-                        foundPort = true
-                        break
-                    }
-                }
-                if foundPort { break }
-            }
-            if !foundPort {
-                let socketFD = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP)
-                if socketFD != -1 {
-                    var addr = sockaddr_in()
-                    addr.sin_len = UInt8(MemoryLayout<sockaddr_in>.size)
-                    addr.sin_family = sa_family_t(AF_INET)
-                    addr.sin_port = 0
-                    addr.sin_addr.s_addr = in_addr_t(INADDR_LOOPBACK).bigEndian
-                    let bound = withUnsafePointer(to: &addr) { addrPtr in
-                        addrPtr.withMemoryRebound(to: sockaddr.self, capacity: 1) { sockaddrPtr in
-                            bind(socketFD, sockaddrPtr, socklen_t(MemoryLayout<sockaddr_in>.size))
-                        }
-                    }
-                    if bound == 0 {
-                        var boundAddr = sockaddr_in()
-                        var addrLen = socklen_t(MemoryLayout<sockaddr_in>.size)
-                        withUnsafeMutablePointer(to: &boundAddr) { ptr in
-                            ptr.withMemoryRebound(to: sockaddr.self, capacity: 1) { sockPtr in
-                                getsockname(socketFD, sockPtr, &addrLen)
-                            }
-                        }
-                        socksPort = Int(UInt16(bigEndian: boundAddr.sin_port))
-                    }
-                    close(socketFD)
-                }
-            }
-            appendLog("Port \(originalPort) busy, using \(socksPort)")
-        }
-
+        isArmed = true
+        restartAttempt = 0
+        restartCount = 0
+        needsHappToggle = false
+        downSince = Date()
         logs.removeAll()
         pendingLogs.removeAll()
         errorMessage = ""
-        status = .idle
+        startSupervisor()
+        launchHeadless()
+    }
+
+    /// Starts (or restarts) the Go joiner. Port and credentials never change here, so the
+    /// Happ profile imported once keeps working across every restart.
+    private func launchHeadless() {
+        guard isArmed, !callUrl.isEmpty else { return }
+
+        pendingRestart?.cancel()
+        pendingRestart = nil
+        errorMessage = ""
+        status = .connecting
         isRunning = true
 
+        let preferred = socksPort
+        DispatchQueue.global(qos: .userInitiated).async { [weak self] in
+            guard let self = self else { return }
+            let result = self.acquirePort(preferred: preferred)
+            DispatchQueue.main.async {
+                guard self.isArmed else { return }
+                if result.port != self.socksPort {
+                    self.socksPort = result.port
+                }
+                self.portDrifted = result.drifted
+                self.startJoiner()
+            }
+        }
+    }
+
+    private func startJoiner() {
         let bridge = HeadlessCallbackBridge()
         bridge.manager = self
         callbackBridge = bridge
@@ -353,13 +408,24 @@ class ProxyManager: ObservableObject {
         }
     }
 
-    func disconnect() {
+    /// Tears the joiner down without dropping the user's intent - used between restarts.
+    private func stopJoiner(keepAlive: Bool) {
         callbackBridge?.manager = nil
         callbackBridge = nil
         IosStopCaptchaProxy()
         IosStopHeadless()
-        backgroundKeepAlive.stop()
+        if !keepAlive { backgroundKeepAlive.stop() }
         isRunning = false
+    }
+
+    func disconnect() {
+        isArmed = false
+        stopSupervisor()
+        pendingRestart?.cancel()
+        pendingRestart = nil
+        downSince = nil
+        needsHappToggle = false
+        stopJoiner(keepAlive: false)
         status = .idle
         appendLog("Disconnected")
     }
@@ -371,6 +437,7 @@ class ProxyManager: ObservableObject {
         logs.removeAll()
         pendingLogs.removeAll()
         errorMessage = ""
+        portDrifted = false
         socksPort = 1080
     }
 
@@ -381,9 +448,15 @@ class ProxyManager: ObservableObject {
             let errorText = String(statusString.dropFirst(6))
             status = .error
             errorMessage = errorText
-            isRunning = false
             captchaURL = nil
             appendLog("ERROR: \(errorText)")
+            if isArmed {
+                // The Go joiner gives up for good if the very first attempt fails, so the
+                // restart has to come from here.
+                scheduleRestart(reason: errorText)
+            } else {
+                isRunning = false
+            }
         } else if statusString.hasPrefix("CAPTCHA:") {
             captchaURL = String(statusString.dropFirst(8))
             statusText = NSLocalizedString("status_solve_captcha", comment: "")
@@ -395,6 +468,11 @@ class ProxyManager: ObservableObject {
             }
             status = ProxyStatus(rawValue: statusString) ?? .idle
             appendLog("Status: \(statusString)")
+            if status == .tunnelConnected {
+                onTunnelHealthy()
+            } else if isArmed && downSince == nil {
+                downSince = Date()
+            }
         }
     }
 
@@ -418,6 +496,105 @@ class ProxyManager: ObservableObject {
         if logs.count > 100 {
             logs.removeFirst(logs.count - 100)
         }
+    }
+
+    private func appendLogAsync(_ message: String) {
+        DispatchQueue.main.async { [weak self] in self?.appendLog(message) }
+    }
+
+    // MARK: - Supervisor
+
+    private func startSupervisor() {
+        stopSupervisor()
+        let timer = Timer(timeInterval: 5, repeats: true) { [weak self] _ in
+            self?.supervisorTick()
+        }
+        RunLoop.main.add(timer, forMode: .common)
+        supervisorTimer = timer
+    }
+
+    private func stopSupervisor() {
+        supervisorTimer?.invalidate()
+        supervisorTimer = nil
+    }
+
+    private func supervisorTick() {
+        guard isArmed else { return }
+        guard status != .tunnelConnected else { return }
+
+        if downSince == nil { downSince = Date() }
+        let downFor = Date().timeIntervalSince(downSince!)
+
+        if downFor >= happHintTimeout && !needsHappToggle {
+            needsHappToggle = true
+            appendLog("Still down after \(Int(downFor))s - Happ is most likely holding the network")
+        }
+
+        if downFor >= stuckTimeout && pendingRestart == nil {
+            scheduleRestart(reason: "no tunnel for \(Int(downFor))s")
+        }
+    }
+
+    private func scheduleRestart(reason: String) {
+        guard isArmed, pendingRestart == nil else { return }
+        if downSince == nil { downSince = Date() }
+
+        let delay = restartBackoff[min(restartAttempt, restartBackoff.count - 1)]
+        restartAttempt += 1
+        appendLog("Restarting joiner in \(Int(delay))s (\(reason))")
+
+        let work = DispatchWorkItem { [weak self] in
+            guard let self = self, self.isArmed else { return }
+            self.pendingRestart = nil
+            self.restartCount += 1
+            self.stopJoiner(keepAlive: true)
+            self.launchHeadless()
+        }
+        pendingRestart = work
+        DispatchQueue.main.asyncAfter(deadline: .now() + delay, execute: work)
+    }
+
+    /// Skips the backoff - used when something changed for the better (network came back,
+    /// user opened the app), so waiting would only waste time.
+    private func restartNow(reason: String) {
+        guard isArmed else { return }
+        pendingRestart?.cancel()
+        pendingRestart = nil
+        restartAttempt = 0
+        scheduleRestart(reason: reason)
+    }
+
+    private func onTunnelHealthy() {
+        downSince = nil
+        restartAttempt = 0
+        pendingRestart?.cancel()
+        pendingRestart = nil
+        needsHappToggle = false
+    }
+
+    private func startPathMonitor() {
+        let monitor = NWPathMonitor()
+        monitor.pathUpdateHandler = { [weak self] path in
+            DispatchQueue.main.async {
+                guard let self = self else { return }
+                let up = path.status == .satisfied
+                let wasUp = self.networkUp
+                self.networkUp = up
+                guard up, !wasUp else { return }
+                self.appendLog("Network is back")
+                if self.isArmed && self.status != .tunnelConnected {
+                    self.restartNow(reason: "network restored")
+                }
+            }
+        }
+        monitor.start(queue: DispatchQueue.global(qos: .utility))
+        pathMonitor = monitor
+    }
+
+    @objc private func appDidBecomeActive() {
+        guard isArmed, status != .tunnelConnected else { return }
+        guard let down = downSince, Date().timeIntervalSince(down) > 10 else { return }
+        restartNow(reason: "app foregrounded")
     }
 
     func copyProxyUrl() {
@@ -444,9 +621,34 @@ class ProxyManager: ObservableObject {
     func openHappProxy() {
         let creds = "\(activeSocksUser):\(activeSocksPass)"
         let credsB64 = Data(creds.utf8).base64EncodedString()
-        let proxyUri = "socks://\(credsB64)@127.0.0.1:\(socksPort)#WLB-\(socksPort)"
+        // Fixed name: the port and the credentials no longer change, so Happ keeps a single
+        // WLB profile instead of piling up WLB-1080 / WLB-1081 / WLB-1082.
+        let proxyUri = "socks://\(credsB64)@127.0.0.1:\(socksPort)#WLB"
         UIPasteboard.general.string = proxyUri
         showToast(NSLocalizedString("toast_happ_params_copied", comment: ""))
+    }
+
+    /// Hands Happ a routing profile that sends wb.ru straight out instead of into the tunnel.
+    /// Without it the joiner's own signalling traffic is captured by the VPN it feeds, so a
+    /// dropped tunnel can never come back while the VPN is on.
+    func openHappRouting() {
+        let profile: [String: Any] = [
+            "Name": "WLB direct",
+            "GlobalProxy": "true",
+            "DirectSites": ["domain:wb.ru", "domain:wildberries.ru"],
+            "DirectIp": ["127.0.0.0/8"],
+            "ProxySites": [],
+            "ProxyIp": [],
+            "BlockSites": [],
+            "BlockIp": [],
+        ]
+        guard let data = try? JSONSerialization.data(withJSONObject: profile) else { return }
+        let link = "happ://routing/onadd/\(data.base64EncodedString())"
+        UIPasteboard.general.string = link
+        if let url = URL(string: link) {
+            UIApplication.shared.open(url)
+        }
+        showToast(NSLocalizedString("toast_happ_routing_sent", comment: ""))
     }
 
 }
