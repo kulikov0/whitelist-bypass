@@ -501,7 +501,7 @@ func main() {
 		*token = os.Getenv("VK_TOKEN")
 	}
 	if *upstreamPass == "" {
-		*upstreamPass = os.Getenv("VK_UPSTREAM_PASS")
+		*upstreamPass = os.Getenv("UPSTREAM_PASS")
 	}
 
 	switch *resources {
