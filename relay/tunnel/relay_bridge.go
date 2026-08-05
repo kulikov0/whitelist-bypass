@@ -386,6 +386,14 @@ func (rb *RelayBridge) handleUDP(connID uint32, payload []byte) {
 	addr := string(payload[1 : 1+addrLen])
 	data := payload[1+addrLen:]
 
+	// per datagram, an already open session carries a fresh dst every time
+	if common.DstBlocked(addr) {
+		if common.Debug {
+			rb.logFn("relay[creator]: UDP %d blocked %s", connID, common.MaskAddr(addr))
+		}
+		return
+	}
+
 	var egress *creatorUDP
 	if val, ok := rb.udpClients.Load(connID); ok {
 		existing, ok := val.(*creatorUDP)
@@ -453,11 +461,7 @@ func (rb *RelayBridge) dialCreatorUDP(addr string) (*creatorUDP, error) {
 		}
 		return &creatorUDP{socks: sess}, nil
 	}
-	udpAddr, err := net.ResolveUDPAddr("udp", addr)
-	if err != nil {
-		return nil, err
-	}
-	dialed, err := net.DialUDP("udp", nil, udpAddr)
+	dialed, err := common.DialUDP(addr)
 	if err != nil {
 		return nil, err
 	}
@@ -466,6 +470,11 @@ func (rb *RelayBridge) dialCreatorUDP(addr string) (*creatorUDP, error) {
 
 func (rb *RelayBridge) connectTCP(connID uint32, addr string) {
 	rb.logFn("relay: CONNECT %d -> %s", connID, common.MaskAddr(addr))
+	if common.DstBlocked(addr) {
+		rb.logFn("relay: CONNECT %d blocked %s", connID, common.MaskAddr(addr))
+		rb.send(connID, MsgConnectErr, []byte(common.ErrPrivateDst.Error()))
+		return
+	}
 	var conn net.Conn
 	var err error
 	if rb.upstream != nil {
@@ -482,7 +491,7 @@ func (rb *RelayBridge) connectTCP(connID uint32, addr string) {
 				rb.logFn("relay: DNS %d %s -> %s port=%s took=%s", connID, host, ipAddrList(ips), port, time.Since(dnsStart))
 			}
 		}
-		conn, err = net.DialTimeout("tcp", addr, 10*time.Second)
+		conn, err = common.DialTCP(addr, 10*time.Second)
 	}
 	if err != nil {
 		rb.logFn("relay: CONNECT %d failed: %s", connID, common.MaskError(err))

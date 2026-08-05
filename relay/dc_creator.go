@@ -169,14 +169,7 @@ func (c *dcCreatorRelay) handleUDP(connID uint32, payload []byte) {
 	addr := string(payload[1 : 1+addrLen])
 	data := payload[1+addrLen:]
 
-	udpAddr, err := net.ResolveUDPAddr("udp", addr)
-	if err != nil {
-		if common.Debug {
-			log.Printf("dc-creator: UDP resolve %s failed: %s", common.MaskAddr(addr), common.MaskError(err))
-		}
-		return
-	}
-	conn, err := net.DialUDP("udp", nil, udpAddr)
+	conn, err := common.DialUDP(addr)
 	if err != nil {
 		if common.Debug {
 			log.Printf("dc-creator: UDP dial %s failed: %s", common.MaskAddr(addr), common.MaskError(err))
@@ -196,7 +189,7 @@ func (c *dcCreatorRelay) handleUDP(connID uint32, payload []byte) {
 
 func (c *dcCreatorRelay) connect(connID uint32, addr string) {
 	log.Printf("dc-creator: CONNECT %d -> %s", connID, common.MaskAddr(addr))
-	conn, err := net.DialTimeout("tcp", addr, 10*time.Second)
+	conn, err := common.DialTCP(addr, 10*time.Second)
 	if err != nil {
 		log.Printf("dc-creator: CONNECT %d failed: %s", connID, common.MaskError(err))
 		c.send(connID, dcMsgConnectErr, []byte(common.MaskError(err)))
