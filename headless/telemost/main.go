@@ -16,6 +16,7 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/gorilla/websocket"
+	"github.com/kulikov0/headlessclient"
 	"github.com/pion/webrtc/v4"
 	"whitelist-bypass/relay/common"
 	tmapi "whitelist-bypass/relay/telemost"
@@ -751,9 +752,11 @@ func (b *Bridge) run() {
 	wsHeader.Set("User-Agent", common.UserAgent)
 	wsHeader.Set("Origin", tmOrigin)
 
+	dialer := headlessclient.ChromeWindows.WebSocketDialer()
+
 	for {
 		log.Println("[tm-ws] Connecting...")
-		ws, _, err := websocket.DefaultDialer.Dial(b.connInfo.MediaServerURL, wsHeader)
+		ws, _, err := dialer.Dial(b.connInfo.MediaServerURL, wsHeader)
 		if err != nil {
 			log.Printf("[tm-ws] Connect failed: %s, retrying in 5s...", common.MaskError(err))
 			time.Sleep(5 * time.Second)

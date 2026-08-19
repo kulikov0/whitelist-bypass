@@ -8,6 +8,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/kulikov0/headlessclient"
 	"github.com/pion/rtp"
 	"github.com/pion/rtp/codecs"
 	"github.com/pion/webrtc/v4"
@@ -59,7 +60,9 @@ func NewTunnelRelay() *TunnelRelay {
 }
 
 func (u *TunnelRelay) Init(iceServers []webrtc.ICEServer) error {
-	pc, err := webrtc.NewPeerConnection(webrtc.Configuration{ICEServers: iceServers})
+	settingEngine := webrtc.SettingEngine{}
+	headlessclient.ChromeWindows.WithDTLSMimicChrome13().ApplyWebRTC(&settingEngine)
+	pc, err := webrtc.NewAPI(webrtc.WithSettingEngine(settingEngine)).NewPeerConnection(webrtc.Configuration{ICEServers: iceServers})
 	if err != nil {
 		return err
 	}

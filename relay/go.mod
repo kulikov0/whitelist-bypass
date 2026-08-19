@@ -18,6 +18,12 @@ require (
 )
 
 require (
+	github.com/andybalholm/brotli v1.0.6 // indirect
+	github.com/klauspost/compress v1.17.4 // indirect
+	github.com/refraction-networking/utls v1.8.2 // indirect
+)
+
+require (
 	github.com/ajg/form v1.5.1 // indirect
 	github.com/docker/go-units v0.5.0 // indirect
 	github.com/go-chi/chi/v5 v5.2.1 // indirect
@@ -29,6 +35,7 @@ require (
 	github.com/gorilla/schema v1.4.1 // indirect
 	github.com/klauspost/cpuid/v2 v2.2.6 // indirect
 	github.com/klauspost/reedsolomon v1.12.0 // indirect
+	github.com/kulikov0/headlessclient v0.0.0
 	github.com/pion/dtls/v3 v3.1.2 // indirect
 	github.com/pion/ice/v4 v4.2.1 // indirect
 	github.com/pion/logging v0.2.4 // indirect
@@ -58,3 +65,5 @@ require (
 	golang.zx2c4.com/wireguard v0.0.0-20250521234502-f333402bd9cb // indirect
 	gvisor.dev/gvisor v0.0.0-20250523182742-eede7a881b20 // indirect
 )
+
+replace github.com/kulikov0/headlessclient => ../../headlessclient

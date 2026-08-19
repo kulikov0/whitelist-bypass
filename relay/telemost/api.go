@@ -11,9 +11,9 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/kulikov0/headlessclient"
 	"github.com/pion/interceptor"
 	"github.com/pion/webrtc/v4"
-	"whitelist-bypass/relay/common"
 )
 
 const (
@@ -102,12 +102,16 @@ func NewAPI(settingEngine *webrtc.SettingEngine) (*webrtc.API, error) {
 	if err := webrtc.RegisterDefaultInterceptors(mediaEngine, registry); err != nil {
 		return nil, err
 	}
+	engine := webrtc.SettingEngine{}
+	if settingEngine != nil {
+		engine = *settingEngine
+	}
+	headlessclient.ChromeWindows.ApplyWebRTC(&engine)
+	_ = engine.SetAnsweringDTLSRole(webrtc.DTLSRoleServer)
 	opts := []func(*webrtc.API){
 		webrtc.WithMediaEngine(mediaEngine),
 		webrtc.WithInterceptorRegistry(registry),
-	}
-	if settingEngine != nil {
-		opts = append(opts, webrtc.WithSettingEngine(*settingEngine))
+		webrtc.WithSettingEngine(engine),
 	}
 	return webrtc.NewAPI(opts...), nil
 }
@@ -189,15 +193,14 @@ func (c *Client) Do(method, path string, body interface{}) ([]byte, int, error) 
 	if err != nil {
 		return nil, 0, err
 	}
-	ua := c.UserAgent
-	if ua == "" {
-		ua = common.UserAgent
-	}
 	instanceID := c.InstanceID
 	if instanceID == "" {
 		instanceID = uuid.New().String()
 	}
-	req.Header.Set("User-Agent", ua)
+	req.Header = headlessclient.ChromeWindows.Headers(headlessclient.DestEmpty)
+	if c.UserAgent != "" {
+		req.Header.Set("User-Agent", c.UserAgent)
+	}
 	req.Header.Set("Origin", Origin)
 	req.Header.Set("Referer", Origin+"/")
 	req.Header.Set("Client-Instance-Id", instanceID)
@@ -212,7 +215,7 @@ func (c *Client) Do(method, path string, body interface{}) ([]byte, int, error) 
 	}
 	client := c.HTTP
 	if client == nil {
-		client = http.DefaultClient
+		client = headlessclient.ChromeWindows.HTTPClient()
 	}
 	resp, err := client.Do(req)
 	if err != nil {
