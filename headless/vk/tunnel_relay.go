@@ -11,7 +11,7 @@ import (
 	"github.com/kulikov0/headlessclient"
 	"github.com/pion/rtp"
 	"github.com/pion/rtp/codecs"
-	"github.com/pion/webrtc/v4"
+	"github.com/kulikov0/headlessclient/webrtc"
 	"whitelist-bypass/relay/common"
 	"whitelist-bypass/relay/tunnel"
 )

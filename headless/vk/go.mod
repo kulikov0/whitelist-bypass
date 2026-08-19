@@ -5,7 +5,6 @@ go 1.26.1
 require (
 	github.com/kulikov0/headlessclient v0.0.0
 	github.com/pion/rtp v1.10.1
-	github.com/pion/webrtc/v4 v4.2.11
 	whitelist-bypass/relay v0.0.0
 )
 
@@ -47,7 +46,3 @@ require (
 	golang.org/x/text v0.37.0 // indirect
 	golang.org/x/time v0.14.0 // indirect
 )
-
-replace github.com/pion/dtls/v3 => ../../../dtls
-
-replace github.com/pion/webrtc/v4 => ../../../pion-forks/webrtc-4.2.11

@@ -5,7 +5,7 @@ import (
 	"net"
 	"strings"
 
-	"github.com/pion/webrtc/v4"
+	"github.com/kulikov0/headlessclient/webrtc"
 )
 
 type TransceiverPlan struct {

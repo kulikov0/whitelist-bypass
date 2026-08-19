@@ -13,7 +13,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/kulikov0/headlessclient"
 	"github.com/pion/interceptor"
-	"github.com/pion/webrtc/v4"
+	"github.com/kulikov0/headlessclient/webrtc"
 )
 
 const (

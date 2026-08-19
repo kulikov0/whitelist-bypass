@@ -8,7 +8,7 @@ import (
 	"github.com/gorilla/websocket"
 	"github.com/pion/rtp"
 	"github.com/pion/rtp/codecs"
-	"github.com/pion/webrtc/v4"
+	"github.com/kulikov0/headlessclient/webrtc"
 	"whitelist-bypass/relay/common"
 )
 

@@ -36,7 +36,6 @@ require (
 	github.com/pion/stun/v3 v3.1.1 // indirect
 	github.com/pion/transport/v4 v4.1.0 // indirect
 	github.com/pion/turn/v4 v4.1.4 // indirect
-	github.com/pion/webrtc/v4 v4.2.9 // indirect
 	github.com/pkg/errors v0.9.1 // indirect
 	github.com/quic-go/qpack v0.6.0 // indirect
 	github.com/quic-go/quic-go v0.60.0 // indirect
@@ -61,7 +60,3 @@ require (
 replace whitelist-bypass/relay => ../../relay
 
 replace github.com/kulikov0/headlessclient => ../../../headlessclient
-
-replace github.com/pion/dtls/v3 => ../../../dtls
-
-replace github.com/pion/webrtc/v4 => ../../../pion-forks/webrtc-4.2.11

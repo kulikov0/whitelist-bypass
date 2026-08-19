@@ -16,7 +16,7 @@ import (
 	"time"
 
 	"github.com/kulikov0/headlessclient"
-	"github.com/pion/webrtc/v4"
+	"github.com/kulikov0/headlessclient/webrtc"
 	"whitelist-bypass/relay/common"
 	"whitelist-bypass/relay/tunnel"
 	"whitelist-bypass/relay/wtsignal"

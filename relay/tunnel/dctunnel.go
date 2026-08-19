@@ -10,7 +10,7 @@ import (
 	"time"
 
 	"github.com/pion/datachannel"
-	"github.com/pion/webrtc/v4"
+	"github.com/kulikov0/headlessclient/webrtc"
 
 	"whitelist-bypass/relay/common"
 )
