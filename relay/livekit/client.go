@@ -12,8 +12,8 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/gorilla/websocket"
 	"github.com/kulikov0/headlessclient/webrtc"
+	"github.com/kulikov0/headlessclient/websocket"
 	"whitelist-bypass/relay/common"
 )
 
@@ -73,20 +73,20 @@ type Client struct {
 
 	closed atomic.Bool
 
-	OnReady              func()
-	OnTrack              func(*webrtc.TrackRemote, *webrtc.RTPReceiver)
-	OnDataChannel        func(*webrtc.DataChannel)
-	OnPubConnected       func()
-	OnParticipantUpdate  func([]ParticipantInfo)
+	OnReady             func()
+	OnTrack             func(*webrtc.TrackRemote, *webrtc.RTPReceiver)
+	OnDataChannel       func(*webrtc.DataChannel)
+	OnPubConnected      func()
+	OnParticipantUpdate func([]ParticipantInfo)
 	// OnRemoteCandidate fires once for every trickle ICE candidate
 	// arriving from the SFU. Used by the Windows joiner to install
 	// /32 bypass routes so the joiner's own media flows stay on the
 	// physical NIC instead of recursing through the tunnel.
-	OnRemoteCandidate    func(target int, candidate webrtc.ICECandidateInit)
+	OnRemoteCandidate func(target int, candidate webrtc.ICECandidateInit)
 	// OnRemoteSDP fires when the SFU sends an SDP offer or answer.
 	// The SDP itself can carry candidates inline; the Windows joiner
 	// uses this to bypass them before any media starts flowing.
-	OnRemoteSDP          func(target int, sdpType, sdp string)
+	OnRemoteSDP func(target int, sdpType, sdp string)
 }
 
 func NewClient(cfg Config) *Client {
@@ -106,7 +106,7 @@ func NewClient(cfg Config) *Client {
 	}
 }
 
-func (c *Client) Join() JoinResponse              { return c.join }
+func (c *Client) Join() JoinResponse            { return c.join }
 func (c *Client) PubPC() *webrtc.PeerConnection { return c.pubPC }
 func (c *Client) SubPC() *webrtc.PeerConnection { return c.subPC }
 

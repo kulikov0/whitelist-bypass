@@ -5,10 +5,10 @@ import (
 	"net/http"
 	"sync"
 
-	"github.com/gorilla/websocket"
+	"github.com/kulikov0/headlessclient/webrtc"
+	"github.com/kulikov0/headlessclient/websocket"
 	"github.com/pion/rtp"
 	"github.com/pion/rtp/codecs"
-	"github.com/kulikov0/headlessclient/webrtc"
 	"whitelist-bypass/relay/common"
 )
 

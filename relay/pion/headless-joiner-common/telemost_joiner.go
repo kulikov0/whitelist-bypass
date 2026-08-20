@@ -14,8 +14,9 @@ import (
 	"time"
 
 	"github.com/google/uuid"
-	"github.com/gorilla/websocket"
+	"github.com/kulikov0/headlessclient"
 	"github.com/kulikov0/headlessclient/webrtc"
+	"github.com/kulikov0/headlessclient/websocket"
 	"whitelist-bypass/relay/common"
 	tmapi "whitelist-bypass/relay/telemost"
 	"whitelist-bypass/relay/tunnel"
@@ -36,11 +37,11 @@ type TelemostHeadlessJoiner struct {
 	// joiner uses these to install /32 bypass routes before the
 	// candidate is added to Pion's PeerConnection.
 	OnRemoteCandidate func(target int, candidateOrSDP string)
-	ResolveFn      ResolveFunc
-	Status         StatusEmitter
-	PCConfig       PeerConnectionConfigurer
-	AddTracks      AddTunnelTracksFunc
-	ReadTrackFn    ReadTrackFunc
+	ResolveFn         ResolveFunc
+	Status            StatusEmitter
+	PCConfig          PeerConnectionConfigurer
+	AddTracks         AddTunnelTracksFunc
+	ReadTrackFn       ReadTrackFunc
 
 	joinLink    string
 	displayName string
@@ -83,11 +84,11 @@ type TelemostHeadlessJoiner struct {
 	configAck        configAckTracker
 	reconnectAttempt atomic.Int32
 
-	setSlotsKey     int
-	initBundleSent  bool
-	boundPeers      map[string]bool
-	unboundPeers    map[string]bool
-	boundMu         sync.Mutex
+	setSlotsKey    int
+	initBundleSent bool
+	boundPeers     map[string]bool
+	unboundPeers   map[string]bool
+	boundMu        sync.Mutex
 }
 
 func NewTelemostHeadlessJoiner(logFn func(string, ...any), resolveFn ResolveFunc, status StatusEmitter, pcConfig PeerConnectionConfigurer, addTracks AddTunnelTracksFunc, readTrackFn ReadTrackFunc) *TelemostHeadlessJoiner {
@@ -381,13 +382,13 @@ func (j *TelemostHeadlessJoiner) sendHello() {
 		"hello": map[string]interface{}{
 			"participantMeta":       map[string]interface{}{"name": j.displayName, "role": "SPEAKER", "description": "", "sendAudio": false, "sendVideo": true},
 			"participantAttributes": map[string]interface{}{"name": j.displayName, "role": "SPEAKER", "description": ""},
-			"sendAudio": false, "sendVideo": true, "sendSharing": false,
+			"sendAudio":             false, "sendVideo": true, "sendSharing": false,
 			"participantId": j.peerID, "roomId": j.roomID,
 			"serviceName": j.serviceName, "credentials": j.credentials,
-			"capabilitiesOffer": tmapi.CapabilitiesOffer,
-			"sdkInfo":             map[string]interface{}{"implementation": "browser", "version": "6.0.0", "userAgent": common.UserAgent, "hwConcurrency": 8},
+			"capabilitiesOffer":   tmapi.CapabilitiesOffer,
+			"sdkInfo":             map[string]interface{}{"implementation": "browser", "version": "6.0.0", "userAgent": headlessclient.ChromeWindows.UserAgent(), "hwConcurrency": 8},
 			"sdkInitializationId": uuid.New().String(),
-			"disablePublisher": false, "disableSubscriber": false, "disableSubscriberAudio": false,
+			"disablePublisher":    false, "disableSubscriber": false, "disableSubscriberAudio": false,
 		},
 	})
 	j.logFn("telemost-joiner: -> hello")

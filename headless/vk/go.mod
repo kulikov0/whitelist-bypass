@@ -15,7 +15,6 @@ replace github.com/kulikov0/headlessclient => ../../../headlessclient
 require (
 	github.com/andybalholm/brotli v1.0.6 // indirect
 	github.com/google/uuid v1.6.0 // indirect
-	github.com/gorilla/websocket v1.5.3 // indirect
 	github.com/klauspost/compress v1.17.4 // indirect
 	github.com/klauspost/cpuid/v2 v2.2.6 // indirect
 	github.com/klauspost/reedsolomon v1.12.0 // indirect

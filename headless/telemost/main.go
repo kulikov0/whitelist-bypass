@@ -6,7 +6,6 @@ import (
 	"flag"
 	"fmt"
 	"log"
-	"net/http"
 	"net/url"
 	"os"
 	"runtime/debug"
@@ -15,9 +14,9 @@ import (
 	"time"
 
 	"github.com/google/uuid"
-	"github.com/gorilla/websocket"
 	"github.com/kulikov0/headlessclient"
 	"github.com/kulikov0/headlessclient/webrtc"
+	"github.com/kulikov0/headlessclient/websocket"
 	"whitelist-bypass/relay/common"
 	tmapi "whitelist-bypass/relay/telemost"
 	"whitelist-bypass/relay/tunnel"
@@ -204,7 +203,7 @@ func (b *Bridge) sendHello() {
 			"participantId": b.connInfo.PeerID, "roomId": b.connInfo.RoomID,
 			"serviceName": b.connInfo.ServiceName, "credentials": b.connInfo.Credentials,
 			"capabilitiesOffer":   tmapi.CapabilitiesOffer,
-			"sdkInfo":             map[string]interface{}{"implementation": "browser", "version": b.config.SDKVersion, "userAgent": common.UserAgent, "hwConcurrency": 8},
+			"sdkInfo":             map[string]interface{}{"implementation": "browser", "version": b.config.SDKVersion, "userAgent": headlessclient.ChromeWindows.UserAgent(), "hwConcurrency": 8},
 			"sdkInitializationId": uuid.New().String(),
 			"disablePublisher":    false, "disableSubscriber": false, "disableSubscriberAudio": false,
 		},
@@ -748,8 +747,7 @@ func (b *Bridge) run() {
 	fmt.Println("  join_link:", b.connInfo.ConferenceURI)
 	fmt.Printf("  protocol:  sdk %s app %s\n\n", b.config.SDKVersion, b.config.AppVersion)
 
-	wsHeader := http.Header{}
-	wsHeader.Set("User-Agent", common.UserAgent)
+	wsHeader := headlessclient.ChromeWindows.Headers(headlessclient.DestWebSocket)
 	wsHeader.Set("Origin", tmOrigin)
 
 	dialer := headlessclient.ChromeWindows.WebSocketDialer()

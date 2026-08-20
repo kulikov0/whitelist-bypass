@@ -6,7 +6,6 @@ require whitelist-bypass/relay v0.0.0
 
 require (
 	github.com/google/uuid v1.6.0 // indirect
-	github.com/gorilla/websocket v1.5.3 // indirect
 	github.com/klauspost/cpuid/v2 v2.2.6 // indirect
 	github.com/klauspost/reedsolomon v1.12.0 // indirect
 	github.com/kulikov0/headlessclient v0.0.0 // indirect

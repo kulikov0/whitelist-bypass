@@ -10,7 +10,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/gorilla/websocket"
+	"github.com/kulikov0/headlessclient/websocket"
 	"whitelist-bypass/relay/common"
 )
 

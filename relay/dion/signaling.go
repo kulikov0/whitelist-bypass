@@ -12,49 +12,49 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/gorilla/websocket"
+	"github.com/kulikov0/headlessclient/websocket"
 
 	"whitelist-bypass/relay/common"
 )
 
 const (
-	MethodServerConnected          = "server:notify:main:connected"
-	MethodServerYouJoined          = "server:you_joined"
-	MethodServerSubscribeResponse  = "server:main:response:subscribe:conference"
-	MethodServerSDPAnswer          = "server:sdp_answer"
-	MethodServerSpeakerJoined      = "server:speaker_joined"
+	MethodServerConnected           = "server:notify:main:connected"
+	MethodServerYouJoined           = "server:you_joined"
+	MethodServerSubscribeResponse   = "server:main:response:subscribe:conference"
+	MethodServerSDPAnswer           = "server:sdp_answer"
+	MethodServerSpeakerJoined       = "server:speaker_joined"
 	MethodServerSpeakerDisconnected = "server:speaker_disconnected"
-	MethodServerHeartbeat          = "server:notify:main:heartbeat"
-	MethodServerSpeakersResponse   = "server:response:speakers"
+	MethodServerHeartbeat           = "server:notify:main:heartbeat"
+	MethodServerSpeakersResponse    = "server:response:speakers"
 	MethodServerSpeakersResponseZip = "server:response:speakers_zip"
 
-	MethodClientSubscribeConference = "client:main:request:subscribe:conference"
-	MethodClientSDPOffer            = "client:request:media:sdp_offer"
-	MethodClientSendICECandidates   = "client:request:send_ice_candidates_zip"
-	MethodClientPCICEStat           = "client:request:pc_ice_stat"
-	MethodClientTrace               = "client:trace"
-	MethodClientConfSpeakersState   = "client:request:conf_speakers_state_zip"
-	MethodServerConfSpeakersState   = "server:response:conf_speakers_state_zip"
-	MethodClientGetVideoFromUser    = "client:request:get_video_from_user"
-	MethodClientStopVideoFromUser   = "client:request:stop_video_from_user"
-	MethodServerGetVideoFromUser    = "server:response:get_video_from_user"
-	MethodServerStopVideoFromUser   = "server:response:stop_video_from_user"
-	MethodClientCamStateChange      = "client:request:cam_state_change"
-	MethodClientMicStateChange      = "client:request:mic_state_change"
-	MethodClientScreenSharingSwitchOn        = "client:request:screensharing_switch_on"
-	MethodClientScreenSharingSwitchOff       = "client:request:screensharing_switch_off"
-	MethodClientGetScreenSharingFromUser     = "client:request:get_screensharing_from_user"
-	MethodClientStopScreenSharingFromUser    = "client:request:stop_screensharing_from_user"
-	MethodClientScreensharingQualityChange   = "client:request:screensharing_quality_change"
-	MethodServerGetScreenSharingFromUser     = "server:response:get_screensharing_from_user"
-	MethodClientClientStatZip       = "client:request:client_stat_zip"
-	MethodClientKickOne             = "client:request:kick_one"
-	MethodServerKickOneResponse     = "server:response:kick_one"
-	MethodServerYouKicked           = "server:you_kicked"
-	MethodServerYourCamStateChanged    = "server:response:your_cam_state_changed"
-	MethodServerYourMicStateChanged    = "server:response:your_mic_state_changed"
-	MethodServerSpeakerCamStateChanged = "server:speaker_cam_state_changed"
-	MethodServerSpeakerMicStateChanged = "server:speaker_mic_state_changed"
+	MethodClientSubscribeConference        = "client:main:request:subscribe:conference"
+	MethodClientSDPOffer                   = "client:request:media:sdp_offer"
+	MethodClientSendICECandidates          = "client:request:send_ice_candidates_zip"
+	MethodClientPCICEStat                  = "client:request:pc_ice_stat"
+	MethodClientTrace                      = "client:trace"
+	MethodClientConfSpeakersState          = "client:request:conf_speakers_state_zip"
+	MethodServerConfSpeakersState          = "server:response:conf_speakers_state_zip"
+	MethodClientGetVideoFromUser           = "client:request:get_video_from_user"
+	MethodClientStopVideoFromUser          = "client:request:stop_video_from_user"
+	MethodServerGetVideoFromUser           = "server:response:get_video_from_user"
+	MethodServerStopVideoFromUser          = "server:response:stop_video_from_user"
+	MethodClientCamStateChange             = "client:request:cam_state_change"
+	MethodClientMicStateChange             = "client:request:mic_state_change"
+	MethodClientScreenSharingSwitchOn      = "client:request:screensharing_switch_on"
+	MethodClientScreenSharingSwitchOff     = "client:request:screensharing_switch_off"
+	MethodClientGetScreenSharingFromUser   = "client:request:get_screensharing_from_user"
+	MethodClientStopScreenSharingFromUser  = "client:request:stop_screensharing_from_user"
+	MethodClientScreensharingQualityChange = "client:request:screensharing_quality_change"
+	MethodServerGetScreenSharingFromUser   = "server:response:get_screensharing_from_user"
+	MethodClientClientStatZip              = "client:request:client_stat_zip"
+	MethodClientKickOne                    = "client:request:kick_one"
+	MethodServerKickOneResponse            = "server:response:kick_one"
+	MethodServerYouKicked                  = "server:you_kicked"
+	MethodServerYourCamStateChanged        = "server:response:your_cam_state_changed"
+	MethodServerYourMicStateChanged        = "server:response:your_mic_state_changed"
+	MethodServerSpeakerCamStateChanged     = "server:speaker_cam_state_changed"
+	MethodServerSpeakerMicStateChanged     = "server:speaker_mic_state_changed"
 
 	ProductVersion      = "6.14.0"
 	SubscriptionVersion = "2.0"
@@ -152,22 +152,22 @@ type SpeakerEntry struct {
 }
 
 type ConfSpeakersStateResponse struct {
-	SpeakersCount         int            `json:"speakers_count"`
-	WebinarSpeakersCount  int            `json:"webinar_speakers_count"`
-	Speakers              []SpeakerEntry `json:"speakers"`
+	SpeakersCount        int            `json:"speakers_count"`
+	WebinarSpeakersCount int            `json:"webinar_speakers_count"`
+	Speakers             []SpeakerEntry `json:"speakers"`
 }
 
 type ConfSpeakersStateRequest struct {
-	SessionIDs        []string                  `json:"session_ids"`
-	TileParams        ConfSpeakersTileParams    `json:"tile_params"`
-	InputVideoQuality string                    `json:"input_video_quality"`
-	ScreenParams      ConfSpeakersScreenParams  `json:"screen_params"`
+	SessionIDs        []string                 `json:"session_ids"`
+	TileParams        ConfSpeakersTileParams   `json:"tile_params"`
+	InputVideoQuality string                   `json:"input_video_quality"`
+	ScreenParams      ConfSpeakersScreenParams `json:"screen_params"`
 }
 
 type ConfSpeakersTileParams struct {
-	Mode          string                       `json:"mode"`
-	MosaicParams  ConfSpeakersMosaicParams     `json:"mosaic_params"`
-	IsModeBlocked bool                         `json:"is_mode_blocked"`
+	Mode          string                   `json:"mode"`
+	MosaicParams  ConfSpeakersMosaicParams `json:"mosaic_params"`
+	IsModeBlocked bool                     `json:"is_mode_blocked"`
 }
 
 type ConfSpeakersMosaicParams struct {
@@ -218,19 +218,19 @@ type SignalingClient struct {
 	sessionID string
 	eventID   string
 
-	OnYouJoined               func(YouJoinedParams)
-	OnSubscribeResponse       func()
-	OnSDPAnswer               func(answerSDP string, transceivers []TransceiverDesc)
-	OnSpeakerJoined           func(SpeakerJoinedParams)
-	OnSpeakerDisconnected     func(SpeakerDisconnectedParams)
-	OnConfSpeakersState       func(ConfSpeakersStateResponse)
-	OnSpeakerCamStateChanged  func(SpeakerCamStateChangedParams)
-	OnSpeakerMicStateChanged  func(SpeakerMicStateChangedParams)
+	OnYouJoined                        func(YouJoinedParams)
+	OnSubscribeResponse                func()
+	OnSDPAnswer                        func(answerSDP string, transceivers []TransceiverDesc)
+	OnSpeakerJoined                    func(SpeakerJoinedParams)
+	OnSpeakerDisconnected              func(SpeakerDisconnectedParams)
+	OnConfSpeakersState                func(ConfSpeakersStateResponse)
+	OnSpeakerCamStateChanged           func(SpeakerCamStateChangedParams)
+	OnSpeakerMicStateChanged           func(SpeakerMicStateChangedParams)
 	OnGetVideoFromUserResponse         func(resp GetVideoFromUserResponse, errCode int, errMessage string)
 	OnGetScreenSharingFromUserResponse func(resp GetScreenSharingFromUserResponse, errCode int, errMessage string)
-	OnHeartbeat               func()
-	OnUnknown                 func(method string, params json.RawMessage)
-	OnDataChannelMessage      func(method string, params json.RawMessage)
+	OnHeartbeat                        func()
+	OnUnknown                          func(method string, params json.RawMessage)
+	OnDataChannelMessage               func(method string, params json.RawMessage)
 }
 
 type SignalingDialOptions struct {
@@ -422,38 +422,38 @@ func (c *SignalingClient) SendPCIceStat() error {
 }
 
 type ClientStatVideoIn struct {
-	BytesReceived           int64   `json:"bytes_received"`
-	Codec                   string  `json:"codec"`
-	IsEnabled               bool    `json:"is_enabled"`
-	JitterBufferDelay       float64 `json:"jitter_buffer_delay"`
-	JitterBufferEmittedCount int    `json:"jitter_buffer_emitted_count"`
-	Jitter                  float64 `json:"jitter"`
-	Mid                     int     `json:"mid"`
-	PacketsLost             int     `json:"packets_lost"`
-	PacketsReceived         int     `json:"packets_received"`
-	Framerate               int     `json:"framerate"`
-	FreezeCount             int     `json:"freeze_count"`
-	Resolution              ClientStatResolution `json:"resolution"`
-	Rid                     string  `json:"rid"`
-	TotalFreezesDuration    int     `json:"total_freezes_duration"`
-	SessionID               string  `json:"session_id"`
+	BytesReceived            int64                `json:"bytes_received"`
+	Codec                    string               `json:"codec"`
+	IsEnabled                bool                 `json:"is_enabled"`
+	JitterBufferDelay        float64              `json:"jitter_buffer_delay"`
+	JitterBufferEmittedCount int                  `json:"jitter_buffer_emitted_count"`
+	Jitter                   float64              `json:"jitter"`
+	Mid                      int                  `json:"mid"`
+	PacketsLost              int                  `json:"packets_lost"`
+	PacketsReceived          int                  `json:"packets_received"`
+	Framerate                int                  `json:"framerate"`
+	FreezeCount              int                  `json:"freeze_count"`
+	Resolution               ClientStatResolution `json:"resolution"`
+	Rid                      string               `json:"rid"`
+	TotalFreezesDuration     int                  `json:"total_freezes_duration"`
+	SessionID                string               `json:"session_id"`
 }
 
 type ClientStatVideoOut struct {
-	Mid             int                    `json:"mid"`
-	BytesSent       int64                  `json:"bytes_sent"`
-	Codec           string                 `json:"codec"`
-	IsEnabled       bool                   `json:"is_enabled"`
-	PacketsSent     int                    `json:"packets_sent"`
-	RemoteStats     ClientStatRemoteStats  `json:"remote_stats"`
-	TargetBitrate   int                    `json:"target_bitrate"`
-	Framerate       int                    `json:"framerate"`
-	FreezeCount     int                    `json:"freeze_count"`
-	Resolution      ClientStatResolution   `json:"resolution"`
-	Rid             string                 `json:"rid"`
-	TotalFreezesDuration int               `json:"total_freezes_duration"`
-	SessionID       string                 `json:"session_id"`
-	ScalabilityMode string                 `json:"scalability_mode"`
+	Mid                  int                   `json:"mid"`
+	BytesSent            int64                 `json:"bytes_sent"`
+	Codec                string                `json:"codec"`
+	IsEnabled            bool                  `json:"is_enabled"`
+	PacketsSent          int                   `json:"packets_sent"`
+	RemoteStats          ClientStatRemoteStats `json:"remote_stats"`
+	TargetBitrate        int                   `json:"target_bitrate"`
+	Framerate            int                   `json:"framerate"`
+	FreezeCount          int                   `json:"freeze_count"`
+	Resolution           ClientStatResolution  `json:"resolution"`
+	Rid                  string                `json:"rid"`
+	TotalFreezesDuration int                   `json:"total_freezes_duration"`
+	SessionID            string                `json:"session_id"`
+	ScalabilityMode      string                `json:"scalability_mode"`
 }
 
 type ClientStatResolution struct {
@@ -487,8 +487,8 @@ type ClientStatConnection struct {
 }
 
 type ClientStatReport struct {
-	ReportTimeUnixMS int64                 `json:"report_time_unix_ms"`
-	Connection       ClientStatConnection  `json:"connection"`
+	ReportTimeUnixMS int64                `json:"report_time_unix_ms"`
+	Connection       ClientStatConnection `json:"connection"`
 	Audio            struct {
 		In ClientStatAudioIn `json:"in"`
 	} `json:"audio"`
