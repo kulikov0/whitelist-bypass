@@ -62,6 +62,9 @@ func NewTunnelRelay() *TunnelRelay {
 func (u *TunnelRelay) Init(iceServers []webrtc.ICEServer) error {
 	settingEngine := webrtc.SettingEngine{}
 	headlessclient.ChromeWindows.WithDTLSMimicChrome13().ApplyWebRTC(&settingEngine)
+	if err := headlessclient.ChromeWindows.ApplyICECredentials(&settingEngine); err != nil {
+		return err
+	}
 	pc, err := webrtc.NewAPI(webrtc.WithSettingEngine(settingEngine)).NewPeerConnection(webrtc.Configuration{ICEServers: iceServers})
 	if err != nil {
 		return err

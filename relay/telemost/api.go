@@ -107,6 +107,9 @@ func NewAPI(settingEngine *webrtc.SettingEngine) (*webrtc.API, error) {
 		engine = *settingEngine
 	}
 	headlessclient.ChromeWindows.ApplyWebRTC(&engine)
+	if err := headlessclient.ChromeWindows.ApplyICECredentials(&engine); err != nil {
+		return nil, fmt.Errorf("apply ice credentials: %w", err)
+	}
 	_ = engine.SetAnsweringDTLSRole(webrtc.DTLSRoleServer)
 	opts := []func(*webrtc.API){
 		webrtc.WithMediaEngine(mediaEngine),

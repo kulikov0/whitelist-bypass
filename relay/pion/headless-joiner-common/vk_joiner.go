@@ -577,6 +577,10 @@ func (h *VKHeadlessJoiner) initPC() {
 		h.PCConfig.ConfigureSettingEngine(&settingEngine)
 	}
 	headlessclient.ChromeWindows.WithDTLSMimicChrome13().ApplyWebRTC(&settingEngine)
+	if err := headlessclient.ChromeWindows.ApplyICECredentials(&settingEngine); err != nil {
+		h.logFn("vk-joiner: failed to apply ice credentials: %v", err)
+		return
+	}
 
 	pc, err := webrtc.NewAPI(webrtc.WithSettingEngine(settingEngine)).NewPeerConnection(webrtc.Configuration{
 		ICEServers: iceServers,

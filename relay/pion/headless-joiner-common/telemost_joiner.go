@@ -407,18 +407,22 @@ func (j *TelemostHeadlessJoiner) sendICE(cand *webrtc.ICECandidate, target strin
 func (j *TelemostHeadlessJoiner) initPC() {
 	config := webrtc.Configuration{ICEServers: j.iceServers}
 
-	settingEngine := webrtc.SettingEngine{}
-	settingEngine.DetachDataChannels()
-	if j.PCConfig != nil {
-		j.PCConfig.ConfigureSettingEngine(&settingEngine)
+	newAPI := func() (*webrtc.API, error) {
+		settingEngine := webrtc.SettingEngine{}
+		settingEngine.DetachDataChannels()
+		if j.PCConfig != nil {
+			j.PCConfig.ConfigureSettingEngine(&settingEngine)
+		}
+		return tmapi.NewAPI(&settingEngine)
 	}
-	api, err := tmapi.NewAPI(&settingEngine)
+
+	subAPI, err := newAPI()
 	if err != nil {
-		j.logFn("telemost-joiner: ERROR: create webrtc API: %v", err)
+		j.logFn("telemost-joiner: ERROR: create subscriber webrtc API: %v", err)
 		return
 	}
 
-	subPC, err := api.NewPeerConnection(config)
+	subPC, err := subAPI.NewPeerConnection(config)
 	if err != nil {
 		j.logFn("telemost-joiner: ERROR: create sub PC: %v", err)
 		return
@@ -448,7 +452,13 @@ func (j *TelemostHeadlessJoiner) initPC() {
 		}, j.logFn, "telemost-joiner")
 	})
 
-	pubPC, err := api.NewPeerConnection(config)
+	pubAPI, err := newAPI()
+	if err != nil {
+		j.logFn("telemost-joiner: ERROR: create publisher webrtc API: %v", err)
+		return
+	}
+
+	pubPC, err := pubAPI.NewPeerConnection(config)
 	if err != nil {
 		j.logFn("telemost-joiner: ERROR: create pub PC: %v", err)
 		return
