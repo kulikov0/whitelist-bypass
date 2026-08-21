@@ -2,7 +2,6 @@ package joiner
 
 import (
 	"context"
-	"crypto/tls"
 	"encoding/json"
 	"fmt"
 	"net"
@@ -222,20 +221,24 @@ func (j *TelemostHeadlessJoiner) isClosed() bool {
 	return j.closed
 }
 
+func (j *TelemostHeadlessJoiner) tlsOptions() headlessclient.TLSOptions {
+	return headlessclient.TLSOptions{
+		InsecureSkipVerify: true,
+		DialContext: func(ctx context.Context, network, addr string) (net.Conn, error) {
+			host, port, _ := net.SplitHostPort(addr)
+			resolvedIP, err := j.ResolveFn(host)
+			if err != nil {
+				return nil, err
+			}
+			return (&net.Dialer{Timeout: 10 * time.Second}).DialContext(ctx, network, resolvedIP+":"+port)
+		},
+	}
+}
+
 func (j *TelemostHeadlessJoiner) makeHTTPClient() *http.Client {
 	return &http.Client{
-		Timeout: 15 * time.Second,
-		Transport: &http.Transport{
-			TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
-			DialContext: func(ctx context.Context, network, addr string) (net.Conn, error) {
-				host, port, _ := net.SplitHostPort(addr)
-				resolvedIP, err := j.ResolveFn(host)
-				if err != nil {
-					return nil, err
-				}
-				return (&net.Dialer{Timeout: 10 * time.Second}).DialContext(ctx, network, resolvedIP+":"+port)
-			},
-		},
+		Timeout:   15 * time.Second,
+		Transport: headlessclient.ChromeWindows.Transport(j.tlsOptions()),
 	}
 }
 
@@ -905,20 +908,21 @@ func (j *TelemostHeadlessJoiner) connectAndRun() {
 	}
 	j.logFn("telemost-joiner: resolved %s -> %s", common.MaskAddr(hostname), common.MaskAddr(resolvedIP))
 
-	wsHeader := http.Header{}
-	wsHeader.Set("User-Agent", common.UserAgent)
+	wsHeader := headlessclient.ChromeWindows.Headers(headlessclient.DestWebSocket)
 	wsHeader.Set("Origin", TmOrigin)
 
 	j.logFn("telemost-joiner: connecting to %s", j.mediaURL)
-	dialer := websocket.Dialer{
-		HandshakeTimeout: 10 * time.Second,
-		WriteBufferSize:  65536,
-		TLSClientConfig:  &tls.Config{InsecureSkipVerify: true, ServerName: hostname},
-		NetDialContext: func(ctx context.Context, network, addr string) (net.Conn, error) {
+	dialer := headlessclient.ChromeWindows.WebSocketDialer(headlessclient.TLSOptions{
+		ServerName:         hostname,
+		InsecureSkipVerify: true,
+		DialContext: func(ctx context.Context, network, addr string) (net.Conn, error) {
 			_, port, _ := net.SplitHostPort(addr)
 			return (&net.Dialer{Timeout: 10 * time.Second}).DialContext(ctx, network, resolvedIP+":"+port)
 		},
-	}
+	})
+	dialer.HandshakeTimeout = 10 * time.Second
+	dialer.WriteBufferSize = 65536
+
 	ws, _, err := dialer.Dial(j.mediaURL, wsHeader)
 	if err != nil {
 		j.logFn("telemost-joiner: ERROR: ws connect: %s", common.MaskError(err))

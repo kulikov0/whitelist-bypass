@@ -750,7 +750,7 @@ func (b *Bridge) run() {
 	wsHeader := headlessclient.ChromeWindows.Headers(headlessclient.DestWebSocket)
 	wsHeader.Set("Origin", tmOrigin)
 
-	dialer := headlessclient.ChromeWindows.WebSocketDialer()
+	dialer := headlessclient.ChromeWindows.WebSocketDialer(headlessclient.TLSOptions{})
 
 	for {
 		log.Println("[tm-ws] Connecting...")
