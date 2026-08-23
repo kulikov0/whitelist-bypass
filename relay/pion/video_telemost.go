@@ -129,7 +129,12 @@ func (c *TelemostClient) handleICEServers(data json.RawMessage, role string) {
 		ICETransportPolicy: webrtc.ICETransportPolicyRelay,
 	}
 
-	pc, err := NewPionAPI(c.LocalIP).NewPeerConnection(config)
+	api, err := NewPionAPI(c.LocalIP)
+	if err != nil {
+		c.logFn("telemost [%s]: failed to create webrtc API: %v", role, err)
+		return
+	}
+	pc, err := api.NewPeerConnection(config)
 	if err != nil {
 		c.logFn("telemost [%s]: failed to create PC: %v", role, err)
 		return

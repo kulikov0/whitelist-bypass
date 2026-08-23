@@ -10,6 +10,7 @@ import (
 	"github.com/pion/rtp"
 	"github.com/pion/rtp/codecs"
 	"whitelist-bypass/relay/common"
+	"whitelist-bypass/relay/telemost"
 )
 
 type SignalingMessage struct {
@@ -67,12 +68,11 @@ func ParseICEServers(data json.RawMessage) ([]webrtc.ICEServer, error) {
 	return iceServers, nil
 }
 
-func NewPionAPI(localIP string) *webrtc.API {
+func NewPionAPI(localIP string) (*webrtc.API, error) {
 	se := webrtc.SettingEngine{}
 	se.SetNet(&common.AndroidNet{LocalIP: localIP})
 	// Telemost SFU is DTLS-active for subscribers; Pion must answer passive.
-	se.SetAnsweringDTLSRole(webrtc.DTLSRoleServer)
-	return webrtc.NewAPI(webrtc.WithSettingEngine(se))
+	return telemost.NewAPI(&se)
 }
 
 type WSHelper struct {

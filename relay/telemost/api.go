@@ -111,6 +111,7 @@ func NewAPI(settingEngine *webrtc.SettingEngine) (*webrtc.API, error) {
 		return nil, fmt.Errorf("apply ice credentials: %w", err)
 	}
 	_ = engine.SetAnsweringDTLSRole(webrtc.DTLSRoleServer)
+	engine.SetDTLSInsecureSkipHelloVerify(true)
 	opts := []func(*webrtc.API){
 		webrtc.WithMediaEngine(mediaEngine),
 		webrtc.WithInterceptorRegistry(registry),
