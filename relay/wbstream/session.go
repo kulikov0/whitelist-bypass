@@ -11,7 +11,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/pion/rtp"
 	"github.com/pion/rtp/codecs"
-	"github.com/kulikov0/headlessclient/webrtc"
+	"github.com/kulikov0/headless-client/webrtc"
 	"whitelist-bypass/relay/common"
 	"whitelist-bypass/relay/livekit"
 	"whitelist-bypass/relay/tunnel"

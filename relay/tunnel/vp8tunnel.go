@@ -5,8 +5,8 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/kulikov0/headlessclient/webrtc"
-	"github.com/kulikov0/headlessclient/webrtc/pkg/media"
+	"github.com/kulikov0/headless-client/webrtc"
+	"github.com/kulikov0/headless-client/webrtc/pkg/media"
 
 	"whitelist-bypass/relay/common"
 )

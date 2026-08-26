@@ -15,8 +15,8 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/kulikov0/headlessclient"
-	"github.com/kulikov0/headlessclient/webrtc"
+	"github.com/kulikov0/headless-client"
+	"github.com/kulikov0/headless-client/webrtc"
 	"whitelist-bypass/relay/common"
 	"whitelist-bypass/relay/tunnel"
 	"whitelist-bypass/relay/wtsignal"
@@ -570,16 +570,15 @@ func (h *VKHeadlessJoiner) initPC() {
 
 	mode := h.authParams.TunnelMode
 
-	settingEngine := webrtc.SettingEngine{}
+	settingEngine, err := headless.ChromeWindows.WithDTLS13Mimicry().SettingEngine()
+	if err != nil {
+		h.logFn("vk-joiner: failed to build setting engine: %v", err)
+		return
+	}
 	settingEngine.DisableCloseByDTLS(true)
 	settingEngine.DetachDataChannels()
 	if h.PCConfig != nil {
 		h.PCConfig.ConfigureSettingEngine(&settingEngine)
-	}
-	headlessclient.ChromeWindows.WithDTLS13Mimicry().ApplyWebRTC(&settingEngine)
-	if err := headlessclient.ChromeWindows.ApplyICECredentials(&settingEngine); err != nil {
-		h.logFn("vk-joiner: failed to apply ice credentials: %v", err)
-		return
 	}
 
 	pc, err := webrtc.NewAPI(webrtc.WithSettingEngine(settingEngine)).NewPeerConnection(webrtc.Configuration{

@@ -5,8 +5,8 @@ import (
 	"net/http"
 	"sync"
 
-	"github.com/kulikov0/headlessclient/webrtc"
-	"github.com/kulikov0/headlessclient/websocket"
+	"github.com/kulikov0/headless-client/webrtc"
+	"github.com/kulikov0/headless-client/websocket"
 	"github.com/pion/rtp"
 	"github.com/pion/rtp/codecs"
 	"whitelist-bypass/relay/common"
@@ -69,10 +69,10 @@ func ParseICEServers(data json.RawMessage) ([]webrtc.ICEServer, error) {
 }
 
 func NewPionAPI(localIP string) (*webrtc.API, error) {
-	se := webrtc.SettingEngine{}
-	se.SetNet(&common.AndroidNet{LocalIP: localIP})
 	// Telemost SFU is DTLS-active for subscribers; Pion must answer passive.
-	return telemost.NewAPI(&se)
+	return telemost.NewAPI(func(settingEngine *webrtc.SettingEngine) {
+		settingEngine.SetNet(&common.AndroidNet{LocalIP: localIP})
+	})
 }
 
 type WSHelper struct {

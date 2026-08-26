@@ -8,10 +8,10 @@ import (
 	"sync"
 	"time"
 
-	"github.com/kulikov0/headlessclient"
+	"github.com/kulikov0/headless-client"
+	"github.com/kulikov0/headless-client/webrtc"
 	"github.com/pion/rtp"
 	"github.com/pion/rtp/codecs"
-	"github.com/kulikov0/headlessclient/webrtc"
 	"whitelist-bypass/relay/common"
 	"whitelist-bypass/relay/tunnel"
 )
@@ -60,9 +60,8 @@ func NewTunnelRelay() *TunnelRelay {
 }
 
 func (u *TunnelRelay) Init(iceServers []webrtc.ICEServer) error {
-	settingEngine := webrtc.SettingEngine{}
-	headlessclient.ChromeWindows.WithDTLS13Mimicry().ApplyWebRTC(&settingEngine)
-	if err := headlessclient.ChromeWindows.ApplyICECredentials(&settingEngine); err != nil {
+	settingEngine, err := headless.ChromeWindows.WithDTLS13Mimicry().SettingEngine()
+	if err != nil {
 		return err
 	}
 	pc, err := webrtc.NewAPI(webrtc.WithSettingEngine(settingEngine)).NewPeerConnection(webrtc.Configuration{ICEServers: iceServers})

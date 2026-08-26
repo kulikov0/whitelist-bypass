@@ -5,10 +5,10 @@ go 1.26.1
 require whitelist-bypass/relay v0.0.0
 
 require (
-	github.com/kulikov0/headlessclient v0.0.0 // indirect
+	github.com/kulikov0/headless-client v0.0.0 // indirect
 	github.com/pion/transport/v4 v4.1.0 // indirect
 )
 
 replace whitelist-bypass/relay => ../../relay
 
-replace github.com/kulikov0/headlessclient => ../../../headlessclient
+replace github.com/kulikov0/headless-client => ../../../headlessclient

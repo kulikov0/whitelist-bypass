@@ -8,7 +8,7 @@ require (
 	github.com/google/uuid v1.6.0 // indirect
 	github.com/klauspost/cpuid/v2 v2.2.6 // indirect
 	github.com/klauspost/reedsolomon v1.12.0 // indirect
-	github.com/kulikov0/headlessclient v0.0.0 // indirect
+	github.com/kulikov0/headless-client v0.0.0 // indirect
 	github.com/pion/datachannel v1.6.0 // indirect
 	github.com/pion/dtls/v3 v3.1.2 // indirect
 	github.com/pion/ice/v4 v4.2.2 // indirect
@@ -36,4 +36,4 @@ require (
 
 replace whitelist-bypass/relay => ../../relay
 
-replace github.com/kulikov0/headlessclient => ../../../headlessclient
+replace github.com/kulikov0/headless-client => ../../../headlessclient

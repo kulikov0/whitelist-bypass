@@ -12,7 +12,7 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/kulikov0/headlessclient/websocket"
+	"github.com/kulikov0/headless-client/websocket"
 
 	"whitelist-bypass/relay/common"
 )

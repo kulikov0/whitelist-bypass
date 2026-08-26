@@ -7,7 +7,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/kulikov0/headlessclient/webrtc"
+	"github.com/kulikov0/headless-client/webrtc"
 	"whitelist-bypass/relay/common"
 	"whitelist-bypass/relay/tunnel"
 )

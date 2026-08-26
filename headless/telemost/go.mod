@@ -4,7 +4,7 @@ go 1.26.1
 
 require (
 	github.com/google/uuid v1.6.0
-	github.com/kulikov0/headlessclient v0.0.0
+	github.com/kulikov0/headless-client v0.0.0
 	github.com/pion/rtp v1.10.1
 	whitelist-bypass/relay v0.0.0
 )
@@ -42,4 +42,4 @@ require (
 	golang.org/x/time v0.14.0 // indirect
 )
 
-replace github.com/kulikov0/headlessclient => ../../../headlessclient
+replace github.com/kulikov0/headless-client => ../../../headlessclient

@@ -34,7 +34,7 @@ require (
 	github.com/gorilla/schema v1.4.1 // indirect
 	github.com/klauspost/cpuid/v2 v2.2.6 // indirect
 	github.com/klauspost/reedsolomon v1.12.0 // indirect
-	github.com/kulikov0/headlessclient v0.0.0
+	github.com/kulikov0/headless-client v0.0.0
 	github.com/pion/dtls/v3 v3.1.2 // indirect
 	github.com/pion/ice/v4 v4.2.2 // indirect
 	github.com/pion/logging v0.2.4 // indirect
@@ -65,4 +65,4 @@ require (
 	gvisor.dev/gvisor v0.0.0-20250523182742-eede7a881b20 // indirect
 )
 
-replace github.com/kulikov0/headlessclient => ../../headlessclient
+replace github.com/kulikov0/headless-client => ../../headlessclient

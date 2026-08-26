@@ -11,9 +11,9 @@ import (
 	"time"
 
 	"github.com/google/uuid"
-	"github.com/kulikov0/headlessclient"
+	"github.com/kulikov0/headless-client"
+	"github.com/kulikov0/headless-client/webrtc"
 	"github.com/pion/interceptor"
-	"github.com/kulikov0/headlessclient/webrtc"
 )
 
 const (
@@ -77,7 +77,7 @@ type Client struct {
 	InstanceID string
 }
 
-func NewAPI(settingEngine *webrtc.SettingEngine) (*webrtc.API, error) {
+func NewAPI(configure func(*webrtc.SettingEngine)) (*webrtc.API, error) {
 	mediaEngine := &webrtc.MediaEngine{}
 	if err := mediaEngine.RegisterDefaultCodecs(); err != nil {
 		return nil, err
@@ -102,13 +102,12 @@ func NewAPI(settingEngine *webrtc.SettingEngine) (*webrtc.API, error) {
 	if err := webrtc.RegisterDefaultInterceptors(mediaEngine, registry); err != nil {
 		return nil, err
 	}
-	engine := webrtc.SettingEngine{}
-	if settingEngine != nil {
-		engine = *settingEngine
+	engine, err := headless.ChromeWindows.SettingEngine()
+	if err != nil {
+		return nil, fmt.Errorf("setting engine: %w", err)
 	}
-	headlessclient.ChromeWindows.ApplyWebRTC(&engine)
-	if err := headlessclient.ChromeWindows.ApplyICECredentials(&engine); err != nil {
-		return nil, fmt.Errorf("apply ice credentials: %w", err)
+	if configure != nil {
+		configure(&engine)
 	}
 	_ = engine.SetAnsweringDTLSRole(webrtc.DTLSRoleServer)
 	engine.SetDTLSInsecureSkipHelloVerify(true)
@@ -201,7 +200,7 @@ func (c *Client) Do(method, path string, body interface{}) ([]byte, int, error) 
 	if instanceID == "" {
 		instanceID = uuid.New().String()
 	}
-	req.Header = headlessclient.ChromeWindows.Headers(headlessclient.DestEmpty)
+	req.Header = headless.ChromeWindows.Headers(headless.DestEmpty)
 	if c.UserAgent != "" {
 		req.Header.Set("User-Agent", c.UserAgent)
 	}
@@ -219,7 +218,7 @@ func (c *Client) Do(method, path string, body interface{}) ([]byte, int, error) 
 	}
 	client := c.HTTP
 	if client == nil {
-		client = headlessclient.ChromeWindows.HTTPClient()
+		client = headless.ChromeWindows.HTTPClient()
 	}
 	resp, err := client.Do(req)
 	if err != nil {
