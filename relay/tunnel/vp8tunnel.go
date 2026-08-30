@@ -23,6 +23,8 @@ const (
 	paceBatchFloorPercent = 80
 	paceDriftMin          = 5 * time.Second
 	paceDriftMax          = 20 * time.Second
+
+	idleSpinTicks = 40
 )
 
 type VP8DataTunnel struct {
@@ -236,64 +238,111 @@ func (t *VP8DataTunnel) writerLoop() {
 
 		ticker := time.NewTicker(sampleInterval)
 		drift := time.NewTimer(common.DurationInRange(paceDriftMin, paceDriftMax))
+		idle := time.NewTimer(time.Hour)
+		if !idle.Stop() {
+			<-idle.C
+		}
 		idleTicks := 0
+		spinning := true
 		reconfigure := false
 
+		emit := func(sample []byte, isKeepalive bool) {
+			if sample == nil {
+				return
+			}
+			if err := t.track.WriteSample(media.Sample{Data: sample, Duration: sampleInterval}); err != nil {
+				if common.Debug {
+					t.logFn("vp8tunnel: WriteSample error: %v", err)
+				}
+				return
+			}
+			n := t.sentFrames.Add(1)
+			if isKeepalive {
+				t.keepaliveFrames.Add(1)
+			}
+			if common.Debug && (n <= 5 || n%500 == 0) {
+				keepalives := t.keepaliveFrames.Load()
+				t.logFn("vp8tunnel: sent frame #%d size=%d data=%d keepalive=%d", n, len(sample), n-keepalives, keepalives)
+			}
+		}
+
+		repace := func() {
+			pacedBatch = pacedBatchFor(batch)
+			sampleInterval = sampleIntervalFor(fps, pacedBatch)
+			if spinning {
+				ticker.Reset(sampleInterval)
+			}
+			keepaliveEvery, keepalivePad = t.nextKeepalive(sampleInterval)
+			drift.Reset(common.DurationInRange(paceDriftMin, paceDriftMax))
+			if common.Debug {
+				t.logFn("vp8tunnel: pace drift pacedBatch=%d/%d sampleInterval=%s", pacedBatch, batch, sampleInterval)
+			}
+		}
+
 		for !reconfigure {
+			if spinning {
+				select {
+				case <-t.stopCh:
+					ticker.Stop()
+					drift.Stop()
+					idle.Stop()
+					return
+				case <-t.cfgChan:
+					reconfigure = true
+				case <-drift.C:
+					repace()
+				case <-ticker.C:
+					select {
+					case data := <-t.sendQueue:
+						emit(t.obf.EncodeData(data), false)
+						idleTicks = 0
+					default:
+						idleTicks++
+						switch {
+						case idleTicks >= keepaliveEvery:
+							idleTicks = 0
+							emit(t.obf.EncodeKeepalive(keepalivePad), true)
+							keepaliveEvery, keepalivePad = t.nextKeepalive(sampleInterval)
+						case idleTicks >= idleSpinTicks:
+							ticker.Stop()
+							spinning = false
+							idle.Reset(time.Duration(keepaliveEvery-idleTicks) * sampleInterval)
+						}
+					}
+				}
+				continue
+			}
+
 			select {
 			case <-t.stopCh:
-				ticker.Stop()
 				drift.Stop()
+				idle.Stop()
 				return
 			case <-t.cfgChan:
 				reconfigure = true
 			case <-drift.C:
-				pacedBatch = pacedBatchFor(batch)
-				sampleInterval = sampleIntervalFor(fps, pacedBatch)
+				repace()
+			case data := <-t.sendQueue:
+				if !idle.Stop() {
+					select {
+					case <-idle.C:
+					default:
+					}
+				}
+				emit(t.obf.EncodeData(data), false)
+				idleTicks = 0
+				spinning = true
 				ticker.Reset(sampleInterval)
+			case <-idle.C:
+				idleTicks = 0
+				emit(t.obf.EncodeKeepalive(keepalivePad), true)
 				keepaliveEvery, keepalivePad = t.nextKeepalive(sampleInterval)
-				drift.Reset(common.DurationInRange(paceDriftMin, paceDriftMax))
-				if common.Debug {
-					t.logFn("vp8tunnel: pace drift pacedBatch=%d/%d sampleInterval=%s", pacedBatch, batch, sampleInterval)
-				}
-			case <-ticker.C:
-				var sample []byte
-				isKeepalive := false
-				select {
-				case data := <-t.sendQueue:
-					sample = t.obf.EncodeData(data)
-					idleTicks = 0
-				default:
-					idleTicks++
-					if idleTicks < keepaliveEvery {
-						continue
-					}
-					idleTicks = 0
-					sample = t.obf.EncodeKeepalive(keepalivePad)
-					keepaliveEvery, keepalivePad = t.nextKeepalive(sampleInterval)
-					isKeepalive = true
-				}
-				if sample == nil {
-					continue
-				}
-				if err := t.track.WriteSample(media.Sample{Data: sample, Duration: sampleInterval}); err != nil {
-					if common.Debug {
-						t.logFn("vp8tunnel: WriteSample error: %v", err)
-					}
-					continue
-				}
-				n := t.sentFrames.Add(1)
-				if isKeepalive {
-					t.keepaliveFrames.Add(1)
-				}
-				if common.Debug && (n <= 5 || n%500 == 0) {
-					keepalives := t.keepaliveFrames.Load()
-					t.logFn("vp8tunnel: sent frame #%d size=%d data=%d keepalive=%d", n, len(sample), n-keepalives, keepalives)
-				}
+				idle.Reset(time.Duration(keepaliveEvery) * sampleInterval)
 			}
 		}
 		ticker.Stop()
 		drift.Stop()
+		idle.Stop()
 	}
 }
 

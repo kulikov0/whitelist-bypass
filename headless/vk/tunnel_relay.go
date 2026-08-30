@@ -109,7 +109,8 @@ func (u *TunnelRelay) Init(iceServers []webrtc.ICEServer) error {
 		"audio", "tunnel-audio",
 	)
 	pc.AddTrack(audioTrack)
-	pc.AddTrack(sampleTrack)
+	videoSender, _ := pc.AddTrack(sampleTrack)
+	go tunnel.DrainSenderRTCP(videoSender)
 
 	ordered := true
 	dcNotif, err := pc.CreateDataChannel("producerNotification", &webrtc.DataChannelInit{Ordered: &ordered})

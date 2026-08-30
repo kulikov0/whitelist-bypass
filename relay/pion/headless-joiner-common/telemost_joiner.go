@@ -63,6 +63,7 @@ type TelemostHeadlessJoiner struct {
 	obf         *tunnel.TunnelObfuscator
 	vp8FPS      int
 	vp8Batch    int
+	reliable    bool
 
 	httpClient *http.Client
 	instanceID string
@@ -109,6 +110,7 @@ func (j *TelemostHeadlessJoiner) RunWithParams(jsonParams string) {
 		DisplayName string `json:"displayName"`
 		VP8FPS      int    `json:"vp8Fps"`
 		VP8Batch    int    `json:"vp8Batch"`
+		Reliable    bool   `json:"reliable"`
 	}
 	if err := json.Unmarshal([]byte(jsonParams), &params); err != nil {
 		j.logFn("telemost-joiner: failed to parse params: %v", err)
@@ -129,6 +131,7 @@ func (j *TelemostHeadlessJoiner) RunWithParams(jsonParams string) {
 	j.obf = obf
 	j.vp8FPS = params.VP8FPS
 	j.vp8Batch = params.VP8Batch
+	j.reliable = params.Reliable
 	j.logFn("telemost-joiner: link=%s name=%s vp8Fps=%d vp8Batch=%d localEpoch=0x%08x",
 		j.joinLink, j.displayName, params.VP8FPS, params.VP8Batch, obf.LocalEpoch())
 
@@ -441,9 +444,10 @@ func (j *TelemostHeadlessJoiner) initPC() {
 
 	subPC.OnConnectionStateChange(func(state webrtc.PeerConnectionState) {
 		j.logFn("telemost-joiner: sub PC state: %s", state.String())
-		if state == webrtc.PeerConnectionStateFailed {
+		if state == webrtc.PeerConnectionStateFailed && !j.isClosed() {
 			j.logFn("telemost-joiner: ERROR: subscriber connection failed")
 			j.Status.EmitStatusError("subscriber connection failed")
+			go j.forceReconnect("subscriber connection failed")
 		}
 	})
 
@@ -480,6 +484,11 @@ func (j *TelemostHeadlessJoiner) initPC() {
 
 	pubPC.OnConnectionStateChange(func(state webrtc.PeerConnectionState) {
 		j.logFn("telemost-joiner: pub PC state: %s", state.String())
+		if state == webrtc.PeerConnectionStateFailed && !j.isClosed() {
+			j.logFn("telemost-joiner: ERROR: publisher connection failed")
+			j.Status.EmitStatusError("publisher connection failed")
+			go j.forceReconnect("publisher connection failed")
+		}
 		if state == webrtc.PeerConnectionStateConnected && j.vp8tunnel == nil {
 			j.reconnectAttempt.Store(0)
 			j.logFn("telemost-joiner: === VP8 TUNNEL CONNECTED ===")
@@ -487,14 +496,20 @@ func (j *TelemostHeadlessJoiner) initPC() {
 			j.vp8tunnel = tunnel.NewVP8DataTunnel(j.sampleTrack, j.obf, j.logFn)
 			vp8tun := j.vp8tunnel
 			vp8tun.Start(j.vp8FPS, j.vp8Batch)
+			var active tunnel.DataTunnel = vp8tun
+			if j.reliable {
+				mt := tunnel.NewMultiTrackTunnel([]*tunnel.VP8DataTunnel{vp8tun})
+				active = tunnel.NewMultiTrackKCPTunnel(mt, j.logFn)
+				j.logFn("telemost-joiner: per-track kcp reliability active over video tunnel")
+			}
 			if !j.configAck.acknowledged() {
 				acked, cancel := j.configAck.arm()
-				go sendVP8ConfigUntilAcked(acked, cancel, j.stopCh, vp8tun,
+				go sendVP8ConfigUntilAcked(acked, cancel, j.stopCh, active,
 					vp8tun.FPS(), vp8tun.Batch(), 1, j.logFn, "telemost-joiner")
 				j.logFn("telemost-joiner: pushed vp8 config to creator fps=%d batch=%d", vp8tun.FPS(), vp8tun.Batch())
 			}
 			if j.OnConnected != nil {
-				j.OnConnected(j.vp8tunnel)
+				j.OnConnected(active)
 			}
 		}
 	})
@@ -815,7 +830,7 @@ func (j *TelemostHeadlessJoiner) handleMessage(raw []byte) {
 		}
 		j.boundMu.Unlock()
 		if needRebind {
-			go j.forceReconnect("slot binding killed")
+			j.logFn("telemost-joiner: slot kill/vanish observed - ignoring (tunnel data path is independent of slot binding)")
 		}
 		j.ack(uid)
 		return

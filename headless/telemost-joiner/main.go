@@ -51,6 +51,7 @@ func main() {
 	resources := flag.String("resources", "default", "resource mode: moderate, default, unlimited")
 	vp8FPS := flag.Int("vp8-fps", 24, "VP8 frame rate")
 	vp8Batch := flag.Int("vp8-batch", 30, "VP8 batch multiplier")
+	reliable := flag.Bool("reliable", false, "wrap the video tunnel with KCP reliability")
 	debugFlag := flag.Bool("debug", false, "verbose debug logging")
 	flag.Parse()
 	common.Debug = *debugFlag
@@ -104,11 +105,13 @@ func main() {
 		DisplayName string `json:"displayName"`
 		VP8FPS      int    `json:"vp8Fps"`
 		VP8Batch    int    `json:"vp8Batch"`
+		Reliable    bool   `json:"reliable"`
 	}{
 		JoinLink:    strings.TrimSpace(*tmLink),
 		DisplayName: *displayName,
 		VP8FPS:      *vp8FPS,
 		VP8Batch:    *vp8Batch,
+		Reliable:    *reliable,
 	})
 
 	go inner.RunWithParams(string(params))

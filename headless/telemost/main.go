@@ -496,7 +496,7 @@ func (b *Bridge) handleMessage(raw []byte) {
 		}
 		b.mu.Unlock()
 		if needRebind {
-			go b.forceReconnect("slot binding killed")
+			log.Printf("[bind] slot kill/vanish observed - ignoring (tunnel data path is independent of slot binding)")
 		}
 		b.ack(uid)
 		return
@@ -709,7 +709,7 @@ func (b *Bridge) initRelay() {
 	relay.OnPubReady = func() {
 		log.Printf("[relay] pub PC connected")
 	}
-	relay.OnConnected = func(tun *tunnel.VP8DataTunnel) {
+	relay.OnConnected = func(tun tunnel.DataTunnel) {
 		if b.activeBridge != nil {
 			b.activeBridge.Reset()
 		}

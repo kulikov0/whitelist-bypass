@@ -24,13 +24,14 @@ type SFURelay struct {
 	sampleTrack   *webrtc.TrackLocalStaticSample
 	tun           *tunnel.VP8DataTunnel
 	obf           *tunnel.TunnelObfuscator
-	OnConnected   func(*tunnel.VP8DataTunnel)
+	OnConnected   func(tunnel.DataTunnel)
 	OnPubReady    func()
 	OnPeerRestart func()
 	OnPubICE      func(*webrtc.ICECandidate)
 	OnSubICE      func(*webrtc.ICECandidate)
 
 	readBufSize int
+	tunFired    bool
 }
 
 func (r *SFURelay) SetObfuscator(o *tunnel.TunnelObfuscator) { r.obf = o }
@@ -59,7 +60,10 @@ func (r *SFURelay) Init(iceServers []webrtc.ICEServer) error {
 		"audio", "tunnel-audio",
 	)
 	pubPC.AddTransceiverFromTrack(audioTrack, webrtc.RTPTransceiverInit{Direction: webrtc.RTPTransceiverDirectionSendonly})
-	pubPC.AddTransceiverFromTrack(sampleTrack, webrtc.RTPTransceiverInit{Direction: webrtc.RTPTransceiverDirectionSendonly})
+	videoTr, _ := pubPC.AddTransceiverFromTrack(sampleTrack, webrtc.RTPTransceiverInit{Direction: webrtc.RTPTransceiverDirectionSendonly})
+	if videoTr != nil {
+		go tunnel.DrainSenderRTCP(videoTr.Sender())
+	}
 
 	pubPC.OnICECandidate(func(cand *webrtc.ICECandidate) {
 		if cand == nil || r.OnPubICE == nil {
@@ -75,9 +79,9 @@ func (r *SFURelay) Init(iceServers []webrtc.ICEServer) error {
 				log.Println("[relay] starting VP8 publish tunnel on pub PC connected")
 				r.tun = tunnel.NewVP8DataTunnel(r.sampleTrack, r.obf, log.Printf)
 				r.tun.Start(0, 0)
-				if r.OnConnected != nil {
-					r.OnConnected(r.tun)
-				}
+				r.tunFired = false
+				mt := tunnel.NewMultiTrackTunnel([]*tunnel.VP8DataTunnel{r.tun})
+				mt.SetOnData(func(payload []byte) { r.activate(mt, payload) })
 			}
 			if r.OnPubReady != nil {
 				r.OnPubReady()
@@ -110,6 +114,35 @@ func (r *SFURelay) Init(iceServers []webrtc.ICEServer) error {
 
 	log.Printf("[relay] pub+sub PCs created (%d ICE servers)", len(iceServers))
 	return nil
+}
+
+func (r *SFURelay) activate(mt *tunnel.MultiTrackTunnel, payload []byte) {
+	r.mu.Lock()
+	if r.tunFired {
+		r.mu.Unlock()
+		return
+	}
+	r.tunFired = true
+	r.mu.Unlock()
+
+	var delivered tunnel.DataTunnel = mt
+	useKCP := false
+	if !tunnel.LooksLikeRelayFrame(payload) {
+		delivered = tunnel.NewMultiTrackKCPTunnel(mt, log.Printf)
+		useKCP = true
+		log.Println("[relay] per-track kcp reliability active over video tunnel")
+	}
+	log.Printf("[relay] auto-detected active tunnel: %T", delivered)
+	if r.OnConnected != nil {
+		r.OnConnected(delivered)
+	}
+	if useKCP {
+		if kcptun, ok := delivered.(*tunnel.MultiTrackKCPTunnel); ok {
+			kcptun.InjectSegment(payload)
+		}
+	} else {
+		mt.DeliverData(payload)
+	}
 }
 
 func (r *SFURelay) CreatePubOffer() (webrtc.SessionDescription, error) {

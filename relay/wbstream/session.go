@@ -198,6 +198,7 @@ func (s *Session) onLKReady() {
 			return
 		}
 		transceivers = append(transceivers, trx)
+		go tunnel.DrainSenderRTCP(trx.Sender())
 	}
 
 	s.mu.Lock()
@@ -528,6 +529,7 @@ func (s *Session) addPublisherTrack(pubPC *webrtc.PeerConnection, slot int) bool
 		s.cfg.LogFn("[lk] adapt-track-count: add transceiver slot=%d: %v", slot, err)
 		return false
 	}
+	go tunnel.DrainSenderRTCP(trx.Sender())
 	if err := s.lk.SendAddTrack(track.ID(), "videochannel",
 		livekit.TrackTypeVideo, source, 1280, 720); err != nil {
 		s.cfg.LogFn("[lk] adapt-track-count: send add-track slot=%d: %v", slot, err)

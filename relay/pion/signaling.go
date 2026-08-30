@@ -11,6 +11,7 @@ import (
 	"github.com/pion/rtp/codecs"
 	"whitelist-bypass/relay/common"
 	"whitelist-bypass/relay/telemost"
+	"whitelist-bypass/relay/tunnel"
 )
 
 type SignalingMessage struct {
@@ -156,6 +157,7 @@ func AddTunnelTracks(pc *webrtc.PeerConnection, logFn func(string, ...any), pref
 	logFn("%s: AddTrack audio: sender=%v err=%v", prefix, audioSender != nil, audioErr)
 	logFn("%s: AddTrack video: sender=%v err=%v", prefix, videoSender != nil, videoErr)
 	logFn("%s: senders count: %d", prefix, len(pc.GetSenders()))
+	go tunnel.DrainSenderRTCP(videoSender)
 	return sampleTrack
 }
 

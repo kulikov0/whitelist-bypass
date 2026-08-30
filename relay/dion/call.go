@@ -242,6 +242,7 @@ func (c *Call) Start() error {
 	if err := sender.ReplaceTrack(track); err != nil {
 		return fmt.Errorf("ReplaceTrack: %w", err)
 	}
+	go tunnel.DrainSenderRTCP(sender)
 	c.cfg.LogFn("[call] role=%s attached send track to mid=%d", c.cfg.Role, sendMidIndex)
 
 	peer.PC.OnTrack(func(remoteTrack *webrtc.TrackRemote, _ *webrtc.RTPReceiver) {
