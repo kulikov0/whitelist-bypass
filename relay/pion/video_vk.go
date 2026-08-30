@@ -5,8 +5,10 @@ import (
 	"log"
 	"net/http"
 
+	headless "github.com/kulikov0/headless-client"
 	"github.com/kulikov0/headless-client/webrtc"
 	"whitelist-bypass/relay/common"
+	"whitelist-bypass/relay/headlessapi"
 	"whitelist-bypass/relay/tunnel"
 )
 
@@ -74,10 +76,17 @@ func (c *VKClient) handleMessage(raw []byte) {
 }
 
 func (c *VKClient) createPC(config webrtc.Configuration) error {
-	se := webrtc.SettingEngine{}
-	se.SetNet(&common.AndroidNet{})
-	se.SetInterfaceFilter(func(iface string) bool { return false })
-	api := webrtc.NewAPI(webrtc.WithSettingEngine(se))
+	api, err := headlessapi.WebRTCAPI(headlessapi.Options{
+		Profile: headless.ChromeWindows.WithDTLS13Mimicry(),
+		Configure: func(settingEngine *webrtc.SettingEngine) {
+			settingEngine.SetNet(&common.AndroidNet{})
+			settingEngine.SetInterfaceFilter(func(iface string) bool { return false })
+		},
+	})
+	if err != nil {
+		c.logFn("vk: failed to build webrtc api: %v", err)
+		return err
+	}
 	pc, err := api.NewPeerConnection(config)
 	if err != nil {
 		c.logFn("vk: failed to create PC: %v", err)

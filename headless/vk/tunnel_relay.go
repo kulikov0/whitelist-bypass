@@ -13,6 +13,7 @@ import (
 	"github.com/pion/rtp"
 	"github.com/pion/rtp/codecs"
 	"whitelist-bypass/relay/common"
+	"whitelist-bypass/relay/headlessapi"
 	"whitelist-bypass/relay/tunnel"
 )
 
@@ -60,11 +61,11 @@ func NewTunnelRelay() *TunnelRelay {
 }
 
 func (u *TunnelRelay) Init(iceServers []webrtc.ICEServer) error {
-	settingEngine, err := headless.ChromeWindows.WithDTLS13Mimicry().SettingEngine()
+	api, err := headlessapi.WebRTCAPI(headlessapi.Options{Profile: headless.ChromeWindows.WithDTLS13Mimicry()})
 	if err != nil {
 		return err
 	}
-	pc, err := webrtc.NewAPI(webrtc.WithSettingEngine(settingEngine)).NewPeerConnection(webrtc.Configuration{ICEServers: iceServers})
+	pc, err := api.NewPeerConnection(webrtc.Configuration{ICEServers: iceServers})
 	if err != nil {
 		return err
 	}

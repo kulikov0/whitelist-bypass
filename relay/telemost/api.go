@@ -14,6 +14,7 @@ import (
 	"github.com/kulikov0/headless-client"
 	"github.com/kulikov0/headless-client/webrtc"
 	"github.com/pion/interceptor"
+	"whitelist-bypass/relay/headlessapi"
 )
 
 const (
@@ -102,21 +103,15 @@ func NewAPI(configure func(*webrtc.SettingEngine)) (*webrtc.API, error) {
 	if err := webrtc.RegisterDefaultInterceptors(mediaEngine, registry); err != nil {
 		return nil, err
 	}
-	engine, err := headless.ChromeWindows.SettingEngine()
-	if err != nil {
-		return nil, fmt.Errorf("setting engine: %w", err)
-	}
-	if configure != nil {
-		configure(&engine)
-	}
-	_ = engine.SetAnsweringDTLSRole(webrtc.DTLSRoleServer)
-	engine.SetDTLSInsecureSkipHelloVerify(true)
-	opts := []func(*webrtc.API){
+	return headlessapi.WebRTCAPI(
+		headlessapi.Options{
+			Profile:            headless.ChromeWindows,
+			AnswerAsDTLSServer: true,
+			Configure:          configure,
+		},
 		webrtc.WithMediaEngine(mediaEngine),
 		webrtc.WithInterceptorRegistry(registry),
-		webrtc.WithSettingEngine(engine),
-	}
-	return webrtc.NewAPI(opts...), nil
+	)
 }
 
 func NewPeerConnection(config webrtc.Configuration) (*webrtc.PeerConnection, error) {

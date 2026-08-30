@@ -76,17 +76,15 @@ func (j *WBStreamHeadlessJoiner) RunWithParams(jsonParams string) {
 	}
 	j.logFn("wbstream-joiner: obf key-source=%q localEpoch=0x%08x", params.RoomID, obf.LocalEpoch())
 
-	var settingEngine *webrtc.SettingEngine
+	var configureSettingEngine func(*webrtc.SettingEngine)
 	if j.PCConfig != nil {
-		se := webrtc.SettingEngine{}
-		j.PCConfig.ConfigureSettingEngine(&se)
-		settingEngine = &se
+		configureSettingEngine = j.PCConfig.ConfigureSettingEngine
 	}
 
 	var attempt atomic.Int32
 
 	j.Status.EmitStatus(common.StatusConnecting)
-	if err := j.runOnce(httpClient, params.RoomID, params.DisplayName, params.TunnelMode, obf, settingEngine, params.VP8FPS, params.VP8Batch, params.DualTrack, reliable, &attempt); err != nil {
+	if err := j.runOnce(httpClient, params.RoomID, params.DisplayName, params.TunnelMode, obf, configureSettingEngine, params.VP8FPS, params.VP8Batch, params.DualTrack, reliable, &attempt); err != nil {
 		j.Status.EmitStatusError(err.Error())
 		return
 	}
@@ -106,13 +104,13 @@ func (j *WBStreamHeadlessJoiner) RunWithParams(jsonParams string) {
 		}
 		j.logFn("wbstream-joiner: reconnect attempt #%d", attempt.Load())
 		j.Status.EmitStatus(common.StatusReconnecting)
-		if err := j.runOnce(httpClient, params.RoomID, params.DisplayName, params.TunnelMode, obf, settingEngine, params.VP8FPS, params.VP8Batch, params.DualTrack, reliable, &attempt); err != nil {
+		if err := j.runOnce(httpClient, params.RoomID, params.DisplayName, params.TunnelMode, obf, configureSettingEngine, params.VP8FPS, params.VP8Batch, params.DualTrack, reliable, &attempt); err != nil {
 			j.logFn("wbstream-joiner: %v, will retry", err)
 		}
 	}
 }
 
-func (j *WBStreamHeadlessJoiner) runOnce(httpClient *http.Client, roomID, displayName, tunnelMode string, obf *tunnel.TunnelObfuscator, settingEngine *webrtc.SettingEngine, vp8FPS, vp8Batch int, dualTrack, reliable bool, attempt *atomic.Int32) error {
+func (j *WBStreamHeadlessJoiner) runOnce(httpClient *http.Client, roomID, displayName, tunnelMode string, obf *tunnel.TunnelObfuscator, configureSettingEngine func(*webrtc.SettingEngine), vp8FPS, vp8Batch int, dualTrack, reliable bool, attempt *atomic.Int32) error {
 	_, roomToken, _, serverURL, authErr := wbstream.AuthAndGetToken(httpClient, roomID, displayName)
 	if authErr != nil {
 		return fmt.Errorf("auth: %w", authErr)
@@ -120,20 +118,20 @@ func (j *WBStreamHeadlessJoiner) runOnce(httpClient *http.Client, roomID, displa
 	j.logFn("wbstream-joiner: server=%s", serverURL)
 
 	sess := wbstream.NewSession(wbstream.SessionConfig{
-		RoomToken:      roomToken,
-		ServerURL:      serverURL,
-		DisplayName:    displayName,
-		TunnelMode:     tunnelMode,
-		Obfuscator:     obf,
-		LogFn:          j.logFn,
-		SettingEngine:  settingEngine,
-		NetDialContext: j.makeDialContext(),
-		ResolveICEHost: j.ResolveFn,
-		VP8FPS:         vp8FPS,
-		VP8Batch:       vp8Batch,
-		ScreenShare:    dualTrack,
-		IsJoiner:       true,
-		Reliable:       reliable,
+		RoomToken:              roomToken,
+		ServerURL:              serverURL,
+		DisplayName:            displayName,
+		TunnelMode:             tunnelMode,
+		Obfuscator:             obf,
+		LogFn:                  j.logFn,
+		ConfigureSettingEngine: configureSettingEngine,
+		NetDialContext:         j.makeDialContext(),
+		ResolveICEHost:         j.ResolveFn,
+		VP8FPS:                 vp8FPS,
+		VP8Batch:               vp8Batch,
+		ScreenShare:            dualTrack,
+		IsJoiner:               true,
+		Reliable:               reliable,
 	})
 	sess.OnConnected = func(tun tunnel.DataTunnel) {
 		attempt.Store(0)

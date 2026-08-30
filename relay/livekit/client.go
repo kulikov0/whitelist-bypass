@@ -12,9 +12,11 @@ import (
 	"sync/atomic"
 	"time"
 
+	headless "github.com/kulikov0/headless-client"
 	"github.com/kulikov0/headless-client/webrtc"
 	"github.com/kulikov0/headless-client/websocket"
 	"whitelist-bypass/relay/common"
+	"whitelist-bypass/relay/headlessapi"
 )
 
 const (
@@ -37,14 +39,14 @@ type ICEServer = iceServer
 type JoinResponse = joinResponse
 
 type Config struct {
-	ServerURL      string
-	Token          string
-	Origin         string
-	UserAgent      string
-	LogFn          func(string, ...any)
-	SettingEngine  *webrtc.SettingEngine
-	NetDialContext func(ctx context.Context, network, addr string) (net.Conn, error)
-	ResolveICEHost func(host string) (string, error)
+	ServerURL              string
+	Token                  string
+	Origin                 string
+	UserAgent              string
+	LogFn                  func(string, ...any)
+	ConfigureSettingEngine func(*webrtc.SettingEngine)
+	NetDialContext         func(ctx context.Context, network, addr string) (net.Conn, error)
+	ResolveICEHost         func(host string) (string, error)
 }
 
 type Client struct {
@@ -55,9 +57,9 @@ type Client struct {
 	origin string
 	ua     string
 
-	settingEngine  *webrtc.SettingEngine
-	netDialContext func(ctx context.Context, network, addr string) (net.Conn, error)
-	resolveICEHost func(host string) (string, error)
+	configureSettingEngine func(*webrtc.SettingEngine)
+	netDialContext         func(ctx context.Context, network, addr string) (net.Conn, error)
+	resolveICEHost         func(host string) (string, error)
 
 	ws   *websocket.Conn
 	wsMu sync.Mutex
@@ -95,14 +97,14 @@ func NewClient(cfg Config) *Client {
 		logFn = func(string, ...any) {}
 	}
 	return &Client{
-		logFn:          logFn,
-		wsURL:          cfg.ServerURL,
-		token:          cfg.Token,
-		origin:         cfg.Origin,
-		ua:             cfg.UserAgent,
-		settingEngine:  cfg.SettingEngine,
-		netDialContext: cfg.NetDialContext,
-		resolveICEHost: cfg.ResolveICEHost,
+		logFn:                  logFn,
+		wsURL:                  cfg.ServerURL,
+		token:                  cfg.Token,
+		origin:                 cfg.Origin,
+		ua:                     cfg.UserAgent,
+		configureSettingEngine: cfg.ConfigureSettingEngine,
+		netDialContext:         cfg.NetDialContext,
+		resolveICEHost:         cfg.ResolveICEHost,
 	}
 }
 
@@ -239,12 +241,18 @@ func (c *Client) iceServersAsWebRTC() []webrtc.ICEServer {
 func (c *Client) buildPeerConnections() error {
 	cfg := webrtc.Configuration{ICEServers: c.iceServersAsWebRTC()}
 
-	se := webrtc.SettingEngine{}
-	if c.settingEngine != nil {
-		se = *c.settingEngine
+	api, err := headlessapi.WebRTCAPI(headlessapi.Options{
+		Profile: headless.ChromeWindows,
+		Configure: func(settingEngine *webrtc.SettingEngine) {
+			if c.configureSettingEngine != nil {
+				c.configureSettingEngine(settingEngine)
+			}
+			settingEngine.DetachDataChannels()
+		},
+	})
+	if err != nil {
+		return fmt.Errorf("build webrtc api: %w", err)
 	}
-	se.DetachDataChannels()
-	api := webrtc.NewAPI(webrtc.WithSettingEngine(se))
 
 	pubPC, err := api.NewPeerConnection(cfg)
 	if err != nil {

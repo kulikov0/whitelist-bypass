@@ -18,6 +18,7 @@ import (
 	"github.com/kulikov0/headless-client"
 	"github.com/kulikov0/headless-client/webrtc"
 	"whitelist-bypass/relay/common"
+	"whitelist-bypass/relay/headlessapi"
 	"whitelist-bypass/relay/tunnel"
 	"whitelist-bypass/relay/wtsignal"
 )
@@ -570,18 +571,22 @@ func (h *VKHeadlessJoiner) initPC() {
 
 	mode := h.authParams.TunnelMode
 
-	settingEngine, err := headless.ChromeWindows.WithDTLS13Mimicry().SettingEngine()
+	api, err := headlessapi.WebRTCAPI(headlessapi.Options{
+		Profile: headless.ChromeWindows.WithDTLS13Mimicry(),
+		Configure: func(settingEngine *webrtc.SettingEngine) {
+			settingEngine.DisableCloseByDTLS(true)
+			settingEngine.DetachDataChannels()
+			if h.PCConfig != nil {
+				h.PCConfig.ConfigureSettingEngine(settingEngine)
+			}
+		},
+	})
 	if err != nil {
-		h.logFn("vk-joiner: failed to build setting engine: %v", err)
+		h.logFn("vk-joiner: failed to build webrtc api: %v", err)
 		return
 	}
-	settingEngine.DisableCloseByDTLS(true)
-	settingEngine.DetachDataChannels()
-	if h.PCConfig != nil {
-		h.PCConfig.ConfigureSettingEngine(&settingEngine)
-	}
 
-	pc, err := webrtc.NewAPI(webrtc.WithSettingEngine(settingEngine)).NewPeerConnection(webrtc.Configuration{
+	pc, err := api.NewPeerConnection(webrtc.Configuration{
 		ICEServers: iceServers,
 	})
 	if err != nil {

@@ -9,9 +9,9 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/kulikov0/headless-client/webrtc"
 	"github.com/pion/rtp"
 	"github.com/pion/rtp/codecs"
-	"github.com/kulikov0/headless-client/webrtc"
 	"whitelist-bypass/relay/common"
 	"whitelist-bypass/relay/livekit"
 	"whitelist-bypass/relay/tunnel"
@@ -31,23 +31,23 @@ const (
 )
 
 type SessionConfig struct {
-	RoomToken      string
-	ServerURL      string
-	DisplayName    string
-	TunnelMode     string
-	Obfuscator     *tunnel.TunnelObfuscator
-	LogFn          func(string, ...any)
-	SettingEngine  *webrtc.SettingEngine
-	NetDialContext func(ctx context.Context, network, addr string) (net.Conn, error)
-	ResolveICEHost func(host string) (string, error)
-	VP8FPS         int
-	VP8Batch       int
-	RoomID         string
-	AccessToken    string
-	ReadBuf        int
-	ScreenShare    bool // when true, publish a second VP8 track as ScreenShare and shard outbound across both
-	IsJoiner       bool // when true, run the configPingPong loop; only the joiner sends VP8 config to the peer
-	Reliable       bool
+	RoomToken              string
+	ServerURL              string
+	DisplayName            string
+	TunnelMode             string
+	Obfuscator             *tunnel.TunnelObfuscator
+	LogFn                  func(string, ...any)
+	ConfigureSettingEngine func(*webrtc.SettingEngine)
+	NetDialContext         func(ctx context.Context, network, addr string) (net.Conn, error)
+	ResolveICEHost         func(host string) (string, error)
+	VP8FPS                 int
+	VP8Batch               int
+	RoomID                 string
+	AccessToken            string
+	ReadBuf                int
+	ScreenShare            bool // when true, publish a second VP8 track as ScreenShare and shard outbound across both
+	IsJoiner               bool // when true, run the configPingPong loop; only the joiner sends VP8 config to the peer
+	Reliable               bool
 }
 
 type Session struct {
@@ -105,14 +105,14 @@ func (s *Session) Done() <-chan struct{} { return s.done }
 
 func (s *Session) Start() error {
 	s.lk = livekit.NewClient(livekit.Config{
-		ServerURL:      s.cfg.ServerURL,
-		Token:          s.cfg.RoomToken,
-		Origin:         Origin,
-		UserAgent:      common.UserAgent,
-		LogFn:          s.cfg.LogFn,
-		SettingEngine:  s.cfg.SettingEngine,
-		NetDialContext: s.cfg.NetDialContext,
-		ResolveICEHost: s.cfg.ResolveICEHost,
+		ServerURL:              s.cfg.ServerURL,
+		Token:                  s.cfg.RoomToken,
+		Origin:                 Origin,
+		UserAgent:              common.UserAgent,
+		LogFn:                  s.cfg.LogFn,
+		ConfigureSettingEngine: s.cfg.ConfigureSettingEngine,
+		NetDialContext:         s.cfg.NetDialContext,
+		ResolveICEHost:         s.cfg.ResolveICEHost,
 	})
 	s.lk.OnReady = s.onLKReady
 	s.lk.OnTrack = s.onRemoteTrack
@@ -475,10 +475,6 @@ func (s *Session) AdaptTrackCount(peerCount int) {
 	s.cfg.LogFn("[lk] adapt-track-count: renegotiation offer sent (%d bytes)", len(offer.SDP))
 }
 
-// removePublisherTrack stops the trailing transceiver, drops its sub-tunnel
-// from the multi-track wrapper, and trims the bookkeeping slices. The SFU
-// sees the transceiver go inactive on the next renegotiation and stops
-// forwarding the track to subscribers. Slot 0 is preserved.
 func (s *Session) removePublisherTrack() bool {
 	s.mu.Lock()
 	if len(s.sampleTransceivers) <= 1 || len(s.sampleTracks) <= 1 {
