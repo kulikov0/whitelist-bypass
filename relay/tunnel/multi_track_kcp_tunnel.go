@@ -12,12 +12,8 @@ import (
 )
 
 const (
-	kcpConvBase       = 0x77627374
-	kcpUpdateInterval = 10 * time.Millisecond
-	// While idle KCP has nothing to retransmit, yet the loop still called Update
-	// a hundred times a second and kept the CPU awake. Idle switches to a rare
-	// tick; sends and receives wake the loop immediately, so the first packet
-	// after silence is not delayed.
+	kcpConvBase           = 0x77627374
+	kcpUpdateInterval     = 10 * time.Millisecond
 	kcpIdleUpdateInterval = 500 * time.Millisecond
 	kcpIdleAfterTicks     = 50
 	// One KCP segment must ride in a single RTP packet so a dropped packet
@@ -152,7 +148,7 @@ type MultiTrackKCPTunnel struct {
 
 	stopCh   chan struct{}
 	stopOnce sync.Once
-	nudge    chan struct{} // wakes updateLoop when there is work to do
+	nudge    chan struct{}
 
 	currentWindow atomic.Int32
 
@@ -199,7 +195,6 @@ func (t *MultiTrackKCPTunnel) SendData(frame []byte) {
 	if len(frame) < 9 {
 		return
 	}
-	t.wake()
 	connID := binary.BigEndian.Uint32(frame[4:8])
 	msgType := frame[8]
 
@@ -207,6 +202,7 @@ func (t *MultiTrackKCPTunnel) SendData(frame []byte) {
 		t.sendRaw(connID, frame)
 		return
 	}
+	t.wake()
 
 	t.mu.Lock()
 	if len(t.sessions) == 0 {
@@ -378,8 +374,6 @@ func (t *MultiTrackKCPTunnel) handleInnerClose() {
 	}
 }
 
-// wake returns the update loop to the fast cadence. Called on send and on
-// receive so a packet after idle does not wait for the slow tick.
 func (t *MultiTrackKCPTunnel) wake() {
 	select {
 	case t.nudge <- struct{}{}:

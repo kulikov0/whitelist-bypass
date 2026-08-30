@@ -24,10 +24,6 @@ const (
 	paceDriftMin          = 5 * time.Second
 	paceDriftMax          = 20 * time.Second
 
-	// How many consecutive empty ticks the writer tolerates before stopping the
-	// ticker and sleeping until the next keepalive. At fps=24/batch=30 a tick is
-	// ~1.5ms, so 40 ticks is ~60ms: short gaps inside a transfer are ridden out
-	// on the ticker, while real idle no longer spins the CPU.
 	idleSpinTicks = 40
 )
 
@@ -250,7 +246,6 @@ func (t *VP8DataTunnel) writerLoop() {
 		spinning := true
 		reconfigure := false
 
-		// emit writes one sample and accounts for it.
 		emit := func(sample []byte, isKeepalive bool) {
 			if sample == nil {
 				return
@@ -286,7 +281,6 @@ func (t *VP8DataTunnel) writerLoop() {
 
 		for !reconfigure {
 			if spinning {
-				// Transferring: hold the video pace, frame by frame.
 				select {
 				case <-t.stopCh:
 					ticker.Stop()
@@ -310,9 +304,6 @@ func (t *VP8DataTunnel) writerLoop() {
 							emit(t.obf.EncodeKeepalive(keepalivePad), true)
 							keepaliveEvery, keepalivePad = t.nextKeepalive(sampleInterval)
 						case idleTicks >= idleSpinTicks:
-							// Nothing queued and nothing coming: stop the ticker
-							// and sleep until the keepalive instead of ~650 idle
-							// wakeups per second.
 							ticker.Stop()
 							spinning = false
 							idle.Reset(time.Duration(keepaliveEvery-idleTicks) * sampleInterval)
@@ -322,7 +313,6 @@ func (t *VP8DataTunnel) writerLoop() {
 				continue
 			}
 
-			// Idle: sleep until data arrives or the next keepalive is due.
 			select {
 			case <-t.stopCh:
 				drift.Stop()
