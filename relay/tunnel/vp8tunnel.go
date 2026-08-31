@@ -52,6 +52,8 @@ type VP8DataTunnel struct {
 	OnData        func([]byte)
 	OnClose       func()
 	OnPeerRestart func()
+
+	WriteFrame func([]byte) error
 }
 
 func (t *VP8DataTunnel) SetOnData(fn func([]byte))  { t.OnData = fn }
@@ -79,22 +81,6 @@ func NewVP8DataTunnelWithQueue(track *webrtc.TrackLocalStaticSample, obf *Tunnel
 		keepaliveMax:    keepaliveIdleMax,
 		keepalivePadMax: keepalivePadMax,
 	}
-}
-
-func (t *VP8DataTunnel) SetKeepaliveShape(minPeriod, maxPeriod time.Duration, padMax int) {
-	t.cfgMu.Lock()
-	if minPeriod > 0 {
-		t.keepaliveMin = minPeriod
-	}
-	if maxPeriod >= t.keepaliveMin {
-		t.keepaliveMax = maxPeriod
-	}
-	if padMax >= 0 {
-		t.keepalivePadMax = padMax
-	}
-	newMin, newMax, newPad := t.keepaliveMin, t.keepaliveMax, t.keepalivePadMax
-	t.cfgMu.Unlock()
-	t.logFn("vp8tunnel: keepalive shape min=%s max=%s padMax=%d", newMin, newMax, newPad)
 }
 
 func (t *VP8DataTunnel) nextKeepalive(sampleInterval time.Duration) (ticks, padLen int) {
@@ -250,7 +236,14 @@ func (t *VP8DataTunnel) writerLoop() {
 			if sample == nil {
 				return
 			}
-			if err := t.track.WriteSample(media.Sample{Data: sample, Duration: sampleInterval}); err != nil {
+			if t.WriteFrame != nil {
+				if err := t.WriteFrame(sample); err != nil {
+					if common.Debug {
+						t.logFn("vp8tunnel: WriteFrame error: %v", err)
+					}
+					return
+				}
+			} else if err := t.track.WriteSample(media.Sample{Data: sample, Duration: sampleInterval}); err != nil {
 				if common.Debug {
 					t.logFn("vp8tunnel: WriteSample error: %v", err)
 				}

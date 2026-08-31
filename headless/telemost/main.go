@@ -60,6 +60,8 @@ type Bridge struct {
 
 	setSlotsKey    int
 	initBundleSent bool
+	shareMu        sync.Mutex
+	shareEnabled   bool
 	pendingKicks   map[string]chan struct{}
 	boundPeers     map[string]bool
 	unboundPeers   map[string]bool
@@ -217,20 +219,67 @@ func (b *Bridge) sendPubOffer() {
 		log.Printf("[tm-ws] pub offer failed: %v", err)
 		return
 	}
-	audioMid, videoMid := parseMids(offer.SDP)
-	log.Printf("[tm-ws] -> publisherSdpOffer pcSeq=%d", b.pubSeq)
+	b.sendPublisherOffer(offer, false)
+}
+
+func (b *Bridge) sendPublisherOffer(offer webrtc.SessionDescription, includeSharing bool) {
+	audioMids, videoMids := parseMids(offer.SDP)
+	log.Printf("[tm-ws] -> publisherSdpOffer pcSeq=%d includeSharing=%v audio=%v video=%v", b.pubSeq, includeSharing, audioMids, videoMids)
 
 	var tracks []map[string]interface{}
-	if audioMid != "" {
-		tracks = append(tracks, map[string]interface{}{"mid": audioMid, "transceiverMid": audioMid, "kind": "AUDIO", "priority": 0, "label": "", "codecs": map[string]interface{}{}, "groupId": 1, "description": ""})
+	if len(audioMids) > 0 {
+		tracks = append(tracks, map[string]interface{}{"mid": audioMids[0], "transceiverMid": audioMids[0], "kind": "AUDIO", "priority": 0, "label": "", "codecs": map[string]interface{}{}, "groupId": 1, "description": ""})
 	}
-	if videoMid != "" {
-		tracks = append(tracks, map[string]interface{}{"mid": videoMid, "transceiverMid": videoMid, "kind": "VIDEO", "priority": 0, "label": "", "codecs": map[string]interface{}{}, "groupId": 2, "description": ""})
+	if len(videoMids) > 0 {
+		tracks = append(tracks, map[string]interface{}{"mid": videoMids[0], "transceiverMid": videoMids[0], "kind": "VIDEO", "priority": 0, "label": "", "codecs": map[string]interface{}{}, "groupId": 1, "description": ""})
+	}
+	if includeSharing {
+		tracks = append(tracks, tmapi.DisplayVideoTrack("Screen"))
 	}
 	b.wsSend(map[string]interface{}{
 		"uid":               uuid.New().String(),
 		"publisherSdpOffer": map[string]interface{}{"pcSeq": b.pubSeq, "sdp": offer.SDP, "tracks": tracks},
 	})
+}
+
+func (b *Bridge) enableScreenshare() {
+	b.shareMu.Lock()
+	defer b.shareMu.Unlock()
+	if b.shareEnabled {
+		return
+	}
+	b.shareEnabled = true
+	log.Printf("[ss] enabling screenshare: describe DISPLAY_VIDEO -> updateMe -> offer")
+	if err := b.relay.AddSharingDataChannel(); err != nil {
+		log.Printf("[ss] AddSharingDataChannel: %v", err)
+		return
+	}
+	b.wsSend(tmapi.UpdatePublisherSharingTrackMessage("Screen"))
+	b.wsSend(tmapi.UpdateMeMessage(b.selfName, true, true))
+	offer, err := b.relay.CreatePubRenegotiate()
+	if err != nil {
+		log.Printf("[ss] enable renegotiate failed: %v", err)
+		return
+	}
+	b.sendPublisherOffer(offer, true)
+}
+
+func (b *Bridge) disableScreenshare() {
+	b.shareMu.Lock()
+	defer b.shareMu.Unlock()
+	if !b.shareEnabled {
+		return
+	}
+	b.shareEnabled = false
+	log.Printf("[ss] disabling screenshare (peer requested trackCount<2)")
+	b.wsSend(tmapi.UpdateMeMessage(b.selfName, true, false))
+	b.relay.RemoveSharingDataChannel()
+	offer, err := b.relay.CreatePubRenegotiate()
+	if err != nil {
+		log.Printf("[ss] disable renegotiate failed: %v", err)
+		return
+	}
+	b.sendPublisherOffer(offer, false)
 }
 
 func (b *Bridge) sendICE(cand *webrtc.ICECandidate, target string, pcSeq int) {
@@ -251,29 +300,6 @@ func (b *Bridge) sendICE(cand *webrtc.ICECandidate, target string, pcSeq int) {
 			"sdpMlineIndex":    idx, "target": target, "pcSeq": pcSeq,
 		},
 	})
-}
-
-func (b *Bridge) requestVideoSlots() {
-	b.setSlotsKey++
-	log.Printf("[tm-ws] -> setSlots key=%d", b.setSlotsKey)
-	b.wsSend(tmapi.SetSlotsMessage(b.setSlotsKey))
-}
-
-func (b *Bridge) forceReconnect(reason string) {
-	oldPeerID := b.connInfo.PeerID
-	log.Printf("[tm-ws] forcing reconnect: %s", reason)
-	if oldPeerID != "" {
-		log.Printf("[tm-ws] kicking self pid=%s to leave call cleanly", oldPeerID)
-		if err := b.kickPeer(oldPeerID); err != nil {
-			log.Printf("[tm-ws] self-kick failed: %v", err)
-		}
-	}
-	clientInstanceID = uuid.New().String()
-	log.Printf("[tm-ws] new instance-id=%s", clientInstanceID)
-	b.mu.Lock()
-	ws := b.ws
-	b.mu.Unlock()
-	common.CloseWS(ws)
 }
 
 func (b *Bridge) sendInitBundle() {
@@ -715,6 +741,13 @@ func (b *Bridge) initRelay() {
 		}
 		b.activeBridge = tunnel.NewRelayBridge(tun, "creator", common.VP8BufSize, log.Printf)
 		b.activeBridge.SetUpstreamSocks(b.upstreamSocks, b.upstreamUser, b.upstreamPass)
+		b.activeBridge.SetOnPeerConfig(func(fps, batch, trackCount int) {
+			if trackCount >= 2 {
+				b.enableScreenshare()
+			} else {
+				b.disableScreenshare()
+			}
+		})
 		fmt.Print("\n  TUNNEL CONNECTED\n")
 	}
 	relay.OnPeerRestart = func() {
@@ -852,20 +885,22 @@ func (b *Bridge) run() {
 	}
 }
 
-func parseMids(sdp string) (audioMid, videoMid string) {
+func parseMids(sdp string) (audioMids, videoMids []string) {
 	var media string
 	for _, line := range strings.Split(sdp, "\r\n") {
 		if strings.HasPrefix(line, "m=audio") {
 			media = "audio"
 		} else if strings.HasPrefix(line, "m=video") {
 			media = "video"
+		} else if strings.HasPrefix(line, "m=") {
+			media = ""
 		}
 		if strings.HasPrefix(line, "a=mid:") {
 			mid := strings.TrimPrefix(line, "a=mid:")
-			if media == "audio" && audioMid == "" {
-				audioMid = mid
-			} else if media == "video" && videoMid == "" {
-				videoMid = mid
+			if media == "audio" {
+				audioMids = append(audioMids, mid)
+			} else if media == "video" {
+				videoMids = append(videoMids, mid)
 			}
 		}
 	}

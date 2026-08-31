@@ -1,6 +1,7 @@
 package main
 
 import (
+	"fmt"
 	"log"
 	"sync"
 
@@ -10,6 +11,14 @@ import (
 	"whitelist-bypass/relay/common"
 	tmapi "whitelist-bypass/relay/telemost"
 	"whitelist-bypass/relay/tunnel"
+)
+
+const (
+	sharingRTPMTU     = 1200
+	sharingVP8PT      = 96
+	sharingClockRate  = 90000
+	sharingStreamSSRC = 0x1a2b3c4d
+	defaultSharingFPS = 24
 )
 
 type SFURelay struct {
@@ -23,6 +32,7 @@ type SFURelay struct {
 
 	sampleTrack   *webrtc.TrackLocalStaticSample
 	tun           *tunnel.VP8DataTunnel
+	mt            *tunnel.MultiTrackTunnel
 	obf           *tunnel.TunnelObfuscator
 	OnConnected   func(tunnel.DataTunnel)
 	OnPubReady    func()
@@ -30,14 +40,97 @@ type SFURelay struct {
 	OnPubICE      func(*webrtc.ICECandidate)
 	OnSubICE      func(*webrtc.ICECandidate)
 
+	sharingDC *webrtc.DataChannel
+
 	readBufSize int
 	tunFired    bool
+}
+
+type sharingDCSink struct {
+	dc         *webrtc.DataChannel
+	mu         sync.Mutex
+	packetizer rtp.Packetizer
+	samples    uint32
 }
 
 func (r *SFURelay) SetObfuscator(o *tunnel.TunnelObfuscator) { r.obf = o }
 
 func NewSFURelay() *SFURelay {
 	return &SFURelay{}
+}
+
+func newSharingDCSink(dc *webrtc.DataChannel, fps int) *sharingDCSink {
+	if fps <= 0 {
+		fps = defaultSharingFPS
+	}
+	return &sharingDCSink{
+		dc: dc,
+		packetizer: rtp.NewPacketizer(sharingRTPMTU, sharingVP8PT, sharingStreamSSRC,
+			&codecs.VP8Payloader{EnablePictureID: true}, rtp.NewRandomSequencer(), sharingClockRate),
+		samples: uint32(sharingClockRate / fps),
+	}
+}
+
+func (s *sharingDCSink) sendFrame(frame []byte) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	for _, pkt := range s.packetizer.Packetize(frame, s.samples) {
+		raw, err := pkt.Marshal()
+		if err != nil {
+			continue
+		}
+		if err := s.dc.Send(raw); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func (r *SFURelay) AddSharingDataChannel() error {
+	if r.pubPC == nil {
+		return fmt.Errorf("pub PC nil")
+	}
+	unordered := false
+	dc, err := r.pubPC.CreateDataChannel("sharing", &webrtc.DataChannelInit{Ordered: &unordered})
+	if err != nil {
+		return err
+	}
+	r.sharingDC = dc
+	sink := newSharingDCSink(dc, defaultSharingFPS)
+	keyframe := func() []byte {
+		return r.obf.EncodeKeepalive(0)
+	}
+	dc.OnOpen(func() {
+		log.Printf("[ss] creator 'sharing' DC open, registering screenshare sub-tunnel")
+		sink.sendFrame(keyframe())
+		sub := tunnel.NewVP8DataTunnel(nil, r.obf, log.Printf)
+		sub.WriteFrame = sink.sendFrame
+		if r.mt == nil {
+			return
+		}
+		r.mt.AddSubTunnel(sub)
+		log.Printf("[ss] screenshare sub-tunnel live, tracks=%d", r.mt.SubTunnelCount())
+	})
+	dc.OnClose(func() { log.Printf("[ss] creator 'sharing' DC closed") })
+	dc.OnError(func(e error) { log.Printf("[ss] creator 'sharing' DC error: %v", e) })
+	dc.OnMessage(func(m webrtc.DataChannelMessage) {
+		if len(m.Data) >= 2 && m.Data[0]&0xC0 == 0x80 && m.Data[1] >= 200 && m.Data[1] <= 206 {
+			if m.Data[1] == 206 {
+				sink.sendFrame(keyframe())
+			}
+		}
+	})
+	return nil
+}
+
+func (r *SFURelay) RemoveSharingDataChannel() {
+	if r.mt != nil {
+		r.mt.RemoveLastSubTunnel()
+	}
+	if r.sharingDC != nil {
+		r.sharingDC.Close()
+		r.sharingDC = nil
+	}
 }
 
 func (r *SFURelay) Init(iceServers []webrtc.ICEServer) error {
@@ -80,8 +173,8 @@ func (r *SFURelay) Init(iceServers []webrtc.ICEServer) error {
 				r.tun = tunnel.NewVP8DataTunnel(r.sampleTrack, r.obf, log.Printf)
 				r.tun.Start(0, 0)
 				r.tunFired = false
-				mt := tunnel.NewMultiTrackTunnel([]*tunnel.VP8DataTunnel{r.tun})
-				mt.SetOnData(func(payload []byte) { r.activate(mt, payload) })
+				r.mt = tunnel.NewMultiTrackTunnel([]*tunnel.VP8DataTunnel{r.tun})
+				r.mt.SetOnData(func(payload []byte) { r.activate(r.mt, payload) })
 			}
 			if r.OnPubReady != nil {
 				r.OnPubReady()

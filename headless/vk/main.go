@@ -116,23 +116,6 @@ func httpPost(endpoint string, form url.Values, extraHeaders map[string]string) 
 	return io.ReadAll(resp.Body)
 }
 
-func httpGet(endpoint string) ([]byte, error) {
-	req, err := http.NewRequest("GET", endpoint, nil)
-	if err != nil {
-		return nil, err
-	}
-	req.Header.Set("User-Agent", common.UserAgent)
-	resp, err := http.DefaultClient.Do(req)
-	if err != nil {
-		return nil, err
-	}
-	defer resp.Body.Close()
-	if strings.Contains(resp.Request.URL.String(), "challenge") {
-		return nil, fmt.Errorf("VK captcha required - open %s in browser and solve it", resp.Request.URL.String())
-	}
-	return io.ReadAll(resp.Body)
-}
-
 func authAndJoin(cookieStr, okJoinLink string, cfg VKConfig) (*JoinResponse, error) {
 	auth := func(bearer string) map[string]string {
 		return map[string]string{"Authorization": "Bearer " + bearer}

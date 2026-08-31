@@ -169,6 +169,25 @@ func SlotsConfigBindings(v interface{}) []SlotBindEvent {
 	return out
 }
 
+func ScreenShareBindings(v interface{}) []SlotBindEvent {
+	m, ok := v.(map[string]interface{})
+	if !ok {
+		return nil
+	}
+	slots, _ := m["slots"].([]interface{})
+	var out []SlotBindEvent
+	for idx, s := range slots {
+		sm, _ := s.(map[string]interface{})
+		if ss, _ := sm["participantScreenSharingByMid"].(map[string]interface{}); ss != nil {
+			pid, _ := ss["participantId"].(string)
+			mid, _ := ss["mid"].(string)
+			reason, _ := ss["limitationReason"].(string)
+			out = append(out, SlotBindEvent{Slot: idx, ParticipantID: pid, Mid: mid, Reason: reason})
+		}
+	}
+	return out
+}
+
 func BriefJSON(v interface{}) string {
 	const max = 240
 	b, err := json.Marshal(v)
@@ -299,6 +318,40 @@ func SdkCodecsInfoMessage() map[string]interface{} {
 				"hwEncode":  "CODEC_FEATURE_NOT_SUPPORTED",
 				"isoString": "vp8",
 			},
+		},
+	}
+}
+
+func UpdateMeMessage(name string, sendVideo, sendSharing bool) map[string]interface{} {
+	meta := map[string]interface{}{
+		"name": name, "description": "", "role": "SPEAKER",
+		"sendAudio": false, "sendVideo": sendVideo,
+	}
+	return map[string]interface{}{
+		"uid": uuid.New().String(),
+		"updateMe": map[string]interface{}{
+			"participantMeta":       meta,
+			"participantAttributes": map[string]interface{}{"name": name, "role": "SPEAKER", "description": ""},
+			"sendAudio":             false,
+			"sendVideo":             sendVideo,
+			"sendSharing":           sendSharing,
+		},
+	}
+}
+
+func DisplayVideoTrack(label string) map[string]interface{} {
+	return map[string]interface{}{
+		"kind": "DISPLAY_VIDEO", "label": label, "priority": 0, "dcLabel": "sharing", "mid": "",
+		"codecs":  map[string]interface{}{"96": map[string]interface{}{"channels": 0, "clockRate": 90000, "mimeType": "video/VP8", "sdpFmtpLine": ""}},
+		"groupId": 2, "description": "",
+	}
+}
+
+func UpdatePublisherSharingTrackMessage(label string) map[string]interface{} {
+	return map[string]interface{}{
+		"uid": uuid.New().String(),
+		"updatePublisherTrackDescription": map[string]interface{}{
+			"publisherTrackDescriptions": []map[string]interface{}{DisplayVideoTrack(label)},
 		},
 	}
 }

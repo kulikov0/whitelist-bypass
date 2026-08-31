@@ -64,6 +64,7 @@ type TelemostHeadlessJoiner struct {
 	vp8FPS      int
 	vp8Batch    int
 	reliable    bool
+	dualTrack   bool
 
 	httpClient *http.Client
 	instanceID string
@@ -84,11 +85,13 @@ type TelemostHeadlessJoiner struct {
 	configAck        configAckTracker
 	reconnectAttempt atomic.Int32
 
-	setSlotsKey    int
-	initBundleSent bool
-	boundPeers     map[string]bool
-	unboundPeers   map[string]bool
-	boundMu        sync.Mutex
+	setSlotsKey      int
+	slotsMu          sync.Mutex
+	screenshareAsked bool
+	initBundleSent   bool
+	boundPeers       map[string]bool
+	unboundPeers     map[string]bool
+	boundMu          sync.Mutex
 }
 
 func NewTelemostHeadlessJoiner(logFn func(string, ...any), resolveFn ResolveFunc, status StatusEmitter, pcConfig PeerConnectionConfigurer, addTracks AddTunnelTracksFunc, readTrackFn ReadTrackFunc) *TelemostHeadlessJoiner {
@@ -111,6 +114,7 @@ func (j *TelemostHeadlessJoiner) RunWithParams(jsonParams string) {
 		VP8FPS      int    `json:"vp8Fps"`
 		VP8Batch    int    `json:"vp8Batch"`
 		Reliable    bool   `json:"reliable"`
+		DualTrack   bool   `json:"dualTrack"`
 	}
 	if err := json.Unmarshal([]byte(jsonParams), &params); err != nil {
 		j.logFn("telemost-joiner: failed to parse params: %v", err)
@@ -132,8 +136,9 @@ func (j *TelemostHeadlessJoiner) RunWithParams(jsonParams string) {
 	j.vp8FPS = params.VP8FPS
 	j.vp8Batch = params.VP8Batch
 	j.reliable = params.Reliable
-	j.logFn("telemost-joiner: link=%s name=%s vp8Fps=%d vp8Batch=%d localEpoch=0x%08x",
-		j.joinLink, j.displayName, params.VP8FPS, params.VP8Batch, obf.LocalEpoch())
+	j.dualTrack = params.DualTrack
+	j.logFn("telemost-joiner: link=%s name=%s vp8Fps=%d vp8Batch=%d dualTrack=%v localEpoch=0x%08x",
+		j.joinLink, j.displayName, params.VP8FPS, params.VP8Batch, j.dualTrack, obf.LocalEpoch())
 
 	j.Status.EmitStatus(common.StatusConnecting)
 	if err := j.runOnce(); err != nil {
@@ -503,9 +508,13 @@ func (j *TelemostHeadlessJoiner) initPC() {
 				j.logFn("telemost-joiner: per-track kcp reliability active over video tunnel")
 			}
 			if !j.configAck.acknowledged() {
+				trackCount := 1
+				if j.dualTrack {
+					trackCount = 2
+				}
 				acked, cancel := j.configAck.arm()
 				go sendVP8ConfigUntilAcked(acked, cancel, j.stopCh, active,
-					vp8tun.FPS(), vp8tun.Batch(), 1, j.logFn, "telemost-joiner")
+					vp8tun.FPS(), vp8tun.Batch(), trackCount, j.logFn, "telemost-joiner")
 				j.logFn("telemost-joiner: pushed vp8 config to creator fps=%d batch=%d", vp8tun.FPS(), vp8tun.Batch())
 			}
 			if j.OnConnected != nil {
@@ -583,10 +592,29 @@ func (j *TelemostHeadlessJoiner) sendInitBundle() {
 	j.sendStartupSlotsRamp()
 }
 
-func (j *TelemostHeadlessJoiner) requestVideoSlots() {
+func (j *TelemostHeadlessJoiner) nextSlotsKey() int {
+	j.slotsMu.Lock()
+	defer j.slotsMu.Unlock()
 	j.setSlotsKey++
-	j.logFn("telemost-joiner: -> setSlots key=%d", j.setSlotsKey)
-	j.wsSend(tmapi.SetSlotsMessage(j.setSlotsKey))
+	return j.setSlotsKey
+}
+
+func (j *TelemostHeadlessJoiner) requestVideoSlots() {
+	key := j.nextSlotsKey()
+	j.logFn("telemost-joiner: -> setSlots key=%d", key)
+	j.wsSend(tmapi.SetSlotsMessage(key))
+}
+
+func (j *TelemostHeadlessJoiner) pollScreenshareSlots() {
+	for i := 0; i < 8; i++ {
+		select {
+		case <-j.stopCh:
+			return
+		case <-time.After(3 * time.Second):
+		}
+		j.logFn("telemost-joiner: -> setSlots re-request %d to bind screenshare", i+1)
+		j.requestVideoSlots()
+	}
 }
 
 func (j *TelemostHeadlessJoiner) forceReconnect(reason string) {
@@ -611,9 +639,12 @@ func (j *TelemostHeadlessJoiner) forceReconnect(reason string) {
 
 func (j *TelemostHeadlessJoiner) sendStartupSlotsRamp() {
 	for i := 0; i < 4; i++ {
-		j.setSlotsKey++
-		j.logFn("telemost-joiner: -> setSlots key=%d (startup %d/4)", j.setSlotsKey, i+1)
-		j.wsSend(tmapi.StartupSetSlotsMessage(i, j.setSlotsKey))
+		key := j.nextSlotsKey()
+		j.logFn("telemost-joiner: -> setSlots key=%d (startup %d/4)", key, i+1)
+		j.wsSend(tmapi.StartupSetSlotsMessage(i, key))
+	}
+	if j.dualTrack {
+		go j.pollScreenshareSlots()
 	}
 }
 
@@ -776,6 +807,24 @@ func (j *TelemostHeadlessJoiner) handleMessage(raw []byte) {
 	if sc, ok := msg["slotsConfig"]; ok {
 		if common.Debug {
 			j.logFn("telemost-joiner: <- slotsConfig %s", tmapi.BriefJSON(sc))
+		}
+		if j.dualTrack {
+			unboundScreenshare := false
+			for _, ev := range tmapi.ScreenShareBindings(sc) {
+				pid := ev.ParticipantID
+				if len(pid) > 8 {
+					pid = pid[:8]
+				}
+				j.logFn("telemost-joiner: [screenshare] slot=%d pid=%s mid=%q reason=%q", ev.Slot, pid, ev.Mid, ev.Reason)
+				if ev.Mid == "" {
+					unboundScreenshare = true
+				}
+			}
+			if unboundScreenshare && !j.screenshareAsked {
+				j.screenshareAsked = true
+				j.logFn("telemost-joiner: [screenshare] advertised with empty mid, re-requesting sized slots once")
+				j.requestVideoSlots()
+			}
 		}
 		needRebind := false
 		presentPids := make(map[string]bool)
