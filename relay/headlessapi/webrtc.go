@@ -13,11 +13,16 @@ type Options struct {
 	Configure          func(*webrtc.SettingEngine)
 }
 
-func WebRTCSettingEngine(options Options) (webrtc.SettingEngine, error) {
-	profile := options.Profile
-	if profile == (headless.Profile{}) {
-		profile = headless.ChromeWindows
+func resolveProfile(options Options) headless.Profile {
+	if options.Profile == (headless.Profile{}) {
+		return headless.ChromeWindows
 	}
+
+	return options.Profile
+}
+
+func WebRTCSettingEngine(options Options) (webrtc.SettingEngine, error) {
+	profile := resolveProfile(options)
 
 	settingEngine, err := profile.SettingEngine()
 	if err != nil {
@@ -35,11 +40,32 @@ func WebRTCSettingEngine(options Options) (webrtc.SettingEngine, error) {
 	return settingEngine, nil
 }
 
+func buildMediaEngine(options Options) (*webrtc.MediaEngine, error) {
+	mediaEngine := &webrtc.MediaEngine{}
+	if err := mediaEngine.RegisterDefaultCodecs(); err != nil {
+		return nil, fmt.Errorf("register default codecs: %w", err)
+	}
+	if err := resolveProfile(options).RegisterHeaderExtensions(mediaEngine); err != nil {
+		return nil, err
+	}
+
+	return mediaEngine, nil
+}
+
 func WebRTCAPI(options Options, apiOptions ...func(*webrtc.API)) (*webrtc.API, error) {
 	settingEngine, err := WebRTCSettingEngine(options)
 	if err != nil {
 		return nil, err
 	}
+	mediaEngine, err := buildMediaEngine(options)
+	if err != nil {
+		return nil, err
+	}
 
-	return webrtc.NewAPI(append(apiOptions, webrtc.WithSettingEngine(settingEngine))...), nil
+	allAPIOptions := make([]func(*webrtc.API), 0, len(apiOptions)+2)
+	allAPIOptions = append(allAPIOptions, webrtc.WithMediaEngine(mediaEngine))
+	allAPIOptions = append(allAPIOptions, apiOptions...)
+	allAPIOptions = append(allAPIOptions, webrtc.WithSettingEngine(settingEngine))
+
+	return webrtc.NewAPI(allAPIOptions...), nil
 }

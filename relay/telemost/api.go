@@ -83,21 +83,8 @@ func NewAPI(configure func(*webrtc.SettingEngine)) (*webrtc.API, error) {
 	if err := mediaEngine.RegisterDefaultCodecs(); err != nil {
 		return nil, err
 	}
-	for _, uri := range []string{
-		"urn:ietf:params:rtp-hdrext:toffset",
-		"http://www.webrtc.org/experiments/rtp-hdrext/abs-send-time",
-		"urn:3gpp:video-orientation",
-		"http://www.webrtc.org/experiments/rtp-hdrext/playout-delay",
-		"http://www.webrtc.org/experiments/rtp-hdrext/video-content-type",
-		"http://www.webrtc.org/experiments/rtp-hdrext/video-timing",
-		"http://www.webrtc.org/experiments/rtp-hdrext/color-space",
-	} {
-		if err := mediaEngine.RegisterHeaderExtension(
-			webrtc.RTPHeaderExtensionCapability{URI: uri},
-			webrtc.RTPCodecTypeVideo,
-		); err != nil {
-			return nil, fmt.Errorf("register header extension %s: %w", uri, err)
-		}
+	if err := headless.ChromeWindows.RegisterHeaderExtensions(mediaEngine); err != nil {
+		return nil, fmt.Errorf("telemost: %w", err)
 	}
 	registry := &interceptor.Registry{}
 	if err := webrtc.RegisterDefaultInterceptors(mediaEngine, registry); err != nil {

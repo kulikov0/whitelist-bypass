@@ -28,9 +28,9 @@ type deviceTemplate struct {
 }
 
 type browserTemplate struct {
-	browserType    string
-	versionPool    []string
-	userAgentFn    func(osVersion, browserVersion string) string
+	browserType string
+	versionPool []string
+	userAgentFn func(osVersion, browserVersion string) string
 }
 
 var commonScreens = [][2]int{

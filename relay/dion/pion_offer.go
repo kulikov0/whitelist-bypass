@@ -5,9 +5,7 @@ import (
 	"net"
 	"strings"
 
-	headless "github.com/kulikov0/headless-client"
 	"github.com/kulikov0/headless-client/webrtc"
-	"whitelist-bypass/relay/headlessapi"
 )
 
 type TransceiverPlan struct {
@@ -59,18 +57,6 @@ type PionPeer struct {
 	DataChannels     map[string]*webrtc.DataChannel
 	TransceiverDescs []TransceiverDesc
 	DatachannelDescs []DataChannelDesc
-}
-
-func NewPionAPI(configure func(*webrtc.SettingEngine)) (*webrtc.API, error) {
-	mediaEngine := &webrtc.MediaEngine{}
-	if err := mediaEngine.RegisterDefaultCodecs(); err != nil {
-		return nil, fmt.Errorf("dion: register default codecs: %w", err)
-	}
-
-	return headlessapi.WebRTCAPI(
-		headlessapi.Options{Profile: headless.ChromeWindows, Configure: configure},
-		webrtc.WithMediaEngine(mediaEngine),
-	)
 }
 
 func ResolveICEServerHosts(entries []ICEServerEntry, resolveFn func(host string) (string, error), logFn func(string, ...any)) []ICEServerEntry {

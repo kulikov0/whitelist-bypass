@@ -10,10 +10,12 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	headless "github.com/kulikov0/headless-client"
 	"github.com/kulikov0/headless-client/webrtc"
 	"github.com/pion/rtp/codecs"
 
 	"whitelist-bypass/relay/common"
+	"whitelist-bypass/relay/headlessapi"
 	"whitelist-bypass/relay/tunnel"
 )
 
@@ -58,7 +60,6 @@ type PeerEntry struct {
 	CamState  bool
 	JoinedAt  time.Time
 }
-
 
 type Call struct {
 	cfg         CallConfig
@@ -193,9 +194,12 @@ func (c *Call) Start() error {
 	}
 	c.cfg.LogFn("[call] you_joined ice_servers=%d", len(youJoined.IceServers))
 
-	pionAPI, err := NewPionAPI(c.cfg.ConfigureSettingEngine)
+	pionAPI, err := headlessapi.WebRTCAPI(headlessapi.Options{
+		Profile:   headless.ChromeWindows,
+		Configure: c.cfg.ConfigureSettingEngine,
+	})
 	if err != nil {
-		return fmt.Errorf("NewPionAPI: %w", err)
+		return fmt.Errorf("build webrtc api: %w", err)
 	}
 	iceServers := ResolveICEServerHosts(youJoined.IceServers, c.cfg.ResolveICEHost, c.cfg.LogFn)
 	peer, err := BuildPionPeer(pionAPI, iceServers)
