@@ -33,6 +33,7 @@ type SFURelay struct {
 	sampleTrack   *webrtc.TrackLocalStaticSample
 	tun           *tunnel.VP8DataTunnel
 	mt            *tunnel.MultiTrackTunnel
+	delivered     tunnel.DataTunnel
 	obf           *tunnel.TunnelObfuscator
 	OnConnected   func(tunnel.DataTunnel)
 	OnPubReady    func()
@@ -226,6 +227,9 @@ func (r *SFURelay) activate(mt *tunnel.MultiTrackTunnel, payload []byte) {
 		log.Println("[relay] per-track kcp reliability active over video tunnel")
 	}
 	log.Printf("[relay] auto-detected active tunnel: %T", delivered)
+	r.mu.Lock()
+	r.delivered = delivered
+	r.mu.Unlock()
 	if r.OnConnected != nil {
 		r.OnConnected(delivered)
 	}
@@ -235,6 +239,21 @@ func (r *SFURelay) activate(mt *tunnel.MultiTrackTunnel, payload []byte) {
 		}
 	} else {
 		mt.DeliverData(payload)
+	}
+}
+
+func (r *SFURelay) resetForNewPeer() {
+	r.mu.Lock()
+	r.tunFired = false
+	mt := r.mt
+	old := r.delivered
+	r.delivered = nil
+	r.mu.Unlock()
+	if kcp, ok := old.(*tunnel.MultiTrackKCPTunnel); ok {
+		kcp.StopLayer()
+	}
+	if mt != nil {
+		mt.SetOnData(func(payload []byte) { r.activate(mt, payload) })
 	}
 }
 
@@ -410,6 +429,7 @@ func (r *SFURelay) readTrack(track *webrtc.TrackRemote) {
 		}
 		if res.PeerRestart {
 			log.Printf("[video] peer restart detected, new epoch=0x%08x", res.PeerEpoch)
+			r.resetForNewPeer()
 			if r.OnPeerRestart != nil {
 				r.OnPeerRestart()
 			}

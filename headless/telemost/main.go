@@ -65,6 +65,7 @@ type Bridge struct {
 	pendingKicks   map[string]chan struct{}
 	boundPeers     map[string]bool
 	unboundPeers   map[string]bool
+	seenPids       map[string]bool
 }
 
 func tmRequest(method, path string, body interface{}, cookieStr string, cfg TMConfig) ([]byte, int, error) {
@@ -420,7 +421,6 @@ func (b *Bridge) handleMessage(raw []byte) {
 			dm, _ := d.(map[string]interface{})
 			b.applyDescriptionEntry(dm)
 		}
-		b.kickStaleSelves()
 		b.ack(uid)
 		return
 	}
@@ -597,10 +597,15 @@ func (b *Bridge) applyDescriptionEntry(dm map[string]interface{}) {
 	_, disconnected := dm["disconnectedAt"]
 	b.mu.Lock()
 	_, wasKnown := b.peers[pid]
+	newArrival := false
 	if disconnected {
 		delete(b.peers, pid)
 	} else {
 		b.peers[pid] = name
+		if !b.seenPids[pid] {
+			b.seenPids[pid] = true
+			newArrival = true
+		}
 	}
 	total := len(b.peers)
 	b.mu.Unlock()
@@ -610,8 +615,9 @@ func (b *Bridge) applyDescriptionEntry(dm map[string]interface{}) {
 	case disconnected:
 		log.Printf("[tm-ws] Ghost participant: %s (%s) - kicking", name, pid)
 		go b.kickPeer(pid)
-	case !wasKnown:
+	case newArrival:
 		log.Printf("[tm-ws] Participant joined: %s (%s) total=%d", name, pid, total)
+		b.keepOnly(pid)
 	}
 }
 
@@ -623,27 +629,23 @@ func (b *Bridge) applyDescriptionSnapshot(descs []interface{}) {
 		dm, _ := d.(map[string]interface{})
 		b.applyDescriptionEntry(dm)
 	}
-	b.kickStaleSelves()
 }
 
-func (b *Bridge) kickStaleSelves() {
+func (b *Bridge) keepOnly(keepPid string) {
 	b.mu.Lock()
-	selfName := b.selfName
-	stale := make([]string, 0)
-	if selfName != "" {
-		for pid, name := range b.peers {
-			if name == selfName {
-				stale = append(stale, pid)
-			}
+	victims := make([]string, 0, len(b.peers))
+	for pid := range b.peers {
+		if pid != keepPid {
+			victims = append(victims, pid)
 		}
 	}
-	b.mu.Unlock()
-	for _, pid := range stale {
-		log.Printf("[tm-ws] Kicking stale self %s (name=%q)", pid, selfName)
-		b.kickPeer(pid)
-		b.mu.Lock()
+	for _, pid := range victims {
 		delete(b.peers, pid)
-		b.mu.Unlock()
+	}
+	b.mu.Unlock()
+	for _, pid := range victims {
+		log.Printf("[tm-ws] 1:1 evict %s", pid)
+		go b.kickPeer(pid)
 	}
 }
 
@@ -877,6 +879,13 @@ func (b *Bridge) run() {
 			time.Sleep(5 * time.Second)
 			continue
 		}
+		if oldPid := b.connInfo.PeerID; oldPid != "" && oldPid != newConn.PeerID {
+			b.mu.Lock()
+			b.seenPids[oldPid] = true
+			delete(b.peers, oldPid)
+			b.mu.Unlock()
+			go b.kickPeer(oldPid)
+		}
 		b.connInfo.PeerID = newConn.PeerID
 		b.connInfo.Credentials = newConn.Credentials
 		b.connInfo.MediaServerURL = newConn.MediaServerURL
@@ -1010,6 +1019,7 @@ func main() {
 		config:        cfg,
 		cookieStr:     cookieStr,
 		peers:         make(map[string]string),
+		seenPids:      make(map[string]bool),
 		readBuf:       readBuf,
 		upstreamSocks: *upstreamSocks,
 		upstreamUser:  *upstreamUser,
