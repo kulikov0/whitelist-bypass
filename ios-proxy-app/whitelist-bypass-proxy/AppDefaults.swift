@@ -14,11 +14,20 @@ enum DefaultsKeys {
     static let dualTrack = "dualTrack"
     static let reliable = "reliable"
     static let debug = "debug"
+    static let keepaliveMinMs = "keepaliveMinMs"
+    static let keepaliveMaxMs = "keepaliveMaxMs"
+    static let skipVideoTrack = "skipVideoTrack"
+    static let disableMdns = "disableMdns"
 }
 
 enum VP8Defaults {
     static let fps: Int = 24
     static let batch: Int = 30
+    // Idle keepalive spread. The original 60..200ms emits ~9 frames per second
+    // into silence, which never lets the radio sleep. Stretched to 3..8s;
+    // verified against a live WB Stream room, the tunnel holds.
+    static let keepaliveMinMs: Int = 3000
+    static let keepaliveMaxMs: Int = 8000
 }
 
 struct AppDefaults {
@@ -45,7 +54,9 @@ struct AppDefaults {
     }
 
     static var showLogs: Bool {
-        get { defaults.object(forKey: DefaultsKeys.showLogs) as? Bool ?? true }
+        // Off by default: with logs on, every line from Go wakes the main thread
+        // and redraws SwiftUI. Anyone who needs them can switch them back on.
+        get { defaults.object(forKey: DefaultsKeys.showLogs) as? Bool ?? false }
         set { defaults.set(newValue, forKey: DefaultsKeys.showLogs) }
     }
 
@@ -82,6 +93,28 @@ struct AppDefaults {
     static var reliable: Bool {
         get { defaults.object(forKey: DefaultsKeys.reliable) as? Bool ?? false }
         set { defaults.set(newValue, forKey: DefaultsKeys.reliable) }
+    }
+
+    static var keepaliveMinMs: Int {
+        get { defaults.object(forKey: DefaultsKeys.keepaliveMinMs) as? Int ?? VP8Defaults.keepaliveMinMs }
+        set { defaults.set(newValue, forKey: DefaultsKeys.keepaliveMinMs) }
+    }
+
+    static var keepaliveMaxMs: Int {
+        get { defaults.object(forKey: DefaultsKeys.keepaliveMaxMs) as? Int ?? VP8Defaults.keepaliveMaxMs }
+        set { defaults.set(newValue, forKey: DefaultsKeys.keepaliveMaxMs) }
+    }
+
+    static var skipVideoTrack: Bool {
+        // Off by default: if WB Stream refuses a participant without a video
+        // track the tunnel simply will not come up. Enable deliberately.
+        get { defaults.object(forKey: DefaultsKeys.skipVideoTrack) as? Bool ?? false }
+        set { defaults.set(newValue, forKey: DefaultsKeys.skipVideoTrack) }
+    }
+
+    static var disableMdns: Bool {
+        get { defaults.object(forKey: DefaultsKeys.disableMdns) as? Bool ?? true }
+        set { defaults.set(newValue, forKey: DefaultsKeys.disableMdns) }
     }
 
     static var debug: Bool {
