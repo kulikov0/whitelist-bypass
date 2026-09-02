@@ -226,6 +226,20 @@ Mutually exclusive with the call-creation flags (`--peer-id` for VK; the others 
 - `max-dc-buf` - pauses TCP reads when the DataChannel buffered amount exceeds this; only wired in VK (Pion `BufferedAmountLowThreshold`)
 - `mem-limit` - Go runtime soft memory limit; makes GC more aggressive near the cap
 
+#### Running unattended
+
+`Restart=always` keeps the process alive, which is not the same as keeping the
+tunnel working. A creator can sit there joined and accepting connections while
+no payload comes back through any of them - "connected, no internet" on the
+phone, a perfectly healthy process to systemd.
+
+[`headless/ops/`](headless/ops/) has the pieces for running it without
+supervision: templated systemd units, hourly log rotation, and a watchdog that
+tells a deaf tunnel apart from an idle one by comparing `first read` against
+`EOF with no data read` in the relay log. It ships with a replay tool, because
+the thresholds were calibrated on one tunnel and you should check them against
+your own logs before trusting them.
+
 ## License
 
 [MIT](LICENSE)
