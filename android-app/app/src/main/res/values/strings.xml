@@ -118,6 +118,8 @@
     <string name="settings_row_reconnect_sub">Restore the last session automatically</string>
     <string name="settings_row_debug">Debug logging</string>
     <string name="settings_row_debug_sub">Verbose relay logs for troubleshooting</string>
+    <string name="settings_row_power">Power optimization</string>
+    <string name="settings_row_power_sub">Request disable power optimization for app</string>
 
     <string name="settings_toast_destinations_cleared">All calls removed</string>
     <string name="settings_toast_reset_done">Settings reset</string>
