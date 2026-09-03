@@ -12,6 +12,7 @@ import bypass.whitelist.App
 import bypass.whitelist.R
 import bypass.whitelist.tunnel.SplitTunnelingMode
 import bypass.whitelist.tunnel.TunnelMode
+import bypass.whitelist.util.BackgroundRestrictionsManager
 import bypass.whitelist.util.Callback
 import bypass.whitelist.util.ParamCallback
 import bypass.whitelist.util.Prefs
@@ -147,6 +148,9 @@ class SettingsScreenFragment : Fragment(R.layout.fragment_settings_screen) {
         }
         addSwitchRow(card, R.drawable.ic_setting_debug, getString(R.string.settings_row_debug), getString(R.string.settings_row_debug_sub), Prefs.debug) { checked ->
             Prefs.debug = checked
+        }
+        addRow(card, R.drawable.ic_power, getString(R.string.settings_row_power), getString(R.string.settings_row_power_sub), null) {
+            BackgroundRestrictionsManager.requestDisableBatteryOptimization(this.requireActivity());
         }
         return section
     }
