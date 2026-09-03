@@ -328,12 +328,17 @@ func (u *TunnelRelay) sendDCFrame(connID uint32, mt byte, payload []byte) {
 
 func (u *TunnelRelay) connectTCP(connID uint32, addr string) {
 	log.Printf("[dc] CONNECT %d -> %s", connID, common.MaskAddr(addr))
+	if common.DstBlocked(addr) {
+		log.Printf("[dc] CONNECT %d blocked %s", connID, common.MaskAddr(addr))
+		u.sendDCFrame(connID, tunnel.MsgConnectErr, []byte(common.ErrPrivateDst.Error()))
+		return
+	}
 	var conn net.Conn
 	var err error
 	if u.upstream != nil {
 		conn, err = u.upstream.DialTCP(addr, 10*time.Second)
 	} else {
-		conn, err = net.DialTimeout("tcp", addr, 10*time.Second)
+		conn, err = common.DialTCP(addr, 10*time.Second)
 	}
 	if err != nil {
 		log.Printf("[dc] CONNECT %d failed: %s", connID, common.MaskError(err))
@@ -398,6 +403,13 @@ func (u *TunnelRelay) handleUDP(connID uint32, payload []byte) {
 	data := payload[1+addrLen:]
 	resp := make([]byte, common.UDPBufSize)
 
+	if common.DstBlocked(addr) {
+		if common.Debug {
+			log.Printf("[dc] UDP %d blocked %s", connID, common.MaskAddr(addr))
+		}
+		return
+	}
+
 	if u.upstream != nil {
 		session, err := u.upstream.UDPAssociate(10 * time.Second)
 		if err != nil {
@@ -416,11 +428,7 @@ func (u *TunnelRelay) handleUDP(connID uint32, payload []byte) {
 		return
 	}
 
-	udpAddr, err := net.ResolveUDPAddr("udp", addr)
-	if err != nil {
-		return
-	}
-	conn, err := net.DialUDP("udp", nil, udpAddr)
+	conn, err := common.DialUDP(addr)
 	if err != nil {
 		return
 	}
