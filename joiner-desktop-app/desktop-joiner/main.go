@@ -285,7 +285,7 @@ func main() {
 		runWBStream(*link, *displayName, *tunnelMode, *vp8FPS, *vp8Batch, *dualTrack, *reliable,
 			onConnected, addCandidate)
 	case "telemost", "tm":
-		runTelemost(*link, *displayName, *vp8FPS, *vp8Batch,
+		runTelemost(*link, *displayName, *vp8FPS, *vp8Batch, *dualTrack, *reliable,
 			onConnected, addCandidate)
 	case "vk":
 		selfHealReconnect = true
@@ -385,7 +385,7 @@ func runWBStream(link, name, mode string, fps, batch int, dualTrack, reliable bo
 	}
 }
 
-func runTelemost(link, name string, fps, batch int,
+func runTelemost(link, name string, fps, batch int, dualTrack, reliable bool,
 	onConnected func(tunnel.DataTunnel),
 	onCandidate func(int, string),
 ) {
@@ -406,11 +406,15 @@ func runTelemost(link, name string, fps, batch int,
 		DisplayName string `json:"displayName"`
 		VP8FPS      int    `json:"vp8Fps"`
 		VP8Batch    int    `json:"vp8Batch"`
+		DualTrack   bool   `json:"dualTrack"`
+		Reliable    bool   `json:"reliable"`
 	}{
 		JoinLink:    strings.TrimSpace(link),
 		DisplayName: name,
 		VP8FPS:      fps,
 		VP8Batch:    batch,
+		DualTrack:   dualTrack,
+		Reliable:    reliable,
 	})
 	go inner.RunWithParams(string(params))
 }

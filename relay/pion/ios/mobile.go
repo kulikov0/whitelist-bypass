@@ -3,7 +3,6 @@ package ios
 import (
 	"encoding/json"
 	"fmt"
-	"net"
 	"sync"
 
 	"whitelist-bypass/relay/common"
@@ -29,7 +28,6 @@ var activeHeadless struct {
 	sync.Mutex
 	joiner   joinerHandle
 	callback HeadlessCallback
-	socksLn  net.Listener
 	bridge   *tunnel.RelayBridge
 	stopped  bool
 	platform string
@@ -118,9 +116,6 @@ func makeHelpers(callback HeadlessCallback) (func(string, ...any), joiner.Resolv
 		},
 	}
 	return logFn, resolveFn, statusEmitter
-}
-
-func init() {
 }
 
 func SetDebug(enabled bool) { common.Debug = enabled }
@@ -266,10 +261,8 @@ func StopHeadless() {
 	activeHeadless.Lock()
 	activeHeadless.stopped = true
 	currentJoiner := activeHeadless.joiner
-	socksLn := activeHeadless.socksLn
 	bridge := activeHeadless.bridge
 	activeHeadless.joiner = nil
-	activeHeadless.socksLn = nil
 	activeHeadless.bridge = nil
 	activeHeadless.callback = nil
 	activeHeadless.platform = ""
@@ -281,8 +274,5 @@ func StopHeadless() {
 	}
 	if bridge != nil {
 		bridge.Close()
-	}
-	if socksLn != nil {
-		socksLn.Close()
 	}
 }

@@ -307,6 +307,8 @@ class ProxyManager: ObservableObject {
                 "displayName": displayName,
                 "vp8Fps": vp8Fps,
                 "vp8Batch": vp8Batch,
+                "dualTrack": dualTrack,
+                "reliable": reliable,
             ]
             if let jsonData = try? JSONSerialization.data(withJSONObject: joinParams),
                let jsonString = String(data: jsonData, encoding: .utf8) {

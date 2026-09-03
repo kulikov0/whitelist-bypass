@@ -1,0 +1,649 @@
+// !$*UTF8*$!
+{
+	archiveVersion = 1;
+	classes = {
+	};
+	objectVersion = 77;
+	objects = {
+
+/* Begin PBXBuildFile section */
+		000000000000000000000060 /* WhitelistBypassVPNApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 000000000000000000000040 /* WhitelistBypassVPNApp.swift */; };
+		000000000000000000000061 /* ContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 000000000000000000000041 /* ContentView.swift */; };
+		000000000000000000000062 /* MainScreen.swift in Sources */ = {isa = PBXBuildFile; fileRef = 000000000000000000000042 /* MainScreen.swift */; };
+		000000000000000000000063 /* SettingsScreen.swift in Sources */ = {isa = PBXBuildFile; fileRef = 000000000000000000000043 /* SettingsScreen.swift */; };
+		000000000000000000000064 /* LogsScreen.swift in Sources */ = {isa = PBXBuildFile; fileRef = 000000000000000000000044 /* LogsScreen.swift */; };
+		000000000000000000000065 /* Theme.swift in Sources */ = {isa = PBXBuildFile; fileRef = 000000000000000000000045 /* Theme.swift */; };
+		000000000000000000000066 /* AppState.swift in Sources */ = {isa = PBXBuildFile; fileRef = 000000000000000000000046 /* AppState.swift */; };
+		000000000000000000000067 /* VPNController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 000000000000000000000047 /* VPNController.swift */; };
+		000000000000000000000068 /* Shared.swift in Sources */ = {isa = PBXBuildFile; fileRef = 000000000000000000000048 /* Shared.swift */; };
+		000000000000000000000069 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 000000000000000000000049 /* Assets.xcassets */; };
+		00000000000000000000006A /* PacketTunnel.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = 000000000000000000000013 /* PacketTunnel.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
+		00000000000000000000006B /* PacketTunnelProvider.swift in Sources */ = {isa = PBXBuildFile; fileRef = 00000000000000000000004C /* PacketTunnelProvider.swift */; };
+		00000000000000000000006C /* Shared.swift in Sources */ = {isa = PBXBuildFile; fileRef = 000000000000000000000048 /* Shared.swift */; };
+		00000000000000000000006D /* Mobile.xcframework in Frameworks */ = {isa = PBXBuildFile; fileRef = 00000000000000000000004F /* Mobile.xcframework */; };
+		00000000000000000000006E /* Mobile.xcframework in Embed Frameworks */ = {isa = PBXBuildFile; fileRef = 00000000000000000000004F /* Mobile.xcframework */; settings = {ATTRIBUTES = (CodeSignOnCopy, RemoveHeadersOnCopy, ); }; };
+		00000000000000000000006F /* Joiners.swift in Sources */ = {isa = PBXBuildFile; fileRef = 000000000000000000000051 /* Joiners.swift */; };
+		000000000000000000000070 /* QRScanner.swift in Sources */ = {isa = PBXBuildFile; fileRef = 000000000000000000000052 /* QRScanner.swift */; };
+		000000000000000000000071 /* Localizable.strings in Resources */ = {isa = PBXBuildFile; fileRef = 000000000000000000000053 /* Localizable.strings */; };
+		000000000000000000000072 /* CallConfig.swift in Sources */ = {isa = PBXBuildFile; fileRef = 000000000000000000000054 /* CallConfig.swift */; };
+		000000000000000000000073 /* Sheets.swift in Sources */ = {isa = PBXBuildFile; fileRef = 000000000000000000000055 /* Sheets.swift */; };
+		000000000000000000000074 /* FeatureSheets.swift in Sources */ = {isa = PBXBuildFile; fileRef = 000000000000000000000056 /* FeatureSheets.swift */; };
+		000000000000000000000075 /* Ping.swift in Sources */ = {isa = PBXBuildFile; fileRef = 000000000000000000000057 /* Ping.swift */; };
+		000000000000000000000076 /* names.txt in Resources */ = {isa = PBXBuildFile; fileRef = 000000000000000000000058 /* names.txt */; };
+		000000000000000000000077 /* CaptchaWebView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 000000000000000000000059 /* CaptchaWebView.swift */; };
+		0000000000000000000000B0 /* LogWriter.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0000000000000000000000A0 /* LogWriter.swift */; };
+		0000000000000000000000B1 /* StatusHolder.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0000000000000000000000A1 /* StatusHolder.swift */; };
+		0000000000000000000000B2 /* HeadlessCallback.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0000000000000000000000A2 /* HeadlessCallback.swift */; };
+		0000000000000000000000B3 /* PortPicker.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0000000000000000000000A3 /* PortPicker.swift */; };
+		0000000000000000000000B4 /* PacketFlowSink.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0000000000000000000000A4 /* PacketFlowSink.swift */; };
+		0000000000000000000000B5 /* CallRow.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0000000000000000000000A5 /* CallRow.swift */; };
+		0000000000000000000000B6 /* HeroRing.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0000000000000000000000A6 /* HeroRing.swift */; };
+/* End PBXBuildFile section */
+
+/* Begin PBXContainerItemProxy section */
+		000000000000000000000031 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 000000000000000000000001 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = 000000000000000000000011;
+			remoteInfo = PacketTunnel;
+		};
+/* End PBXContainerItemProxy section */
+
+/* Begin PBXCopyFilesBuildPhase section */
+		000000000000000000000023 /* Embed Foundation Extensions */ = {
+			isa = PBXCopyFilesBuildPhase;
+			buildActionMask = 2147483647;
+			dstPath = "";
+			dstSubfolderSpec = 13;
+			files = (
+				00000000000000000000006A /* PacketTunnel.appex in Embed Foundation Extensions */,
+			);
+			name = "Embed Foundation Extensions";
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		000000000000000000000026 /* Embed Frameworks */ = {
+			isa = PBXCopyFilesBuildPhase;
+			buildActionMask = 2147483647;
+			dstPath = "";
+			dstSubfolderSpec = 10;
+			files = (
+				00000000000000000000006E /* Mobile.xcframework in Embed Frameworks */,
+			);
+			name = "Embed Frameworks";
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXCopyFilesBuildPhase section */
+
+/* Begin PBXFileReference section */
+		000000000000000000000012 /* WhitelistBypassVPN.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = WhitelistBypassVPN.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		000000000000000000000013 /* PacketTunnel.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = PacketTunnel.appex; sourceTree = BUILT_PRODUCTS_DIR; };
+		000000000000000000000040 /* WhitelistBypassVPNApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WhitelistBypassVPNApp.swift; sourceTree = "<group>"; };
+		000000000000000000000041 /* ContentView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContentView.swift; sourceTree = "<group>"; };
+		000000000000000000000042 /* MainScreen.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MainScreen.swift; sourceTree = "<group>"; };
+		000000000000000000000043 /* SettingsScreen.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsScreen.swift; sourceTree = "<group>"; };
+		000000000000000000000044 /* LogsScreen.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LogsScreen.swift; sourceTree = "<group>"; };
+		000000000000000000000045 /* Theme.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Theme.swift; sourceTree = "<group>"; };
+		000000000000000000000046 /* AppState.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppState.swift; sourceTree = "<group>"; };
+		000000000000000000000047 /* VPNController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VPNController.swift; sourceTree = "<group>"; };
+		000000000000000000000048 /* Shared.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Shared.swift; sourceTree = "<group>"; };
+		000000000000000000000049 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
+		00000000000000000000004A /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
+		00000000000000000000004B /* App.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = App.entitlements; sourceTree = "<group>"; };
+		00000000000000000000004C /* PacketTunnelProvider.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PacketTunnelProvider.swift; sourceTree = "<group>"; };
+		00000000000000000000004D /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
+		00000000000000000000004E /* PacketTunnel.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = PacketTunnel.entitlements; sourceTree = "<group>"; };
+		00000000000000000000004F /* Mobile.xcframework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.xcframework; path = Mobile.xcframework; sourceTree = "<group>"; };
+		000000000000000000000051 /* Joiners.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Joiners.swift; sourceTree = "<group>"; };
+		000000000000000000000052 /* QRScanner.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = QRScanner.swift; sourceTree = "<group>"; };
+		000000000000000000000053 /* Localizable.strings */ = {isa = PBXFileReference; lastKnownFileType = text.plist.strings; path = Localizable.strings; sourceTree = "<group>"; };
+		000000000000000000000054 /* CallConfig.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CallConfig.swift; sourceTree = "<group>"; };
+		000000000000000000000055 /* Sheets.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Sheets.swift; sourceTree = "<group>"; };
+		000000000000000000000056 /* FeatureSheets.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FeatureSheets.swift; sourceTree = "<group>"; };
+		000000000000000000000057 /* Ping.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Ping.swift; sourceTree = "<group>"; };
+		000000000000000000000058 /* names.txt */ = {isa = PBXFileReference; lastKnownFileType = text; path = names.txt; sourceTree = "<group>"; };
+		000000000000000000000059 /* CaptchaWebView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CaptchaWebView.swift; sourceTree = "<group>"; };
+		0000000000000000000000A0 /* LogWriter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LogWriter.swift; sourceTree = "<group>"; };
+		0000000000000000000000A1 /* StatusHolder.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StatusHolder.swift; sourceTree = "<group>"; };
+		0000000000000000000000A2 /* HeadlessCallback.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HeadlessCallback.swift; sourceTree = "<group>"; };
+		0000000000000000000000A3 /* PortPicker.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PortPicker.swift; sourceTree = "<group>"; };
+		0000000000000000000000A4 /* PacketFlowSink.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PacketFlowSink.swift; sourceTree = "<group>"; };
+		0000000000000000000000A5 /* CallRow.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CallRow.swift; sourceTree = "<group>"; };
+		0000000000000000000000A6 /* HeroRing.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HeroRing.swift; sourceTree = "<group>"; };
+/* End PBXFileReference section */
+
+/* Begin PBXFrameworksBuildPhase section */
+		000000000000000000000022 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		000000000000000000000025 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				00000000000000000000006D /* Mobile.xcframework in Frameworks */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXFrameworksBuildPhase section */
+
+/* Begin PBXGroup section */
+		000000000000000000000002 = {
+			isa = PBXGroup;
+			children = (
+				000000000000000000000006 /* Frameworks */,
+				000000000000000000000004 /* WhitelistBypassVPN */,
+				000000000000000000000005 /* PacketTunnel */,
+				000000000000000000000003 /* Products */,
+			);
+			sourceTree = "<group>";
+		};
+		000000000000000000000003 /* Products */ = {
+			isa = PBXGroup;
+			children = (
+				000000000000000000000012 /* WhitelistBypassVPN.app */,
+				000000000000000000000013 /* PacketTunnel.appex */,
+			);
+			name = Products;
+			sourceTree = "<group>";
+		};
+		000000000000000000000004 /* WhitelistBypassVPN */ = {
+			isa = PBXGroup;
+			children = (
+				0000000000000000000000C0 /* App */,
+				0000000000000000000000C1 /* Screens */,
+				0000000000000000000000C2 /* Components */,
+				0000000000000000000000C3 /* Model */,
+				0000000000000000000000C4 /* Support */,
+				000000000000000000000049 /* Assets.xcassets */,
+				000000000000000000000053 /* Localizable.strings */,
+				000000000000000000000058 /* names.txt */,
+				00000000000000000000004A /* Info.plist */,
+				00000000000000000000004B /* App.entitlements */,
+			);
+			path = WhitelistBypassVPN;
+			sourceTree = "<group>";
+		};
+		000000000000000000000005 /* PacketTunnel */ = {
+			isa = PBXGroup;
+			children = (
+				00000000000000000000004C /* PacketTunnelProvider.swift */,
+				0000000000000000000000A0 /* LogWriter.swift */,
+				0000000000000000000000A1 /* StatusHolder.swift */,
+				0000000000000000000000A2 /* HeadlessCallback.swift */,
+				0000000000000000000000A3 /* PortPicker.swift */,
+				0000000000000000000000A4 /* PacketFlowSink.swift */,
+				000000000000000000000051 /* Joiners.swift */,
+				00000000000000000000004D /* Info.plist */,
+				00000000000000000000004E /* PacketTunnel.entitlements */,
+			);
+			path = PacketTunnel;
+			sourceTree = "<group>";
+		};
+		000000000000000000000006 /* Frameworks */ = {
+			isa = PBXGroup;
+			children = (
+				00000000000000000000004F /* Mobile.xcframework */,
+			);
+			name = Frameworks;
+			sourceTree = "<group>";
+		};
+		0000000000000000000000C0 /* App */ = {
+			isa = PBXGroup;
+			children = (
+				000000000000000000000040 /* WhitelistBypassVPNApp.swift */,
+				000000000000000000000041 /* ContentView.swift */,
+			);
+			path = App;
+			sourceTree = "<group>";
+		};
+		0000000000000000000000C1 /* Screens */ = {
+			isa = PBXGroup;
+			children = (
+				000000000000000000000042 /* MainScreen.swift */,
+				000000000000000000000043 /* SettingsScreen.swift */,
+				000000000000000000000044 /* LogsScreen.swift */,
+			);
+			path = Screens;
+			sourceTree = "<group>";
+		};
+		0000000000000000000000C2 /* Components */ = {
+			isa = PBXGroup;
+			children = (
+				0000000000000000000000A5 /* CallRow.swift */,
+				0000000000000000000000A6 /* HeroRing.swift */,
+				000000000000000000000055 /* Sheets.swift */,
+				000000000000000000000056 /* FeatureSheets.swift */,
+				000000000000000000000059 /* CaptchaWebView.swift */,
+				000000000000000000000052 /* QRScanner.swift */,
+			);
+			path = Components;
+			sourceTree = "<group>";
+		};
+		0000000000000000000000C3 /* Model */ = {
+			isa = PBXGroup;
+			children = (
+				000000000000000000000046 /* AppState.swift */,
+				000000000000000000000054 /* CallConfig.swift */,
+				000000000000000000000048 /* Shared.swift */,
+			);
+			path = Model;
+			sourceTree = "<group>";
+		};
+		0000000000000000000000C4 /* Support */ = {
+			isa = PBXGroup;
+			children = (
+				000000000000000000000047 /* VPNController.swift */,
+				000000000000000000000057 /* Ping.swift */,
+				000000000000000000000045 /* Theme.swift */,
+			);
+			path = Support;
+			sourceTree = "<group>";
+		};
+/* End PBXGroup section */
+
+/* Begin PBXNativeTarget section */
+		000000000000000000000010 /* WhitelistBypassVPN */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 000000000000000000000008 /* Build configuration list for PBXNativeTarget "WhitelistBypassVPN" */;
+			buildPhases = (
+				000000000000000000000020 /* Sources */,
+				000000000000000000000022 /* Frameworks */,
+				000000000000000000000021 /* Resources */,
+				000000000000000000000026 /* Embed Frameworks */,
+				000000000000000000000023 /* Embed Foundation Extensions */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				000000000000000000000030 /* PBXTargetDependency */,
+			);
+			name = WhitelistBypassVPN;
+			productName = WhitelistBypassVPN;
+			productReference = 000000000000000000000012 /* WhitelistBypassVPN.app */;
+			productType = "com.apple.product-type.application";
+		};
+		000000000000000000000011 /* PacketTunnel */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 000000000000000000000009 /* Build configuration list for PBXNativeTarget "PacketTunnel" */;
+			buildPhases = (
+				000000000000000000000024 /* Sources */,
+				000000000000000000000025 /* Frameworks */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			name = PacketTunnel;
+			productName = PacketTunnel;
+			productReference = 000000000000000000000013 /* PacketTunnel.appex */;
+			productType = "com.apple.product-type.app-extension";
+		};
+/* End PBXNativeTarget section */
+
+/* Begin PBXProject section */
+		000000000000000000000001 /* Project object */ = {
+			isa = PBXProject;
+			attributes = {
+				BuildIndependentTargetsInParallel = 1;
+				LastSwiftUpdateCheck = 2640;
+				LastUpgradeCheck = 2640;
+				TargetAttributes = {
+					000000000000000000000010 = {
+						CreatedOnToolsVersion = 26.4;
+					};
+					000000000000000000000011 = {
+						CreatedOnToolsVersion = 26.4;
+					};
+				};
+			};
+			buildConfigurationList = 000000000000000000000007 /* Build configuration list for PBXProject "whitelist-bypass-vpn" */;
+			developmentRegion = en;
+			hasScannedForEncodings = 0;
+			knownRegions = (
+				en,
+				Base,
+			);
+			mainGroup = 000000000000000000000002;
+			minimizedProjectReferenceProxies = 1;
+			preferredProjectObjectVersion = 77;
+			productRefGroup = 000000000000000000000003 /* Products */;
+			projectDirPath = "";
+			projectRoot = "";
+			targets = (
+				000000000000000000000010 /* WhitelistBypassVPN */,
+				000000000000000000000011 /* PacketTunnel */,
+			);
+		};
+/* End PBXProject section */
+
+/* Begin PBXResourcesBuildPhase section */
+		000000000000000000000021 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				000000000000000000000069 /* Assets.xcassets in Resources */,
+				000000000000000000000071 /* Localizable.strings in Resources */,
+				000000000000000000000076 /* names.txt in Resources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXResourcesBuildPhase section */
+
+/* Begin PBXSourcesBuildPhase section */
+		000000000000000000000020 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				000000000000000000000060 /* WhitelistBypassVPNApp.swift in Sources */,
+				000000000000000000000061 /* ContentView.swift in Sources */,
+				000000000000000000000062 /* MainScreen.swift in Sources */,
+				000000000000000000000063 /* SettingsScreen.swift in Sources */,
+				000000000000000000000064 /* LogsScreen.swift in Sources */,
+				000000000000000000000065 /* Theme.swift in Sources */,
+				000000000000000000000066 /* AppState.swift in Sources */,
+				000000000000000000000067 /* VPNController.swift in Sources */,
+				000000000000000000000068 /* Shared.swift in Sources */,
+				000000000000000000000070 /* QRScanner.swift in Sources */,
+				000000000000000000000072 /* CallConfig.swift in Sources */,
+				000000000000000000000073 /* Sheets.swift in Sources */,
+				000000000000000000000074 /* FeatureSheets.swift in Sources */,
+				000000000000000000000075 /* Ping.swift in Sources */,
+				000000000000000000000077 /* CaptchaWebView.swift in Sources */,
+				0000000000000000000000B5 /* CallRow.swift in Sources */,
+				0000000000000000000000B6 /* HeroRing.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		000000000000000000000024 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				00000000000000000000006B /* PacketTunnelProvider.swift in Sources */,
+				0000000000000000000000B0 /* LogWriter.swift in Sources */,
+				0000000000000000000000B1 /* StatusHolder.swift in Sources */,
+				0000000000000000000000B2 /* HeadlessCallback.swift in Sources */,
+				0000000000000000000000B3 /* PortPicker.swift in Sources */,
+				0000000000000000000000B4 /* PacketFlowSink.swift in Sources */,
+				00000000000000000000006F /* Joiners.swift in Sources */,
+				00000000000000000000006C /* Shared.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXSourcesBuildPhase section */
+
+/* Begin PBXTargetDependency section */
+		000000000000000000000030 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = 000000000000000000000011 /* PacketTunnel */;
+			targetProxy = 000000000000000000000031 /* PBXContainerItemProxy */;
+		};
+/* End PBXTargetDependency section */
+
+/* Begin XCBuildConfiguration section */
+		00000000000000000000000A /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				CLANG_ANALYZER_NONNULL = YES;
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CLANG_ENABLE_OBJC_WEAK = YES;
+				CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING = YES;
+				CLANG_WARN_BOOL_CONVERSION = YES;
+				CLANG_WARN_COMMA = YES;
+				CLANG_WARN_CONSTANT_CONVERSION = YES;
+				CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS = YES;
+				CLANG_WARN_EMPTY_BODY = YES;
+				CLANG_WARN_ENUM_CONVERSION = YES;
+				CLANG_WARN_INFINITE_RECURSION = YES;
+				CLANG_WARN_INT_CONVERSION = YES;
+				CLANG_WARN_NON_LITERAL_NULL_CONVERSION = YES;
+				CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF = YES;
+				CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
+				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES;
+				CLANG_WARN_RANGE_LOOP_ANALYSIS = YES;
+				CLANG_WARN_STRICT_PROTOTYPES = YES;
+				CLANG_WARN_SUSPICIOUS_MOVE = YES;
+				CLANG_WARN_UNREACHABLE_CODE = YES;
+				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
+				COPY_PHASE_STRIP = NO;
+				DEBUG_INFORMATION_FORMAT = dwarf;
+				DEVELOPMENT_TEAM = "";
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				ENABLE_TESTABILITY = YES;
+				ENABLE_USER_SCRIPT_SANDBOXING = YES;
+				GCC_C_LANGUAGE_STANDARD = gnu17;
+				GCC_DYNAMIC_NO_PIC = NO;
+				GCC_NO_COMMON_BLOCKS = YES;
+				GCC_OPTIMIZATION_LEVEL = 0;
+				GCC_PREPROCESSOR_DEFINITIONS = (
+					"DEBUG=1",
+					"$(inherited)",
+				);
+				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
+				GCC_WARN_ABOUT_RETURN_TYPE = YES;
+				GCC_WARN_UNDECLARED_SELECTOR = YES;
+				GCC_WARN_UNINITIALIZED_AUTOS = YES;
+				GCC_WARN_UNUSED_FUNCTION = YES;
+				GCC_WARN_UNUSED_VARIABLE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 16.0;
+				MTL_ENABLE_DEBUG_INFO = INCLUDE_SOURCE;
+				MTL_FAST_MATH = YES;
+				ONLY_ACTIVE_ARCH = YES;
+				SDKROOT = iphoneos;
+				STRING_CATALOG_GENERATE_SYMBOLS = YES;
+				SWIFT_ACTIVE_COMPILATION_CONDITIONS = "DEBUG $(inherited)";
+				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
+			};
+			name = Debug;
+		};
+		00000000000000000000000B /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				CLANG_ANALYZER_NONNULL = YES;
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CLANG_ENABLE_OBJC_WEAK = YES;
+				CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING = YES;
+				CLANG_WARN_BOOL_CONVERSION = YES;
+				CLANG_WARN_COMMA = YES;
+				CLANG_WARN_CONSTANT_CONVERSION = YES;
+				CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS = YES;
+				CLANG_WARN_EMPTY_BODY = YES;
+				CLANG_WARN_ENUM_CONVERSION = YES;
+				CLANG_WARN_INFINITE_RECURSION = YES;
+				CLANG_WARN_INT_CONVERSION = YES;
+				CLANG_WARN_NON_LITERAL_NULL_CONVERSION = YES;
+				CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF = YES;
+				CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
+				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES;
+				CLANG_WARN_RANGE_LOOP_ANALYSIS = YES;
+				CLANG_WARN_STRICT_PROTOTYPES = YES;
+				CLANG_WARN_SUSPICIOUS_MOVE = YES;
+				CLANG_WARN_UNREACHABLE_CODE = YES;
+				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
+				COPY_PHASE_STRIP = NO;
+				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
+				DEVELOPMENT_TEAM = "";
+				ENABLE_NS_ASSERTIONS = NO;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				ENABLE_USER_SCRIPT_SANDBOXING = YES;
+				GCC_C_LANGUAGE_STANDARD = gnu17;
+				GCC_NO_COMMON_BLOCKS = YES;
+				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
+				GCC_WARN_ABOUT_RETURN_TYPE = YES;
+				GCC_WARN_UNDECLARED_SELECTOR = YES;
+				GCC_WARN_UNINITIALIZED_AUTOS = YES;
+				GCC_WARN_UNUSED_FUNCTION = YES;
+				GCC_WARN_UNUSED_VARIABLE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 16.0;
+				MTL_ENABLE_DEBUG_INFO = NO;
+				MTL_FAST_MATH = YES;
+				SDKROOT = iphoneos;
+				STRING_CATALOG_GENERATE_SYMBOLS = YES;
+				SWIFT_COMPILATION_MODE = wholemodule;
+				VALIDATE_PRODUCT = YES;
+			};
+			name = Release;
+		};
+		00000000000000000000000C /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CODE_SIGN_ENTITLEMENTS = WhitelistBypassVPN/App.entitlements;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				VERSIONING_SYSTEM = "apple-generic";
+				ENABLE_PREVIEWS = YES;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = WhitelistBypassVPN/Info.plist;
+				INFOPLIST_KEY_CFBundleDisplayName = "Whitelist Bypass";
+				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.utilities";
+				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
+				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
+				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
+				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad = "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
+				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPhone = "UIInterfaceOrientationPortrait UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				MARKETING_VERSION = 0.3.8;
+				PRODUCT_BUNDLE_IDENTIFIER = whitelist.bypass.vpn;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Debug;
+		};
+		00000000000000000000000D /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CODE_SIGN_ENTITLEMENTS = WhitelistBypassVPN/App.entitlements;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				VERSIONING_SYSTEM = "apple-generic";
+				ENABLE_PREVIEWS = YES;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = WhitelistBypassVPN/Info.plist;
+				INFOPLIST_KEY_CFBundleDisplayName = "Whitelist Bypass";
+				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.utilities";
+				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
+				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
+				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
+				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad = "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
+				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPhone = "UIInterfaceOrientationPortrait UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				MARKETING_VERSION = 0.3.8;
+				PRODUCT_BUNDLE_IDENTIFIER = whitelist.bypass.vpn;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Release;
+		};
+		00000000000000000000000E /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_ENTITLEMENTS = PacketTunnel/PacketTunnel.entitlements;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				VERSIONING_SYSTEM = "apple-generic";
+				FRAMEWORK_SEARCH_PATHS = (
+					"$(inherited)",
+					"$(PROJECT_DIR)",
+				);
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = PacketTunnel/Info.plist;
+				INFOPLIST_KEY_CFBundleDisplayName = "Whitelist Bypass Tunnel";
+				IPHONEOS_DEPLOYMENT_TARGET = 16.0;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@executable_path/../../Frameworks",
+				);
+				MARKETING_VERSION = 0.3.8;
+				PRODUCT_BUNDLE_IDENTIFIER = whitelist.bypass.vpn.PacketTunnel;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Debug;
+		};
+		00000000000000000000000F /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_ENTITLEMENTS = PacketTunnel/PacketTunnel.entitlements;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				VERSIONING_SYSTEM = "apple-generic";
+				FRAMEWORK_SEARCH_PATHS = (
+					"$(inherited)",
+					"$(PROJECT_DIR)",
+				);
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = PacketTunnel/Info.plist;
+				INFOPLIST_KEY_CFBundleDisplayName = "Whitelist Bypass Tunnel";
+				IPHONEOS_DEPLOYMENT_TARGET = 16.0;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@executable_path/../../Frameworks",
+				);
+				MARKETING_VERSION = 0.3.8;
+				PRODUCT_BUNDLE_IDENTIFIER = whitelist.bypass.vpn.PacketTunnel;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Release;
+		};
+/* End XCBuildConfiguration section */
+
+/* Begin XCConfigurationList section */
+		000000000000000000000007 /* Build configuration list for PBXProject "whitelist-bypass-vpn" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				00000000000000000000000A /* Debug */,
+				00000000000000000000000B /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		000000000000000000000008 /* Build configuration list for PBXNativeTarget "WhitelistBypassVPN" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				00000000000000000000000C /* Debug */,
+				00000000000000000000000D /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		000000000000000000000009 /* Build configuration list for PBXNativeTarget "PacketTunnel" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				00000000000000000000000E /* Debug */,
+				00000000000000000000000F /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+/* End XCConfigurationList section */
+	};
+	rootObject = 000000000000000000000001 /* Project object */;
+}
