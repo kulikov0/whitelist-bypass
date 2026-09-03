@@ -1,0 +1,150 @@
+"nav_main" = "Main";
+"nav_settings" = "Settings";
+"nav_logs" = "Logs";
+
+"main_sub_no_configs" = "No calls saved";
+"main_sub_live" = "Live";
+"main_sub_count_one" = "1 call saved";
+"main_sub_count_other" = "%d calls saved";
+
+"empty_calls_title" = "Add your first call";
+"empty_calls_sub" = "Paste a call link to save it";
+
+"status_connected" = "Connected";
+"status_connecting" = "Connecting";
+"status_disconnected" = "Disconnected";
+
+"detail_tunnel_active" = "Tunnel active";
+"detail_establishing" = "Establishing tunnel...";
+"detail_call_failed" = "Call failed";
+"status_detail_no_calls" = "Add a call to get started";
+"status_detail_pick_call" = "Pick a call and tap connect";
+
+"btn_connect" = "Connect";
+"btn_disconnect" = "Disconnect";
+"btn_cancel" = "Cancel";
+"btn_done" = "Done";
+
+"stat_uptime" = "Uptime";
+"stat_mode" = "Mode";
+
+"ping_run" = "Ping through tunnel";
+"ping_running" = "Pinging...";
+"ping_ok" = "%@ reached via tunnel";
+"ping_fail" = "%@ not reachable via tunnel";
+"ping_ms" = "%d ms";
+"ping_timeout" = "timeout";
+
+"sheet_new_title" = "New call";
+"sheet_new_sub" = "Save a call link to your list. Platform is detected automatically.";
+"sheet_field_name" = "Name";
+"sheet_field_name_hint" = "e.g. Standup VK";
+"sheet_field_link" = "Call link";
+"sheet_field_link_hint" = "https://...";
+"paste_from_clipboard" = "Paste from clipboard";
+"sheet_save" = "Save call";
+"sheet_save_short" = "Save";
+"sheet_cancel" = "Cancel";
+
+"suggest_name_vk" = "VK call";
+"suggest_name_telemost" = "Telemost";
+"suggest_name_wbstream" = "WB Stream";
+"suggest_name_dion" = "DION";
+
+"destination_menu_rename" = "Rename";
+"destination_menu_delete" = "Delete";
+"destination_rename_title" = "Rename call";
+"destination_delete_title" = "Delete call";
+"destination_delete_confirm" = "Remove \"%@\"?";
+"confirm_delete" = "Delete";
+"confirm_reset" = "Reset";
+"confirm_forget" = "Forget";
+
+"settings_section_appearance" = "Appearance";
+"settings_section_tunnel" = "Tunnel";
+"settings_section_network" = "Network";
+"settings_section_behavior" = "Behavior";
+"settings_section_danger" = "Danger zone";
+
+"settings_row_theme" = "Theme";
+"settings_row_theme_sub" = "Light, dark, or follow system";
+"settings_row_tunnel_mode" = "Tunnel mode";
+"settings_row_vp8" = "VP8 settings";
+"settings_row_vp8_sub" = "%d fps / %d batch";
+"settings_row_vp8_flag_dual" = "dual";
+"settings_row_vp8_flag_kcp" = "kcp";
+"settings_row_autofill" = "Autofill";
+"settings_row_autofill_off" = "Off";
+"settings_row_proxy" = "Proxy";
+"settings_row_proxy_sub" = "SOCKS5 port %d";
+"settings_row_dns" = "DNS";
+"settings_row_reconnect" = "Reconnect on app start";
+"settings_row_reconnect_sub" = "Restore the last session automatically";
+"settings_row_debug" = "Debug logging";
+"settings_row_debug_sub" = "Verbose relay logs for troubleshooting";
+"settings_reset_all" = "Reset all settings";
+"settings_reset_all_sub" = "Return every option to its default value";
+"settings_forget_all_destinations" = "Forget all calls";
+"settings_forget_all_destinations_sub" = "Removes saved call links. Settings stay.";
+
+"settings_tunnel_dc" = "DC";
+"settings_tunnel_video" = "Video";
+"settings_auth_auto" = "Auto";
+"settings_auth_manual" = "Manual";
+
+"theme_system" = "System";
+"theme_light" = "Light";
+"theme_dark" = "Dark";
+
+"vp8_settings_title" = "VP8 settings";
+"vp8_settings_sub" = "Tune the data-channel video framing. Lower fps + bigger batch reduces overhead, but may stutter.";
+"vp8_fps_label" = "FPS";
+"vp8_batch_label" = "Batch";
+"vp8_dual_track_title" = "Dual track";
+"vp8_dual_track_sub" = "Publish a second VP8 track as screen-share and shard outbound across both.";
+"vp8_reliable_title" = "Reliable (KCP)";
+"vp8_reliable_sub" = "Wrap the video tunnel with KCP reliability. Off = raw VP8, faster but lossy.";
+
+"dns_settings_title" = "DNS";
+"dns_sub" = "Pick a DNS resolver used inside the tunnel.";
+"dns_mode_system" = "System";
+"dns_mode_custom" = "Custom";
+"dns_primary_label" = "Primary";
+"dns_secondary_label" = "Secondary";
+
+"proxy_settings_title" = "Proxy";
+"proxy_sub" = "Local SOCKS5 endpoint exposed to apps routed through the tunnel.";
+"proxy_port_field_label" = "SOCKS5 port";
+"proxy_auth_field_label" = "Authentication";
+"proxy_auth_auto_sub" = "Generated user / pass";
+"proxy_auth_manual_sub" = "Use the user / pass below";
+"proxy_user_field_label" = "User";
+"proxy_username_hint" = "Username";
+"proxy_pass_field_label" = "Pass";
+"proxy_password_hint" = "Password";
+
+"autofill_settings_title" = "Autofill settings";
+"autofill_settings_sub" = "When the join page asks for a display name, the app fills it in for you.";
+"autofill_enable_title" = "Enable autofill";
+"autofill_enable_sub" = "Click join button + fill name automatically";
+"autofill_name_field_label" = "Display name";
+"autofill_name_input_hint" = "Autofill name";
+"autofill_generate_random" = "Random";
+
+"logs_empty" = "No events yet";
+"logs_copy" = "Copy raw";
+"logs_share" = "Share";
+
+"qr_prompt" = "Point at a call QR code";
+"qr_denied_title" = "Camera access is off";
+"qr_denied_sub" = "Enable it in Settings to scan a call link.";
+"qr_open_settings" = "Open Settings";
+
+"status_ready" = "Ready";
+"status_connecting_ellipsis" = "Connecting...";
+"status_reconnecting" = "Reconnecting...";
+"status_tunnel_active" = "Tunnel active";
+"status_tunnel_lost" = "Tunnel lost, reconnecting...";
+"status_error" = "Error";
+"status_captcha" = "Action required (captcha)";
+"status_solve_captcha" = "Solve the captcha:";

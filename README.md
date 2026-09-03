@@ -111,20 +111,22 @@ The full step-by-step (Russian) covers each platform in detail: see [docs/SETUP.
 ./build-headless.sh    # Headless binaries only (current platform)
 ./build-cli.sh         # Per-arch zips of headless creators + joiners + vk-bot
 ./build-creator.sh     # Creator Electron app (all platforms)
-./build-ios.sh         # Go .xcframework for iOS
+./build-ios.sh proxy   # iOS proxy app, xcframework + unsigned IPA
+./build-ios.sh vpn     # iOS VPN app, xcframework + unsigned IPA
 ```
 
 ### iOS
 
-Requires Xcode and macOS.
+Requires Xcode and macOS. `build-ios.sh` takes one argument, `proxy` or `vpn`.
 
 ```sh
-./build-ios.sh
+./build-ios.sh proxy   # ios-proxy-app -> prebuilts/whitelist-bypass-proxy.ipa
+./build-ios.sh vpn     # ios-vpn-app   -> prebuilts/whitelist-bypass-vpn.ipa
 ```
 
-This builds `Mobile.xcframework` into `ios-proxy-app/`. Then open `ios-proxy-app/whitelist-bypass-proxy.xcodeproj` in Xcode, select your signing team in Signing & Capabilities, and build to device.
+The script builds `Mobile.xcframework` into the app directory, runs the app's `strip-signing.sh` to clear the developer team from the project, builds the app unsigned, and writes an unsigned IPA to `prebuilts/`.
 
-Before committing, run `ios-proxy-app/strip-signing.sh` to remove your Apple developer team ID from the project.
+To run on a device, open the matching `.xcodeproj` in Xcode, set your team and unique bundle identifiers in Signing & Capabilities, and build. The `vpn` variant requires the Network Extension capability on its bundle identifiers.
 
 Output in `prebuilts/`:
 
@@ -135,7 +137,8 @@ Output in `prebuilts/`:
 | `WhitelistBypass Creator-*-ia32.exe` | Windows x86 |
 | `WhitelistBypass Creator-*.AppImage` | Linux x64 |
 | `whitelist-bypass.apk` | Android |
-| `whitelist-bypass-proxy.ipa` | iOS, unsigned |
+| `whitelist-bypass-proxy.ipa` | iOS proxy app, unsigned |
+| `whitelist-bypass-vpn.ipa` | iOS VPN app, unsigned |
 | `headless-vk-creator-linux-x64` | Linux x64 |
 | `headless-vk-creator-linux-ia32` | Linux x86 |
 | `headless-telemost-creator-linux-x64` | Linux x64 |

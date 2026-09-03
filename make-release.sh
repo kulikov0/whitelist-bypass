@@ -24,11 +24,14 @@ echo "=== Building desktop joiner Electron app (Windows + Linux + macOS) ==="
 
 if [ "$(uname)" = "Darwin" ]; then
     echo ""
-    echo "=== Building iOS app ==="
-    "$ROOT/build-ios.sh"
+    echo "=== Building iOS proxy app ==="
+    "$ROOT/build-ios.sh" proxy
+    echo ""
+    echo "=== Building iOS VPN app ==="
+    "$ROOT/build-ios.sh" vpn
 else
     echo ""
-    echo "=== Skipping iOS build (requires macOS) ==="
+    echo "=== Skipping iOS build, requires macOS ==="
 fi
 
 "$ROOT/clean-prebuilts.sh"

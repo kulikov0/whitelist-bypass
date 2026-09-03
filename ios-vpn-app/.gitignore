@@ -1,0 +1,6 @@
+build/
+Mobile.xcframework/
+*.ipa
+xcuserdata/
+*.xcuserstate
+.DS_Store
