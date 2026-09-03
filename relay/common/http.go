@@ -2,9 +2,7 @@ package common
 
 import (
 	"encoding/json"
-	"io"
 	"log"
-	"net/http"
 	"os"
 	"strings"
 )
@@ -58,15 +56,4 @@ func FilterCookies(cookieHeader string, allow []string) string {
 		}
 	}
 	return strings.Join(out, "; ")
-}
-
-func HttpGet(endpoint string) ([]byte, error) {
-	req, _ := http.NewRequest("GET", endpoint, nil)
-	req.Header.Set("User-Agent", UserAgent)
-	resp, err := http.DefaultClient.Do(req)
-	if err != nil {
-		return nil, err
-	}
-	defer resp.Body.Close()
-	return io.ReadAll(resp.Body)
 }

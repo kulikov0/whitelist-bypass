@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"log"
 
-	"github.com/pion/webrtc/v4"
+	"github.com/kulikov0/headless-client/webrtc"
 )
 
 type P2PHandler struct {

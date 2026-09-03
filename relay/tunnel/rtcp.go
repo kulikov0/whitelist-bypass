@@ -1,6 +1,6 @@
 package tunnel
 
-import "github.com/pion/webrtc/v4"
+import "github.com/kulikov0/headless-client/webrtc"
 
 func DrainSenderRTCP(sender *webrtc.RTPSender) {
 	if sender == nil {

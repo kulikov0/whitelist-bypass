@@ -11,9 +11,10 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/kulikov0/headless-client"
+	"github.com/kulikov0/headless-client/webrtc"
 	"github.com/pion/interceptor"
-	"github.com/pion/webrtc/v4"
-	"whitelist-bypass/relay/common"
+	"whitelist-bypass/relay/headlessapi"
 )
 
 const (
@@ -77,39 +78,27 @@ type Client struct {
 	InstanceID string
 }
 
-func NewAPI(settingEngine *webrtc.SettingEngine) (*webrtc.API, error) {
+func NewAPI(configure func(*webrtc.SettingEngine)) (*webrtc.API, error) {
 	mediaEngine := &webrtc.MediaEngine{}
 	if err := mediaEngine.RegisterDefaultCodecs(); err != nil {
 		return nil, err
 	}
-	for _, uri := range []string{
-		"urn:ietf:params:rtp-hdrext:toffset",
-		"http://www.webrtc.org/experiments/rtp-hdrext/abs-send-time",
-		"urn:3gpp:video-orientation",
-		"http://www.webrtc.org/experiments/rtp-hdrext/playout-delay",
-		"http://www.webrtc.org/experiments/rtp-hdrext/video-content-type",
-		"http://www.webrtc.org/experiments/rtp-hdrext/video-timing",
-		"http://www.webrtc.org/experiments/rtp-hdrext/color-space",
-	} {
-		if err := mediaEngine.RegisterHeaderExtension(
-			webrtc.RTPHeaderExtensionCapability{URI: uri},
-			webrtc.RTPCodecTypeVideo,
-		); err != nil {
-			return nil, fmt.Errorf("register header extension %s: %w", uri, err)
-		}
+	if err := headless.ChromeWindows.RegisterHeaderExtensions(mediaEngine); err != nil {
+		return nil, fmt.Errorf("telemost: %w", err)
 	}
 	registry := &interceptor.Registry{}
 	if err := webrtc.RegisterDefaultInterceptors(mediaEngine, registry); err != nil {
 		return nil, err
 	}
-	opts := []func(*webrtc.API){
+	return headlessapi.WebRTCAPI(
+		headlessapi.Options{
+			Profile:            headless.ChromeWindows,
+			AnswerAsDTLSServer: true,
+			Configure:          configure,
+		},
 		webrtc.WithMediaEngine(mediaEngine),
 		webrtc.WithInterceptorRegistry(registry),
-	}
-	if settingEngine != nil {
-		opts = append(opts, webrtc.WithSettingEngine(*settingEngine))
-	}
-	return webrtc.NewAPI(opts...), nil
+	)
 }
 
 func NewPeerConnection(config webrtc.Configuration) (*webrtc.PeerConnection, error) {
@@ -208,15 +197,14 @@ func (c *Client) Do(method, path string, body interface{}) ([]byte, int, error) 
 	if err != nil {
 		return nil, 0, err
 	}
-	ua := c.UserAgent
-	if ua == "" {
-		ua = common.UserAgent
-	}
 	instanceID := c.InstanceID
 	if instanceID == "" {
 		instanceID = uuid.New().String()
 	}
-	req.Header.Set("User-Agent", ua)
+	req.Header = headless.ChromeWindows.Headers(headless.DestEmpty)
+	if c.UserAgent != "" {
+		req.Header.Set("User-Agent", c.UserAgent)
+	}
 	req.Header.Set("Origin", Origin)
 	req.Header.Set("Referer", Origin+"/")
 	req.Header.Set("Client-Instance-Id", instanceID)
@@ -231,7 +219,7 @@ func (c *Client) Do(method, path string, body interface{}) ([]byte, int, error) 
 	}
 	client := c.HTTP
 	if client == nil {
-		client = http.DefaultClient
+		client = headless.ChromeWindows.HTTPClient()
 	}
 	resp, err := client.Do(req)
 	if err != nil {

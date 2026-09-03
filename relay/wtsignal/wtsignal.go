@@ -5,7 +5,6 @@ import (
 	"bytes"
 	"compress/flate"
 	"context"
-	"crypto/tls"
 	"fmt"
 	"io"
 	"net"
@@ -14,9 +13,10 @@ import (
 	"sync"
 	"time"
 
-	"github.com/quic-go/quic-go"
-	"github.com/quic-go/quic-go/http3"
-	"github.com/quic-go/quic-go/quicvarint"
+	headless "github.com/kulikov0/headless-client"
+	"github.com/kulikov0/headless-client/quic"
+	"github.com/kulikov0/headless-client/quic/http3"
+	"github.com/kulikov0/headless-client/quic/quicvarint"
 )
 
 const (
@@ -57,22 +57,17 @@ func Dial(endpoint, serverName, resolvedIP string) (*Conn, error) {
 	}
 	compress := target.Query().Get("compression") == "deflate-raw"
 
-	tlsConf := &tls.Config{
-		InsecureSkipVerify: true,
-		ServerName:         serverName,
-		NextProtos:         []string{"h3"},
-	}
-	quicConf := &quic.Config{
-		EnableDatagrams:                  true,
-		EnableStreamResetPartialDelivery: true,
-		KeepAlivePeriod:                  keepAlivePeriod,
-		MaxIdleTimeout:                   maxIdleTimeout,
-	}
-
 	dialCtx, cancel := context.WithTimeout(context.Background(), dialTimeout)
 	defer cancel()
 
-	qconn, err := quic.DialAddrEarly(dialCtx, net.JoinHostPort(resolvedIP, port), tlsConf, quicConf)
+	qconn, err := headless.ChromeWindows.DialQUIC(dialCtx, net.JoinHostPort(resolvedIP, port), headless.QUICOptions{
+		Transport:          headless.QUICWebTransport,
+		ServerName:         serverName,
+		InsecureSkipVerify: true,
+		EnableDatagrams:    true,
+		KeepAlivePeriod:    keepAlivePeriod,
+		MaxIdleTimeout:     maxIdleTimeout,
+	})
 	if err != nil {
 		return nil, fmt.Errorf("wt dial: %w", err)
 	}

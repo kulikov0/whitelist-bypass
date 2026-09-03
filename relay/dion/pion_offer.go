@@ -5,7 +5,7 @@ import (
 	"net"
 	"strings"
 
-	"github.com/pion/webrtc/v4"
+	"github.com/kulikov0/headless-client/webrtc"
 )
 
 type TransceiverPlan struct {
@@ -59,27 +59,6 @@ type PionPeer struct {
 	DatachannelDescs []DataChannelDesc
 }
 
-// NewPionAPI builds a Pion API with default codecs. customEngine may be nil
-// for the standalone (desktop) case; pass a configured *webrtc.SettingEngine
-// on Android to plug in AndroidNet / custom dial / ICE filters.
-func NewPionAPI(customEngine ...*webrtc.SettingEngine) *webrtc.API {
-	mediaEngine := &webrtc.MediaEngine{}
-	if err := mediaEngine.RegisterDefaultCodecs(); err != nil {
-		panic(fmt.Errorf("dion: register default codecs: %w", err))
-	}
-	engine := webrtc.SettingEngine{}
-	if len(customEngine) > 0 && customEngine[0] != nil {
-		engine = *customEngine[0]
-	}
-	return webrtc.NewAPI(
-		webrtc.WithMediaEngine(mediaEngine),
-		webrtc.WithSettingEngine(engine),
-	)
-}
-
-// ResolveICEServerHosts walks each ICEServerEntry and rewrites any non-IP host
-// in its URLs via the resolver. Used on Android where Pion has no DNS access
-// and hostnames must be pre-resolved through the Java side.
 func ResolveICEServerHosts(entries []ICEServerEntry, resolveFn func(host string) (string, error), logFn func(string, ...any)) []ICEServerEntry {
 	if resolveFn == nil {
 		return entries
@@ -152,8 +131,8 @@ func IceServerEntriesToWebRTC(entries []ICEServerEntry) []webrtc.ICEServer {
 
 func BuildPionPeer(api *webrtc.API, iceServers []ICEServerEntry) (*PionPeer, error) {
 	pc, err := api.NewPeerConnection(webrtc.Configuration{
-		ICEServers:   IceServerEntriesToWebRTC(iceServers),
-		BundlePolicy: webrtc.BundlePolicyMaxBundle,
+		ICEServers:    IceServerEntriesToWebRTC(iceServers),
+		BundlePolicy:  webrtc.BundlePolicyMaxBundle,
 		RTCPMuxPolicy: webrtc.RTCPMuxPolicyRequire,
 	})
 	if err != nil {

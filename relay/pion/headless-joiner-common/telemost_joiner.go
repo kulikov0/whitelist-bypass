@@ -2,7 +2,6 @@ package joiner
 
 import (
 	"context"
-	"crypto/tls"
 	"encoding/json"
 	"fmt"
 	"net"
@@ -14,8 +13,9 @@ import (
 	"time"
 
 	"github.com/google/uuid"
-	"github.com/gorilla/websocket"
-	"github.com/pion/webrtc/v4"
+	"github.com/kulikov0/headless-client"
+	"github.com/kulikov0/headless-client/webrtc"
+	"github.com/kulikov0/headless-client/websocket"
 	"whitelist-bypass/relay/common"
 	tmapi "whitelist-bypass/relay/telemost"
 	"whitelist-bypass/relay/tunnel"
@@ -229,20 +229,24 @@ func (j *TelemostHeadlessJoiner) isClosed() bool {
 	return j.closed
 }
 
+func (j *TelemostHeadlessJoiner) tlsOptions() headless.TLSOptions {
+	return headless.TLSOptions{
+		InsecureSkipVerify: true,
+		DialContext: func(ctx context.Context, network, addr string) (net.Conn, error) {
+			host, port, _ := net.SplitHostPort(addr)
+			resolvedIP, err := j.ResolveFn(host)
+			if err != nil {
+				return nil, err
+			}
+			return (&net.Dialer{Timeout: 10 * time.Second}).DialContext(ctx, network, resolvedIP+":"+port)
+		},
+	}
+}
+
 func (j *TelemostHeadlessJoiner) makeHTTPClient() *http.Client {
 	return &http.Client{
-		Timeout: 15 * time.Second,
-		Transport: &http.Transport{
-			TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
-			DialContext: func(ctx context.Context, network, addr string) (net.Conn, error) {
-				host, port, _ := net.SplitHostPort(addr)
-				resolvedIP, err := j.ResolveFn(host)
-				if err != nil {
-					return nil, err
-				}
-				return (&net.Dialer{Timeout: 10 * time.Second}).DialContext(ctx, network, resolvedIP+":"+port)
-			},
-		},
+		Timeout:   15 * time.Second,
+		Transport: headless.ChromeWindows.Transport(j.tlsOptions()),
 	}
 }
 
@@ -393,7 +397,7 @@ func (j *TelemostHeadlessJoiner) sendHello() {
 			"participantId": j.peerID, "roomId": j.roomID,
 			"serviceName": j.serviceName, "credentials": j.credentials,
 			"capabilitiesOffer":   tmapi.CapabilitiesOffer,
-			"sdkInfo":             map[string]interface{}{"implementation": "browser", "version": "6.0.0", "userAgent": common.UserAgent, "hwConcurrency": 8},
+			"sdkInfo":             map[string]interface{}{"implementation": "browser", "version": "6.0.0", "userAgent": headless.ChromeWindows.UserAgent(), "hwConcurrency": 8},
 			"sdkInitializationId": uuid.New().String(),
 			"disablePublisher":    false, "disableSubscriber": false, "disableSubscriberAudio": false,
 		},
@@ -415,18 +419,22 @@ func (j *TelemostHeadlessJoiner) sendICE(cand *webrtc.ICECandidate, target strin
 func (j *TelemostHeadlessJoiner) initPC() {
 	config := webrtc.Configuration{ICEServers: j.iceServers}
 
-	settingEngine := webrtc.SettingEngine{}
-	settingEngine.DetachDataChannels()
-	if j.PCConfig != nil {
-		j.PCConfig.ConfigureSettingEngine(&settingEngine)
+	newAPI := func() (*webrtc.API, error) {
+		return tmapi.NewAPI(func(settingEngine *webrtc.SettingEngine) {
+			settingEngine.DetachDataChannels()
+			if j.PCConfig != nil {
+				j.PCConfig.ConfigureSettingEngine(settingEngine)
+			}
+		})
 	}
-	api, err := tmapi.NewAPI(&settingEngine)
+
+	subAPI, err := newAPI()
 	if err != nil {
-		j.logFn("telemost-joiner: ERROR: create webrtc API: %v", err)
+		j.logFn("telemost-joiner: ERROR: create subscriber webrtc API: %v", err)
 		return
 	}
 
-	subPC, err := api.NewPeerConnection(config)
+	subPC, err := subAPI.NewPeerConnection(config)
 	if err != nil {
 		j.logFn("telemost-joiner: ERROR: create sub PC: %v", err)
 		return
@@ -457,7 +465,13 @@ func (j *TelemostHeadlessJoiner) initPC() {
 		}, j.logFn, "telemost-joiner")
 	})
 
-	pubPC, err := api.NewPeerConnection(config)
+	pubAPI, err := newAPI()
+	if err != nil {
+		j.logFn("telemost-joiner: ERROR: create publisher webrtc API: %v", err)
+		return
+	}
+
+	pubPC, err := pubAPI.NewPeerConnection(config)
 	if err != nil {
 		j.logFn("telemost-joiner: ERROR: create pub PC: %v", err)
 		return
@@ -958,20 +972,21 @@ func (j *TelemostHeadlessJoiner) connectAndRun() {
 	}
 	j.logFn("telemost-joiner: resolved %s -> %s", common.MaskAddr(hostname), common.MaskAddr(resolvedIP))
 
-	wsHeader := http.Header{}
-	wsHeader.Set("User-Agent", common.UserAgent)
+	wsHeader := headless.ChromeWindows.Headers(headless.DestWebSocket)
 	wsHeader.Set("Origin", TmOrigin)
 
 	j.logFn("telemost-joiner: connecting to %s", j.mediaURL)
-	dialer := websocket.Dialer{
-		HandshakeTimeout: 10 * time.Second,
-		WriteBufferSize:  65536,
-		TLSClientConfig:  &tls.Config{InsecureSkipVerify: true, ServerName: hostname},
-		NetDialContext: func(ctx context.Context, network, addr string) (net.Conn, error) {
+	dialer := headless.ChromeWindows.WebSocketDialer(headless.TLSOptions{
+		ServerName:         hostname,
+		InsecureSkipVerify: true,
+		DialContext: func(ctx context.Context, network, addr string) (net.Conn, error) {
 			_, port, _ := net.SplitHostPort(addr)
 			return (&net.Dialer{Timeout: 10 * time.Second}).DialContext(ctx, network, resolvedIP+":"+port)
 		},
-	}
+	})
+	dialer.HandshakeTimeout = 10 * time.Second
+	dialer.WriteBufferSize = 65536
+
 	ws, _, err := dialer.Dial(j.mediaURL, wsHeader)
 	if err != nil {
 		j.logFn("telemost-joiner: ERROR: ws connect: %s", common.MaskError(err))
