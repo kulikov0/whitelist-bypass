@@ -4,6 +4,7 @@ struct HeroRing: View {
     let phase: ConnectionPhase
 
     @State private var pulsing = false
+    @State private var spin = 0.0
 
     private var active: Bool { phase == .connecting || phase == .connected }
     private var spinDuration: Double { phase == .connected ? 18 : 6 }
@@ -11,14 +12,13 @@ struct HeroRing: View {
     var body: some View {
         ZStack {
             if active {
-                TimelineView(.animation) { timeline in
-                    Circle()
-                        .fill(sweepGradient)
-                        .frame(width: 224, height: 224)
-                        .rotationEffect(.degrees(spinAngle(at: timeline.date)))
-                        .blur(radius: phase == .connected ? 6 : 4)
-                        .opacity(phase == .connected ? 0.9 : 0.85)
-                }
+                Circle()
+                    .fill(sweepGradient)
+                    .frame(width: 224, height: 224)
+                    .rotationEffect(.degrees(spin))
+                    .blur(radius: phase == .connected ? 6 : 4)
+                    .opacity(phase == .connected ? 0.9 : 0.85)
+                    .onAppear(perform: startSpin)
             }
 
             Circle()
@@ -42,13 +42,17 @@ struct HeroRing: View {
             button
         }
         .frame(width: 248, height: 248)
-        .onAppear { syncPulse() }
+        .onAppear { syncPulse(); startSpin() }
         .onDisappear { stopPulse() }
-        .onChange(of: phase) { _ in syncPulse() }
+        .onValueChange(phase) { _ in syncPulse(); startSpin() }
     }
 
-    private func spinAngle(at date: Date) -> Double {
-        (date.timeIntervalSinceReferenceDate / spinDuration).truncatingRemainder(dividingBy: 1) * 360
+    private func startSpin() {
+        guard active else { return }
+        withAnimation(.linear(duration: 0)) { spin = 0 }
+        withAnimation(.linear(duration: spinDuration).repeatForever(autoreverses: false)) {
+            spin = 360
+        }
     }
 
     private var sweepGradient: AngularGradient {
@@ -122,9 +126,9 @@ struct HeroRing: View {
                     .font(.system(size: 40, weight: .regular))
                 Text(buttonLabel.uppercased())
                     .font(Mono.label(11))
-                    .tracking(2.4)
+                    .letterSpacing(2.4)
             }
-            .foregroundStyle(labelColor)
+            .foregroundColor(labelColor)
         }
         .frame(width: 168, height: 168)
         .contentShape(Circle())

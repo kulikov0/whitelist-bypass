@@ -23,15 +23,15 @@ struct CaptchaScreen: View {
             HStack(spacing: 10) {
                 Image(systemName: "checkmark.shield")
                     .font(.system(size: 14))
-                    .foregroundStyle(Palette.accent)
+                    .foregroundColor(Palette.accent)
                 Text(NSLocalizedString("status_solve_captcha", comment: ""))
                     .font(Mono.label(12))
-                    .foregroundStyle(Palette.ink)
+                    .foregroundColor(Palette.ink)
                 Spacer()
                 Button(action: onClose) {
                     Image(systemName: "xmark")
                         .font(.system(size: 15, weight: .semibold))
-                        .foregroundStyle(Palette.ink2)
+                        .foregroundColor(Palette.ink2)
                         .frame(width: 36, height: 36)
                         .background(
                             RoundedRectangle(cornerRadius: 10, style: .continuous)
@@ -42,7 +42,7 @@ struct CaptchaScreen: View {
                                 .stroke(Palette.hair, lineWidth: 1)
                         )
                 }
-                .buttonStyle(.plain)
+                .buttonStyle(PlainButtonStyle())
             }
             .padding(.horizontal, 16)
             .padding(.vertical, 12)
@@ -50,8 +50,8 @@ struct CaptchaScreen: View {
             Rectangle().fill(Palette.hair).frame(height: 1)
 
             CaptchaWebView(url: url)
-                .ignoresSafeArea(edges: .bottom)
+                .edgesIgnoringSafeArea(.bottom)
         }
-        .background(Palette.surface.ignoresSafeArea())
+        .background(Palette.surface.edgesIgnoringSafeArea(.all))
     }
 }

@@ -9,20 +9,19 @@ extension View {
 
 struct QRScannerSheet: View {
     let onResult: (String) -> Void
-    @Environment(\.dismiss) private var dismiss
+    @Environment(\.presentationMode) private var presentationMode
     @State private var status = AVCaptureDevice.authorizationStatus(for: .video)
 
     var body: some View {
         ZStack {
-            Color.black.ignoresSafeArea()
+            Color.black.edgesIgnoringSafeArea(.all)
 
             switch status {
             case .authorized:
                 camera
                 viewfinder
             case .notDetermined:
-                ProgressView()
-                    .tint(.white)
+                LegacySpinner()
                     .onAppear(perform: requestAccess)
             default:
                 denied
@@ -31,12 +30,12 @@ struct QRScannerSheet: View {
             VStack {
                 HStack {
                     Spacer()
-                    Button { dismiss() } label: {
+                    Button { presentationMode.wrappedValue.dismiss() } label: {
                         Image(systemName: "xmark")
                             .font(.system(size: 15, weight: .semibold))
-                            .foregroundStyle(.white)
+                            .foregroundColor(.white)
                             .frame(width: 40, height: 40)
-                            .background(Circle().fill(.black.opacity(0.4)))
+                            .background(Circle().fill(Color.black.opacity(0.4)))
                     }
                 }
                 Spacer()
@@ -50,9 +49,9 @@ struct QRScannerSheet: View {
             let trimmed = value.trimmingCharacters(in: .whitespacesAndNewlines)
             guard !trimmed.isEmpty else { return }
             onResult(trimmed)
-            dismiss()
+            presentationMode.wrappedValue.dismiss()
         }
-        .ignoresSafeArea()
+        .edgesIgnoringSafeArea(.all)
     }
 
     private var viewfinder: some View {
@@ -63,7 +62,7 @@ struct QRScannerSheet: View {
                 .shadow(color: .black.opacity(0.35), radius: 12)
             Text(NSLocalizedString("qr_prompt", comment: ""))
                 .font(Mono.label(12))
-                .foregroundStyle(.white)
+                .foregroundColor(.white)
         }
     }
 
@@ -71,13 +70,13 @@ struct QRScannerSheet: View {
         VStack(spacing: 16) {
             Image(systemName: "camera.metering.none")
                 .font(.system(size: 36))
-                .foregroundStyle(.white.opacity(0.7))
+                .foregroundColor(.white.opacity(0.7))
             Text(NSLocalizedString("qr_denied_title", comment: ""))
                 .font(.system(size: 15, weight: .semibold))
-                .foregroundStyle(.white)
+                .foregroundColor(.white)
             Text(NSLocalizedString("qr_denied_sub", comment: ""))
                 .font(.system(size: 13))
-                .foregroundStyle(.white.opacity(0.6))
+                .foregroundColor(.white.opacity(0.6))
                 .multilineTextAlignment(.center)
             Button(NSLocalizedString("qr_open_settings", comment: "")) {
                 if let url = URL(string: UIApplication.openSettingsURLString) {
@@ -85,7 +84,7 @@ struct QRScannerSheet: View {
                 }
             }
             .font(.system(size: 13, weight: .semibold))
-            .foregroundStyle(Palette.accent)
+            .foregroundColor(Palette.accent)
         }
         .padding(32)
     }

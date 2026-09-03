@@ -10,18 +10,10 @@ struct SheetScaffold<Content: View>: View {
             }
             .padding(20)
         }
-        .scrollDismissesKeyboard(.interactively)
-        .background(Palette.surface.ignoresSafeArea())
-        .toolbar {
-            ToolbarItemGroup(placement: .keyboard) {
-                Spacer()
-                Button(NSLocalizedString("btn_done", comment: "")) { dismissKeyboard() }
-                    .font(.system(size: 14, weight: .semibold))
-                    .foregroundStyle(Palette.accent)
-            }
-        }
-        .presentationDetents([.medium, .large])
-        .presentationDragIndicator(.visible)
+        .scrollDismissesKeyboardCompat()
+        .background(Palette.surface.edgesIgnoringSafeArea(.all))
+        .keyboardDoneToolbar()
+        .sheetPresentationCompat()
     }
 }
 
@@ -34,11 +26,11 @@ struct SheetHeader: View {
         VStack(alignment: .leading, spacing: 6) {
             Text(title)
                 .font(.system(size: 19, weight: .bold))
-                .foregroundStyle(destructive ? Palette.accent : Palette.ink)
+                .foregroundColor(destructive ? Palette.accent : Palette.ink)
             if let sub {
                 Text(sub)
                     .font(.system(size: 13))
-                    .foregroundStyle(Palette.ink3)
+                    .foregroundColor(Palette.ink3)
                     .fixedSize(horizontal: false, vertical: true)
             }
         }
@@ -58,7 +50,7 @@ struct SheetFooter: View {
             Button(action: onCancel) {
                 Text(cancelTitle)
                     .font(.system(size: 14, weight: .semibold))
-                    .foregroundStyle(Palette.ink2)
+                    .foregroundColor(Palette.ink2)
                     .frame(maxWidth: .infinity)
                     .padding(.vertical, 13)
                     .overlay(
@@ -66,12 +58,12 @@ struct SheetFooter: View {
                             .stroke(Palette.hairStrong, lineWidth: 1)
                     )
             }
-            .buttonStyle(.plain)
+            .buttonStyle(PlainButtonStyle())
 
             Button(action: onSave) {
                 Text(saveTitle)
                     .font(.system(size: 14, weight: .semibold))
-                    .foregroundStyle(.white)
+                    .foregroundColor(.white)
                     .frame(maxWidth: .infinity)
                     .padding(.vertical, 13)
                     .background(
@@ -79,7 +71,7 @@ struct SheetFooter: View {
                             .fill(destructive ? Palette.error : Palette.accent)
                     )
             }
-            .buttonStyle(.plain)
+            .buttonStyle(PlainButtonStyle())
         }
         .padding(.top, 4)
     }
@@ -93,8 +85,8 @@ struct FieldBlock<Content: View>: View {
         VStack(alignment: .leading, spacing: 6) {
             Text(label.uppercased())
                 .font(Mono.label(10))
-                .tracking(1.2)
-                .foregroundStyle(Palette.ink3)
+                .letterSpacing(1.2)
+                .foregroundColor(Palette.ink3)
             content
         }
     }
@@ -116,10 +108,10 @@ struct SheetField: View {
             }
         }
         .font(mono ? Mono.label(13) : .system(size: 14))
-        .foregroundStyle(Palette.ink)
+        .foregroundColor(Palette.ink)
         .keyboardType(keyboard)
-        .autocorrectionDisabled(true)
-        .textInputAutocapitalization(.never)
+        .disableAutocorrection(true)
+        .autocapitalization(.none)
         .padding(12)
         .background(
             RoundedRectangle(cornerRadius: 12, style: .continuous)
@@ -146,11 +138,11 @@ struct OptionRow: View {
                 VStack(alignment: .leading, spacing: 2) {
                     Text(title)
                         .font(.system(size: 14, weight: .semibold))
-                        .foregroundStyle(danger ? Palette.error : Palette.ink)
+                        .foregroundColor(danger ? Palette.error : Palette.ink)
                     if let sub {
                         Text(sub)
                             .font(.system(size: 11))
-                            .foregroundStyle(Palette.ink3)
+                            .foregroundColor(Palette.ink3)
                             .fixedSize(horizontal: false, vertical: true)
                     }
                 }
@@ -158,12 +150,12 @@ struct OptionRow: View {
                 if let trailingValue {
                     Text(trailingValue)
                         .font(Mono.label(11))
-                        .foregroundStyle(Palette.ink3)
+                        .foregroundColor(Palette.ink3)
                 }
                 if selected {
                     Image(systemName: "checkmark")
                         .font(.system(size: 13, weight: .bold))
-                        .foregroundStyle(Palette.accent)
+                        .foregroundColor(Palette.accent)
                 }
             }
             .padding(.vertical, 12)
@@ -178,7 +170,7 @@ struct OptionRow: View {
                     .stroke(selected ? Palette.accent.opacity(0.4) : Palette.hair, lineWidth: 1)
             )
         }
-        .buttonStyle(.plain)
+        .buttonStyle(PlainButtonStyle())
     }
 }
 
@@ -194,7 +186,7 @@ struct ChoiceSheet: View {
     let options: [ChoiceOption]
     let selectedId: String
     let onSelect: (String) -> Void
-    @Environment(\.dismiss) private var dismiss
+    @Environment(\.presentationMode) private var presentationMode
 
     var body: some View {
         SheetScaffold {
@@ -203,7 +195,7 @@ struct ChoiceSheet: View {
                 ForEach(options) { option in
                     OptionRow(title: option.title, sub: option.sub, selected: option.id == selectedId) {
                         onSelect(option.id)
-                        dismiss()
+                        presentationMode.wrappedValue.dismiss()
                     }
                 }
             }
@@ -217,14 +209,14 @@ struct ConfirmSheet: View {
     var confirmTitle: String
     var destructive: Bool = true
     let onConfirm: () -> Void
-    @Environment(\.dismiss) private var dismiss
+    @Environment(\.presentationMode) private var presentationMode
 
     var body: some View {
         SheetScaffold {
             SheetHeader(title: title, sub: sub, destructive: destructive)
             SheetFooter(saveTitle: confirmTitle, destructive: destructive,
-                        onCancel: { dismiss() },
-                        onSave: { onConfirm(); dismiss() })
+                        onCancel: { presentationMode.wrappedValue.dismiss() },
+                        onSave: { onConfirm(); presentationMode.wrappedValue.dismiss() })
         }
     }
 }
@@ -235,7 +227,7 @@ struct InputSheet: View {
     let fieldLabel: String
     let onSave: (String) -> Void
     @State private var value: String
-    @Environment(\.dismiss) private var dismiss
+    @Environment(\.presentationMode) private var presentationMode
 
     init(title: String, sub: String? = nil, fieldLabel: String, initial: String, onSave: @escaping (String) -> Void) {
         self.title = title
@@ -251,11 +243,11 @@ struct InputSheet: View {
             FieldBlock(label: fieldLabel) {
                 SheetField(text: $value)
             }
-            SheetFooter(onCancel: { dismiss() }, onSave: {
+            SheetFooter(onCancel: { presentationMode.wrappedValue.dismiss() }, onSave: {
                 let trimmed = value.trimmingCharacters(in: .whitespacesAndNewlines)
                 guard !trimmed.isEmpty else { return }
                 onSave(trimmed)
-                dismiss()
+                presentationMode.wrappedValue.dismiss()
             })
         }
     }
@@ -274,7 +266,7 @@ struct MenuSheet: View {
     var sub: String? = nil
     let actions: [MenuAction]
     let onSelect: (String) -> Void
-    @Environment(\.dismiss) private var dismiss
+    @Environment(\.presentationMode) private var presentationMode
 
     var body: some View {
         SheetScaffold {
@@ -283,25 +275,25 @@ struct MenuSheet: View {
                 ForEach(actions) { action in
                     Button {
                         onSelect(action.id)
-                        dismiss()
+                        presentationMode.wrappedValue.dismiss()
                     } label: {
                         HStack(spacing: 12) {
                             Image(systemName: action.icon)
                                 .font(.system(size: 14))
-                                .foregroundStyle(action.danger ? Palette.error : Palette.ink2)
+                                .foregroundColor(action.danger ? Palette.error : Palette.ink2)
                                 .frame(width: 26)
                             Text(action.title)
                                 .font(.system(size: 14, weight: .semibold))
-                                .foregroundStyle(action.danger ? Palette.error : Palette.ink)
+                                .foregroundColor(action.danger ? Palette.error : Palette.ink)
                             Spacer(minLength: 8)
                             if let value = action.value {
                                 Text(value)
                                     .font(Mono.label(11))
-                                    .foregroundStyle(Palette.ink3)
+                                    .foregroundColor(Palette.ink3)
                             }
                             Image(systemName: "chevron.right")
                                 .font(.system(size: 11))
-                                .foregroundStyle(Palette.ink3)
+                                .foregroundColor(Palette.ink3)
                         }
                         .padding(.vertical, 12)
                         .padding(.horizontal, 14)
@@ -315,7 +307,7 @@ struct MenuSheet: View {
                                 .stroke(Palette.hair, lineWidth: 1)
                         )
                     }
-                    .buttonStyle(.plain)
+                    .buttonStyle(PlainButtonStyle())
                 }
             }
         }
@@ -332,16 +324,16 @@ struct SheetToggleRow: View {
             VStack(alignment: .leading, spacing: 2) {
                 Text(title)
                     .font(.system(size: 14, weight: .semibold))
-                    .foregroundStyle(Palette.ink)
+                    .foregroundColor(Palette.ink)
                 if let sub {
                     Text(sub)
                         .font(.system(size: 11))
-                        .foregroundStyle(Palette.ink3)
+                        .foregroundColor(Palette.ink3)
                         .fixedSize(horizontal: false, vertical: true)
                 }
             }
             Spacer(minLength: 8)
-            Toggle("", isOn: $isOn).labelsHidden().tint(Palette.accent)
+            Toggle("", isOn: $isOn).labelsHidden().accentToggle()
         }
         .padding(.vertical, 12)
         .padding(.horizontal, 14)

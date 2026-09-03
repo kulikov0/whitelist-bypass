@@ -48,14 +48,14 @@ struct MainScreen: View {
 
                 Text(headline)
                     .font(.system(size: 22, weight: .bold))
-                    .foregroundStyle(Palette.ink)
+                    .foregroundColor(Palette.ink)
                     .padding(.top, 22)
 
                 HStack(spacing: 6) {
                     Circle().fill(dotColor).frame(width: 6, height: 6)
                     Text(vpn.statusDetail.isEmpty ? defaultDetail : vpn.statusDetail)
                         .font(Mono.label(11))
-                        .foregroundStyle(Palette.ink3)
+                        .foregroundColor(Palette.ink3)
                 }
                 .padding(.top, 6)
 
@@ -73,7 +73,7 @@ struct MainScreen: View {
             .padding(.horizontal, 20)
             .padding(.bottom, 24)
         }
-        .scrollDismissesKeyboard(.interactively)
+        .scrollDismissesKeyboardCompat()
         .sheet(item: $sheet, onDismiss: {
             if let next = pending { pending = nil; sheet = next }
         }) { sheetView($0) }
@@ -88,8 +88,8 @@ struct MainScreen: View {
         HStack(alignment: .center, spacing: 10) {
             Text(headerSub)
                 .font(Mono.label(10))
-                .tracking(1.2)
-                .foregroundStyle(Palette.ink3)
+                .letterSpacing(1.2)
+                .foregroundColor(Palette.ink3)
             Spacer()
             iconButton(icon: "qrcode.viewfinder") { showScanner = true }
             iconButton(icon: "plus") { sheet = .add("") }
@@ -100,7 +100,7 @@ struct MainScreen: View {
         Button(action: action) {
             Image(systemName: icon)
                 .font(.system(size: 15))
-                .foregroundStyle(Palette.ink2)
+                .foregroundColor(Palette.ink2)
                 .frame(width: 36, height: 36)
                 .background(
                     RoundedRectangle(cornerRadius: 10, style: .continuous)
@@ -111,7 +111,7 @@ struct MainScreen: View {
                         .stroke(Palette.hair, lineWidth: 1)
                 )
         }
-        .buttonStyle(.plain)
+        .buttonStyle(PlainButtonStyle())
     }
 
     private var callsList: some View {
@@ -129,15 +129,15 @@ struct MainScreen: View {
             VStack(spacing: 10) {
                 Image(systemName: "plus")
                     .font(.system(size: 22, weight: .regular))
-                    .foregroundStyle(Palette.accent)
+                    .foregroundColor(Palette.accent)
                     .frame(width: 52, height: 52)
                     .background(Circle().fill(Palette.accentSoft))
                 Text(NSLocalizedString("empty_calls_title", comment: ""))
                     .font(.system(size: 15, weight: .bold))
-                    .foregroundStyle(Palette.ink)
+                    .foregroundColor(Palette.ink)
                 Text(NSLocalizedString("empty_calls_sub", comment: ""))
                     .font(.system(size: 12))
-                    .foregroundStyle(Palette.ink3)
+                    .foregroundColor(Palette.ink3)
             }
             .frame(maxWidth: .infinity)
             .padding(.vertical, 28)
@@ -150,7 +150,7 @@ struct MainScreen: View {
                     .stroke(Palette.hairStrong, style: StrokeStyle(lineWidth: 1, dash: [5, 4]))
             )
         }
-        .buttonStyle(.plain)
+        .buttonStyle(PlainButtonStyle())
     }
 
     private var statsCard: some View {
@@ -166,11 +166,11 @@ struct MainScreen: View {
         VStack(spacing: 4) {
             Text(label.uppercased())
                 .font(Mono.label(9))
-                .tracking(1.6)
-                .foregroundStyle(Palette.ink3)
+                .letterSpacing(1.6)
+                .foregroundColor(Palette.ink3)
             Text(value)
                 .font(Mono.bold(18))
-                .foregroundStyle(Palette.ink)
+                .foregroundColor(Palette.ink)
         }
         .frame(maxWidth: .infinity)
         .padding(14)
@@ -184,7 +184,7 @@ struct MainScreen: View {
                     Text(pinging ? NSLocalizedString("ping_running", comment: "") : NSLocalizedString("ping_run", comment: ""))
                         .font(.system(size: 13, weight: .semibold))
                 }
-                .foregroundStyle(Palette.ink)
+                .foregroundColor(Palette.ink)
                 .frame(maxWidth: .infinity)
                 .padding(.vertical, 11)
                 .overlay(
@@ -193,7 +193,7 @@ struct MainScreen: View {
                 )
                 .opacity(pinging ? 0.6 : 1)
             }
-            .buttonStyle(.plain)
+            .buttonStyle(PlainButtonStyle())
             .disabled(pinging)
 
             if let pingResult { pingResultView(pingResult) }
@@ -216,9 +216,9 @@ struct MainScreen: View {
 
     private func pingPill(text: String, detail: String, color: Color, background: Color) -> some View {
         HStack(spacing: 8) {
-            Text(text).font(Mono.label(11)).foregroundStyle(Palette.ink2)
+            Text(text).font(Mono.label(11)).foregroundColor(Palette.ink2)
             Spacer(minLength: 8)
-            Text(detail).font(Mono.bold(12)).foregroundStyle(color)
+            Text(detail).font(Mono.bold(12)).foregroundColor(color)
         }
         .padding(.horizontal, 14)
         .padding(.vertical, 10)

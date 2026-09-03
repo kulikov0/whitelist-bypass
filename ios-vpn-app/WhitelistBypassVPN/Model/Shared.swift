@@ -1,12 +1,32 @@
 import Foundation
 import os
 
+struct AppLogger {
+    private let handle: OSLog
+
+    init(subsystem: String, category: String) {
+        handle = OSLog(subsystem: subsystem, category: category)
+    }
+
+    func log(_ message: String) {
+        os_log("%{public}@", log: handle, type: .default, message)
+    }
+
+    func debug(_ message: String) {
+        os_log("%{public}@", log: handle, type: .debug, message)
+    }
+
+    func error(_ message: String) {
+        os_log("%{public}@", log: handle, type: .error, message)
+    }
+}
+
 enum Log {
     static let subsystem = "whitelist.bypass.vpn"
-    static let tunnel = Logger(subsystem: subsystem, category: "tunnel")
-    static let relay = Logger(subsystem: subsystem, category: "relay")
-    static let status = Logger(subsystem: subsystem, category: "status")
-    static let app = Logger(subsystem: subsystem, category: "app")
+    static let tunnel = AppLogger(subsystem: subsystem, category: "tunnel")
+    static let relay = AppLogger(subsystem: subsystem, category: "relay")
+    static let status = AppLogger(subsystem: subsystem, category: "status")
+    static let app = AppLogger(subsystem: subsystem, category: "app")
 }
 
 enum AppIdentifiers {

@@ -85,3 +85,135 @@ enum ThemeMode: String, CaseIterable, Identifiable {
         }
     }
 }
+
+extension View {
+    @ViewBuilder
+    func letterSpacing(_ value: CGFloat) -> some View {
+        if #available(iOS 16.0, *) {
+            self.tracking(value)
+        } else {
+            self
+        }
+    }
+
+    @ViewBuilder
+    func sheetPresentationCompat() -> some View {
+        if #available(iOS 16.0, *) {
+            self.presentationDetents([.medium, .large]).presentationDragIndicator(.visible)
+        } else {
+            self
+        }
+    }
+
+    @ViewBuilder
+    func scrollDismissesKeyboardCompat() -> some View {
+        if #available(iOS 16.0, *) {
+            self.scrollDismissesKeyboard(.interactively)
+        } else {
+            self
+        }
+    }
+
+    @ViewBuilder
+    func hiddenScrollBackgroundCompat() -> some View {
+        if #available(iOS 16.0, *) {
+            self.scrollContentBackground(.hidden)
+        } else {
+            self
+        }
+    }
+
+    @ViewBuilder
+    func textSelectionCompat() -> some View {
+        if #available(iOS 15.0, *) {
+            self.textSelection(.enabled)
+        } else {
+            self
+        }
+    }
+
+    @ViewBuilder
+    func listRowSeparatorTintCompat(_ color: Color) -> some View {
+        if #available(iOS 15.0, *) {
+            self.listRowSeparatorTint(color)
+        } else {
+            self
+        }
+    }
+
+    @ViewBuilder
+    func keyboardDoneToolbar() -> some View {
+        if #available(iOS 15.0, *) {
+            self.toolbar {
+                ToolbarItemGroup(placement: .keyboard) {
+                    Spacer()
+                    Button(NSLocalizedString("btn_done", comment: "")) { dismissKeyboard() }
+                        .font(.system(size: 14, weight: .semibold))
+                        .foregroundColor(Palette.accent)
+                }
+            }
+        } else {
+            self
+        }
+    }
+
+    @ViewBuilder
+    func accentToggle() -> some View {
+        if #available(iOS 14.0, *) {
+            self.toggleStyle(SwitchToggleStyle(tint: Palette.accent))
+        } else {
+            self
+        }
+    }
+
+    @ViewBuilder
+    func onValueChange<V: Equatable>(_ value: V, perform action: @escaping (V) -> Void) -> some View {
+        if #available(iOS 14.0, *) {
+            self.onChange(of: value, perform: action)
+        } else {
+            self.modifier(LegacyValueChange(value: value, action: action))
+        }
+    }
+}
+
+struct LegacyValueChange<V: Equatable>: ViewModifier {
+    let value: V
+    let action: (V) -> Void
+    @State private var previous: V?
+
+    func body(content: Content) -> some View {
+        if previous != value {
+            DispatchQueue.main.async {
+                let seen = previous != nil
+                previous = value
+                if seen { action(value) }
+            }
+        }
+        return content
+    }
+}
+
+struct LegacySpinner: UIViewRepresentable {
+    var color: UIColor = .white
+
+    func makeUIView(context: Context) -> UIActivityIndicatorView {
+        let view = UIActivityIndicatorView(style: .large)
+        view.color = color
+        view.startAnimating()
+        return view
+    }
+
+    func updateUIView(_ uiView: UIActivityIndicatorView, context: Context) {}
+}
+
+enum ShareSheet {
+    static func present(items: [Any]) {
+        guard let scene = UIApplication.shared.connectedScenes.first as? UIWindowScene,
+              let root = scene.windows.first(where: { $0.isKeyWindow })?.rootViewController else { return }
+        var presenter = root
+        while let presented = presenter.presentedViewController { presenter = presented }
+        let controller = UIActivityViewController(activityItems: items, applicationActivities: nil)
+        controller.popoverPresentationController?.sourceView = presenter.view
+        presenter.present(controller, animated: true)
+    }
+}

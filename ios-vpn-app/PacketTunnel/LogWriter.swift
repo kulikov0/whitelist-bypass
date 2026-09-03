@@ -31,7 +31,7 @@ final class LogWriter {
 
     func append(_ msg: String) {
         let line = formatter.string(from: Date()) + " " + msg
-        Log.relay.log("\(line, privacy: .public)")
+        Log.relay.log("\(line)")
         lock.lock()
         defer { lock.unlock() }
         displayLines.append(line)

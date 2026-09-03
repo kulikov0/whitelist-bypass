@@ -10,7 +10,7 @@ struct AddDestinationSheet: View {
     @State private var name: String
     @State private var link: String
     @State private var pasteFlashed = false
-    @Environment(\.dismiss) private var dismiss
+    @Environment(\.presentationMode) private var presentationMode
 
     init(appState: AppState, prefillUrl: String = "") {
         self.appState = appState
@@ -39,7 +39,7 @@ struct AddDestinationSheet: View {
                     Text(NSLocalizedString("paste_from_clipboard", comment: ""))
                         .font(.system(size: 13, weight: .semibold))
                 }
-                .foregroundStyle(pasteFlashed ? Palette.accent : Palette.ink2)
+                .foregroundColor(pasteFlashed ? Palette.accent : Palette.ink2)
                 .padding(.vertical, 10)
                 .padding(.horizontal, 14)
                 .overlay(
@@ -47,11 +47,11 @@ struct AddDestinationSheet: View {
                         .stroke(pasteFlashed ? Palette.accent : Palette.hairStrong, lineWidth: 1)
                 )
             }
-            .buttonStyle(.plain)
+            .buttonStyle(PlainButtonStyle())
 
             SheetFooter(saveTitle: NSLocalizedString("sheet_save", comment: ""),
                         destructive: false,
-                        onCancel: { dismiss() },
+                        onCancel: { presentationMode.wrappedValue.dismiss() },
                         onSave: save)
         }
     }
@@ -60,7 +60,7 @@ struct AddDestinationSheet: View {
         let trimmedLink = link.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmedLink.isEmpty else { return }
         appState.addCall(name: name, url: trimmedLink)
-        dismiss()
+        presentationMode.wrappedValue.dismiss()
     }
 
     private func pasteFromClipboard() {
@@ -82,7 +82,7 @@ struct Vp8Sheet: View {
     @State private var batch: String
     @State private var dualTrack: Bool
     @State private var reliable: Bool
-    @Environment(\.dismiss) private var dismiss
+    @Environment(\.presentationMode) private var presentationMode
 
     init(fps: Int, batch: Int, dualTrack: Bool, reliable: Bool, onSave: @escaping (Int, Int, Bool, Bool) -> Void) {
         self.onSave = onSave
@@ -111,11 +111,11 @@ struct Vp8Sheet: View {
             SheetToggleRow(title: NSLocalizedString("vp8_reliable_title", comment: ""),
                            sub: NSLocalizedString("vp8_reliable_sub", comment: ""), isOn: $reliable)
 
-            SheetFooter(onCancel: { dismiss() }, onSave: {
+            SheetFooter(onCancel: { presentationMode.wrappedValue.dismiss() }, onSave: {
                 onSave(clampedInt(fps, lo: 1, hi: 240, fallback: Defaults.vp8Fps),
                        clampedInt(batch, lo: 1, hi: 256, fallback: Defaults.vp8Batch),
                        dualTrack, reliable)
-                dismiss()
+                presentationMode.wrappedValue.dismiss()
             })
         }
     }
@@ -126,7 +126,7 @@ struct DnsSheet: View {
     @State private var mode: DnsMode
     @State private var primary: String
     @State private var secondary: String
-    @Environment(\.dismiss) private var dismiss
+    @Environment(\.presentationMode) private var presentationMode
 
     init(appState: AppState) {
         self.appState = appState
@@ -155,11 +155,11 @@ struct DnsSheet: View {
                 }
             }
 
-            SheetFooter(onCancel: { dismiss() }, onSave: {
+            SheetFooter(onCancel: { presentationMode.wrappedValue.dismiss() }, onSave: {
                 appState.dnsMode = mode
                 appState.dnsPrimary = primary.trimmingCharacters(in: .whitespaces)
                 appState.dnsSecondary = secondary.trimmingCharacters(in: .whitespaces)
-                dismiss()
+                presentationMode.wrappedValue.dismiss()
             })
         }
     }
@@ -171,7 +171,7 @@ struct ProxySheet: View {
     @State private var authMode: SocksAuthMode
     @State private var user: String
     @State private var pass: String
-    @Environment(\.dismiss) private var dismiss
+    @Environment(\.presentationMode) private var presentationMode
 
     init(appState: AppState) {
         self.appState = appState
@@ -207,12 +207,12 @@ struct ProxySheet: View {
                 }
             }
 
-            SheetFooter(onCancel: { dismiss() }, onSave: {
+            SheetFooter(onCancel: { presentationMode.wrappedValue.dismiss() }, onSave: {
                 appState.socksPort = clampedInt(port, lo: 1, hi: 65535, fallback: VpnConfig.defaultSocksPort)
                 appState.socksAuthMode = authMode
                 appState.manualSocksUser = user
                 appState.manualSocksPass = pass
-                dismiss()
+                presentationMode.wrappedValue.dismiss()
             })
         }
     }
@@ -222,7 +222,7 @@ struct AutofillSheet: View {
     @ObservedObject var appState: AppState
     @State private var enabled: Bool
     @State private var name: String
-    @Environment(\.dismiss) private var dismiss
+    @Environment(\.presentationMode) private var presentationMode
 
     init(appState: AppState) {
         self.appState = appState
@@ -246,7 +246,7 @@ struct AutofillSheet: View {
                     } label: {
                         Text(NSLocalizedString("autofill_generate_random", comment: ""))
                             .font(.system(size: 13, weight: .semibold))
-                            .foregroundStyle(Palette.accent)
+                            .foregroundColor(Palette.accent)
                             .padding(.vertical, 12)
                             .padding(.horizontal, 14)
                             .overlay(
@@ -254,15 +254,15 @@ struct AutofillSheet: View {
                                     .stroke(Palette.hairStrong, lineWidth: 1)
                             )
                     }
-                    .buttonStyle(.plain)
+                    .buttonStyle(PlainButtonStyle())
                 }
             }
 
-            SheetFooter(onCancel: { dismiss() }, onSave: {
+            SheetFooter(onCancel: { presentationMode.wrappedValue.dismiss() }, onSave: {
                 appState.autofillEnabled = enabled
                 let trimmed = name.trimmingCharacters(in: .whitespaces)
                 appState.autofillName = trimmed.isEmpty ? Defaults.autofillName : trimmed
-                dismiss()
+                presentationMode.wrappedValue.dismiss()
             })
         }
     }

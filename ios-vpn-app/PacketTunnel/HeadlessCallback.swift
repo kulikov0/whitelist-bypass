@@ -43,11 +43,11 @@ final class HeadlessCallback: NSObject, IosHeadlessCallbackProtocol {
 
     func resolveHost(_ hostname: String?) -> String {
         guard let hostname else { return "" }
-        Log.relay.debug("resolveHost \(hostname, privacy: .public)")
+        Log.relay.debug("resolveHost \(hostname)")
         let host = CFHostCreateWithName(nil, hostname as CFString).takeRetainedValue()
         CFHostStartInfoResolution(host, .addresses, nil)
         guard let addresses = CFHostGetAddressing(host, nil)?.takeUnretainedValue() as? [Data] else {
-            Log.relay.error("resolveHost \(hostname, privacy: .public) FAILED")
+            Log.relay.error("resolveHost \(hostname) FAILED")
             return ""
         }
         for addressData in addresses {

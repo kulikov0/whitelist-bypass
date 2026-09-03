@@ -23,30 +23,46 @@ enum NavTab: CaseIterable {
 }
 
 struct ContentView: View {
+    @EnvironmentObject var appState: AppState
     @EnvironmentObject var vpn: VPNController
     @State private var tab: NavTab = .main
 
     var body: some View {
-        VStack(spacing: 0) {
-            ZStack {
-                switch tab {
-                case .main: MainScreen()
-                case .settings: SettingsScreen()
-                case .logs: LogsScreen()
+        ZStack {
+            VStack(spacing: 0) {
+                ZStack {
+                    switch tab {
+                    case .main: MainScreen()
+                    case .settings: SettingsScreen()
+                    case .logs: LogsScreen()
+                    }
                 }
-            }
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
 
-            BottomNav(tab: $tab)
-        }
-        .background(Palette.surface.ignoresSafeArea())
-        .fullScreenCover(isPresented: Binding(
-            get: { vpn.captchaURL != nil },
-            set: { if !$0 { vpn.captchaURL = nil } }
-        )) {
-            if let raw = vpn.captchaURL, let url = URL(string: raw) {
-                CaptchaScreen(url: url) { vpn.disconnect() }
+                BottomNav(tab: $tab)
             }
+            .background(Palette.surface.edgesIgnoringSafeArea(.all))
+
+            if let raw = vpn.captchaURL, let url = URL(string: raw) {
+                CaptchaScreen(url: url) {
+                    vpn.captchaURL = nil
+                    vpn.disconnect()
+                }
+                .transition(.opacity)
+            }
+        }
+        .preferredColorScheme(appState.themeMode.colorScheme)
+        .onAppear {
+            vpn.appState = appState
+            if appState.connectOnStart, appState.activeCall != nil {
+                Task { await vpn.connect() }
+            }
+        }
+        .onReceive(NotificationCenter.default.publisher(for: UIApplication.didBecomeActiveNotification)) { _ in
+            vpn.startPolling()
+        }
+        .onReceive(NotificationCenter.default.publisher(for: UIApplication.didEnterBackgroundNotification)) { _ in
+            vpn.stopPolling()
         }
     }
 }
@@ -71,10 +87,10 @@ struct BottomNav: View {
                                 .frame(width: 22, height: 22)
                             Text(item.title.uppercased())
                                 .font(Mono.label(10))
-                                .tracking(1.4)
                                 .fontWeight(tab == item ? .bold : .regular)
+                                .letterSpacing(1.4)
                         }
-                        .foregroundStyle(tab == item ? Palette.accent : Palette.ink3)
+                        .foregroundColor(tab == item ? Palette.accent : Palette.ink3)
                         .frame(maxWidth: .infinity)
                         .padding(.vertical, 10)
                         .padding(.horizontal, 6)
@@ -83,7 +99,7 @@ struct BottomNav: View {
                                 .fill(tab == item ? Palette.accentSoft : Color.clear)
                         )
                     }
-                    .buttonStyle(.plain)
+                    .buttonStyle(PlainButtonStyle())
                 }
             }
             .padding(.horizontal, 16)

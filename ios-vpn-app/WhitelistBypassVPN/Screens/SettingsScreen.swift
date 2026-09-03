@@ -40,12 +40,12 @@ struct SettingsScreen: View {
                 SettingsSection(title: NSLocalizedString("settings_section_behavior", comment: "")) {
                     SettingsRow(icon: "arrow.clockwise", title: NSLocalizedString("settings_row_reconnect", comment: ""),
                                 sub: NSLocalizedString("settings_row_reconnect_sub", comment: "")) {
-                        Toggle("", isOn: $appState.connectOnStart).labelsHidden().tint(Palette.accent)
+                        Toggle("", isOn: $appState.connectOnStart).labelsHidden().accentToggle()
                     }
                     Divider().overlay(Palette.hair)
                     SettingsRow(icon: "ladybug", title: NSLocalizedString("settings_row_debug", comment: ""),
                                 sub: NSLocalizedString("settings_row_debug_sub", comment: "")) {
-                        Toggle("", isOn: $appState.debug).labelsHidden().tint(Palette.accent)
+                        Toggle("", isOn: $appState.debug).labelsHidden().accentToggle()
                     }
                 }
 
@@ -68,13 +68,13 @@ struct SettingsScreen: View {
             SettingsRow(icon: icon, title: title, sub: sub, danger: danger) {
                 HStack(spacing: 6) {
                     if let value {
-                        Text(value).font(Mono.label(11)).foregroundStyle(Palette.ink3)
+                        Text(value).font(Mono.label(11)).foregroundColor(Palette.ink3)
                     }
-                    Image(systemName: "chevron.right").font(.system(size: 11)).foregroundStyle(Palette.ink3)
+                    Image(systemName: "chevron.right").font(.system(size: 11)).foregroundColor(Palette.ink3)
                 }
             }
         }
-        .buttonStyle(.plain)
+        .buttonStyle(PlainButtonStyle())
     }
 
     @ViewBuilder
@@ -141,8 +141,8 @@ struct SettingsSection<Content: View>: View {
         VStack(alignment: .leading, spacing: 0) {
             Text(title.uppercased())
                 .font(Mono.label(10))
-                .tracking(1.8)
-                .foregroundStyle(Palette.ink3)
+                .letterSpacing(1.8)
+                .foregroundColor(Palette.ink3)
                 .padding(.horizontal, 8)
                 .padding(.bottom, 8)
 
@@ -166,7 +166,7 @@ struct SettingsRow<Trailing: View>: View {
         HStack(spacing: 12) {
             Image(systemName: icon)
                 .font(.system(size: 13))
-                .foregroundStyle(danger ? Palette.error : Palette.ink2)
+                .foregroundColor(danger ? Palette.error : Palette.ink2)
                 .frame(width: 28, height: 28)
                 .background(
                     RoundedRectangle(cornerRadius: 9, style: .continuous)
@@ -180,11 +180,11 @@ struct SettingsRow<Trailing: View>: View {
             VStack(alignment: .leading, spacing: 2) {
                 Text(title)
                     .font(.system(size: 13, weight: .bold))
-                    .foregroundStyle(danger ? Palette.error : Palette.ink)
+                    .foregroundColor(danger ? Palette.error : Palette.ink)
                 if let sub {
                     Text(sub)
                         .font(.system(size: 11))
-                        .foregroundStyle(Palette.ink3)
+                        .foregroundColor(Palette.ink3)
                 }
             }
 

@@ -13,7 +13,7 @@ struct CallRow: View {
 
             Text(call.glyph)
                 .font(Mono.bold(12))
-                .foregroundStyle(active ? .white : Palette.ink2)
+                .foregroundColor(active ? .white : Palette.ink2)
                 .frame(width: 40, height: 40)
                 .background(
                     RoundedRectangle(cornerRadius: 11, style: .continuous)
@@ -27,11 +27,11 @@ struct CallRow: View {
             VStack(alignment: .leading, spacing: 2) {
                 Text(call.name)
                     .font(.system(size: 14, weight: .bold))
-                    .foregroundStyle(Palette.ink)
+                    .foregroundColor(Palette.ink)
                     .lineLimit(1)
                 Text(call.url)
                     .font(Mono.label(11))
-                    .foregroundStyle(Palette.ink3)
+                    .foregroundColor(Palette.ink3)
                     .lineLimit(1)
             }
 

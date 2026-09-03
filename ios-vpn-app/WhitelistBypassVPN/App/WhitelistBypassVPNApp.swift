@@ -1,30 +1,30 @@
 import SwiftUI
+import UIKit
 
-@main
-struct WhitelistBypassVPNApp: App {
-    @StateObject private var appState = AppState()
-    @StateObject private var vpn = VPNController()
-    @Environment(\.scenePhase) private var scenePhase
+@UIApplicationMain
+class AppDelegate: UIResponder, UIApplicationDelegate {
+    let appState = AppState()
+    lazy var vpn = VPNController()
 
-    var body: some Scene {
-        WindowGroup {
-            ContentView()
-                .environmentObject(appState)
-                .environmentObject(vpn)
-                .preferredColorScheme(appState.themeMode.colorScheme)
-                .onAppear {
-                    vpn.appState = appState
-                    if appState.connectOnStart, appState.activeCall != nil {
-                        Task { await vpn.connect() }
-                    }
-                }
-                .onChange(of: scenePhase) { phase in
-                    switch phase {
-                    case .active: vpn.startPolling()
-                    case .background: vpn.stopPolling()
-                    default: break
-                    }
-                }
-        }
+    func application(_ application: UIApplication, configurationForConnecting connectingSceneSession: UISceneSession, options: UIScene.ConnectionOptions) -> UISceneConfiguration {
+        let configuration = UISceneConfiguration(name: nil, sessionRole: connectingSceneSession.role)
+        configuration.delegateClass = SceneDelegate.self
+        return configuration
+    }
+}
+
+class SceneDelegate: UIResponder, UIWindowSceneDelegate {
+    var window: UIWindow?
+
+    func scene(_ scene: UIScene, willConnectTo session: UISceneSession, options: UIScene.ConnectionOptions) {
+        guard let windowScene = scene as? UIWindowScene,
+              let delegate = UIApplication.shared.delegate as? AppDelegate else { return }
+        let rootView = ContentView()
+            .environmentObject(delegate.appState)
+            .environmentObject(delegate.vpn)
+        let window = UIWindow(windowScene: windowScene)
+        window.rootViewController = UIHostingController(rootView: rootView)
+        self.window = window
+        window.makeKeyAndVisible()
     }
 }

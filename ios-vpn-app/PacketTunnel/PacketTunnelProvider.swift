@@ -87,7 +87,7 @@ final class PacketTunnelProvider: NEPacketTunnelProvider {
     func failSession(_ reason: String) {
         guard !tornDown else { return }
         tornDown = true
-        Log.tunnel.error("failSession, tearing down: \(reason, privacy: .public)")
+        Log.tunnel.error("failSession, tearing down: \(reason)")
         LogWriter.shared.append("session failed: \(reason)")
         IosStopTun2Socks()
         IosStopCaptchaProxy()

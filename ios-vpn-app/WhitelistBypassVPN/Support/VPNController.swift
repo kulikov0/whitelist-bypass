@@ -52,7 +52,7 @@ final class VPNController: ObservableObject {
             return
         }
 
-        Log.app.log("connect requested: platform=\(config.platform.rawValue, privacy: .public) room=\(config.roomId, privacy: .public)")
+        Log.app.log("connect requested: platform=\(config.platform.rawValue) room=\(config.roomId)")
         lastError = nil
         captchaURL = nil
         relayUp = false
@@ -78,7 +78,7 @@ final class VPNController: ObservableObject {
         } catch {
             phase = .failed
             lastError = error.localizedDescription
-            Log.app.error("start error: \(error.localizedDescription, privacy: .public)")
+            Log.app.error("start error: \(error.localizedDescription)")
         }
     }
 
@@ -161,7 +161,7 @@ final class VPNController: ObservableObject {
         }
         if snapshot.status != lastStatus {
             lastStatus = snapshot.status
-            Log.app.log("go status -> \(snapshot.status, privacy: .public)")
+            Log.app.log("go status -> \(snapshot.status)")
         }
         applyGoStatus(snapshot.status)
     }

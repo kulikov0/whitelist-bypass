@@ -7,7 +7,7 @@ final class StatusHolder {
     private var value = GoStatus.idle
 
     func set(_ newValue: String) {
-        Log.status.log("status = \(newValue, privacy: .public)")
+        Log.status.log("status = \(newValue)")
         lock.lock()
         value = newValue
         lock.unlock()

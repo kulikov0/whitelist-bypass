@@ -9,24 +9,18 @@ struct LogsScreen: View {
                 Spacer()
                 Text(NSLocalizedString("logs_empty", comment: ""))
                     .font(Mono.label(12))
-                    .foregroundStyle(Palette.ink3)
+                    .foregroundColor(Palette.ink3)
                 Spacer()
             } else {
-                ScrollViewReader { proxy in
-                    List {
-                        ForEach(vpn.logs.indices, id: \.self) { index in
-                            LogLine(text: vpn.logs[index])
-                                .id(index)
-                                .listRowInsets(EdgeInsets())
-                                .listRowBackground(Color.clear)
-                                .listRowSeparatorTint(Palette.hair)
-                        }
+                if #available(iOS 14.0, *) {
+                    ScrollViewReader { proxy in
+                        logList
+                            .onValueChange(vpn.logs.count) { count in
+                                if count > 0 { proxy.scrollTo(count - 1, anchor: .bottom) }
+                            }
                     }
-                    .listStyle(.plain)
-                    .scrollContentBackground(.hidden)
-                    .onChange(of: vpn.logs.count) { count in
-                        if count > 0 { proxy.scrollTo(count - 1, anchor: .bottom) }
-                    }
+                } else {
+                    logList
                 }
             }
 
@@ -38,22 +32,33 @@ struct LogsScreen: View {
                 } label: {
                     logButton(icon: "doc.on.doc", title: NSLocalizedString("logs_copy", comment: ""))
                 }
-                .buttonStyle(.plain)
+                .buttonStyle(PlainButtonStyle())
 
-                if let url = relayLogFile {
-                    ShareLink(item: url) {
-                        logButton(icon: "square.and.arrow.up", title: NSLocalizedString("logs_share", comment: ""))
-                    }
-                } else {
-                    ShareLink(item: rawLog) {
-                        logButton(icon: "square.and.arrow.up", title: NSLocalizedString("logs_share", comment: ""))
-                    }
+                Button {
+                    ShareSheet.present(items: [relayLogFile ?? rawLog])
+                } label: {
+                    logButton(icon: "square.and.arrow.up", title: NSLocalizedString("logs_share", comment: ""))
                 }
+                .buttonStyle(PlainButtonStyle())
             }
             .padding(.horizontal, 20)
             .padding(.top, 12)
             .padding(.bottom, 20)
         }
+    }
+
+    private var logList: some View {
+        List {
+            ForEach(vpn.logs.indices, id: \.self) { index in
+                LogLine(text: vpn.logs[index])
+                    .id(index)
+                    .listRowInsets(EdgeInsets())
+                    .listRowBackground(Color.clear)
+                    .listRowSeparatorTintCompat(Palette.hair)
+            }
+        }
+        .listStyle(.plain)
+        .hiddenScrollBackgroundCompat()
     }
 
     private var relayLogFile: URL? {
@@ -73,7 +78,7 @@ struct LogsScreen: View {
             Image(systemName: icon).font(.system(size: 14))
             Text(title).font(.system(size: 13, weight: .semibold))
         }
-        .foregroundStyle(Palette.ink)
+        .foregroundColor(Palette.ink)
         .frame(maxWidth: .infinity)
         .padding(.vertical, 11)
         .overlay(
@@ -90,7 +95,7 @@ struct LogLine: View {
         HStack(alignment: .top, spacing: 12) {
             Image(systemName: iconName)
                 .font(.system(size: 12))
-                .foregroundStyle(iconColor)
+                .foregroundColor(iconColor)
                 .frame(width: 26, height: 26)
                 .background(
                     RoundedRectangle(cornerRadius: 9, style: .continuous)
@@ -103,8 +108,8 @@ struct LogLine: View {
 
             Text(text)
                 .font(Mono.label(11))
-                .foregroundStyle(Palette.ink)
-                .textSelection(.enabled)
+                .foregroundColor(Palette.ink)
+                .textSelectionCompat()
                 .frame(maxWidth: .infinity, alignment: .leading)
         }
         .padding(.horizontal, 16)
