@@ -35,4 +35,11 @@
 "vp8_reliable_sub" = "Wrap the video tunnel with KCP reliability. Off = raw VP8, faster but lossy.";
 "proxy_url_copied" = "Proxy URL copied";
 "toast_happ_params_copied" = "v2ray URL copied";
+"toast_happ_routing_sent" = "Routing profile sent to Happ (also copied)";
+"btn_happ_routing" = "Set up Happ routing";
+"settings_reliability" = "Reliability";
+"settings_happ_routing_sub" = "Routes wb.ru around the VPN so the tunnel can reconnect while Happ is on.";
+"status_retrying" = "Reconnecting";
+"warn_port_drifted" = "Port changed - re-import the WLB profile in Happ";
+"warn_happ_holding" = "Turn the VPN off in Happ for ~10 seconds - the tunnel will come back on its own";
 "dc_mode_not_supported" = "DC mode not supported - falling back to video";
