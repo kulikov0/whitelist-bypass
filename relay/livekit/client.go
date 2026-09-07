@@ -135,7 +135,7 @@ func (c *Client) Connect() error {
 		headers.Set("Origin", c.origin)
 	}
 
-	dialer := *websocket.DefaultDialer
+	dialer := headless.ChromeWindows.WebSocketDialer(headless.TLSOptions{DialContext: c.netDialContext})
 	if c.netDialContext != nil {
 		dialer.NetDialContext = c.netDialContext
 	}

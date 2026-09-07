@@ -10,6 +10,7 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/kulikov0/headless-client"
 	"github.com/kulikov0/headless-client/webrtc"
 	"whitelist-bypass/relay/common"
 	"whitelist-bypass/relay/tunnel"
@@ -216,6 +217,8 @@ func (j *WBStreamHeadlessJoiner) makeDialContext() func(ctx context.Context, net
 }
 
 func (j *WBStreamHeadlessJoiner) makeHTTPClient() *http.Client {
-	transport := &http.Transport{DialContext: j.makeDialContext()}
-	return &http.Client{Timeout: 60 * time.Second, Transport: transport}
+	return &http.Client{
+		Timeout:   60 * time.Second,
+		Transport: headless.ChromeWindows.Transport(headless.TLSOptions{DialContext: j.makeDialContext()}),
+	}
 }

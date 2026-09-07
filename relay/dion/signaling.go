@@ -12,6 +12,7 @@ import (
 	"sync/atomic"
 	"time"
 
+	headless "github.com/kulikov0/headless-client"
 	"github.com/kulikov0/headless-client/websocket"
 
 	"whitelist-bypass/relay/common"
@@ -248,7 +249,8 @@ func DialSignaling(wssURL string, opts SignalingDialOptions) (*SignalingClient, 
 		}
 		wssURL = wssURL + joiner + "socket_version=2.0"
 	}
-	dialer := websocket.Dialer{HandshakeTimeout: 10 * time.Second}
+	dialer := headless.ChromeWindows.WebSocketDialer(headless.TLSOptions{DialContext: opts.NetDialContext})
+	dialer.HandshakeTimeout = 10 * time.Second
 	if opts.NetDialContext != nil {
 		dialer.NetDialContext = opts.NetDialContext
 	}

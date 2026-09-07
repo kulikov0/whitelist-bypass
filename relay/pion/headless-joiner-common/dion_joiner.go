@@ -10,6 +10,7 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/kulikov0/headless-client"
 	"github.com/kulikov0/headless-client/webrtc"
 	"whitelist-bypass/relay/common"
 	"whitelist-bypass/relay/dion"
@@ -194,8 +195,10 @@ func (j *DionHeadlessJoiner) makeDialContext() func(ctx context.Context, network
 }
 
 func (j *DionHeadlessJoiner) makeHTTPClient() *http.Client {
-	transport := &http.Transport{DialContext: j.makeDialContext()}
-	return &http.Client{Timeout: 60 * time.Second, Transport: transport}
+	return &http.Client{
+		Timeout:   60 * time.Second,
+		Transport: headless.ChromeWindows.Transport(headless.TLSOptions{DialContext: j.makeDialContext()}),
+	}
 }
 
 // normalizeDionSlug accepts a bare slug, a dion:// URI, or a full

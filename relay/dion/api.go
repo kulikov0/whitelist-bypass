@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/kulikov0/headless-client"
 )
 
 var ErrSessionExpired = errors.New("dion: session expired, re-login required")
@@ -167,7 +168,7 @@ func NewSession(httpClient *http.Client) (*Session, error) {
 		if err != nil {
 			return nil, fmt.Errorf("cookiejar: %w", err)
 		}
-		httpClient = &http.Client{Jar: jar}
+		httpClient = &http.Client{Jar: jar, Transport: headless.ChromeWindows.HTTPClient().Transport}
 	} else if httpClient.Jar == nil {
 		jar, err := cookiejar.New(nil)
 		if err != nil {

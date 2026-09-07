@@ -4,11 +4,11 @@ import (
 	"context"
 	"log"
 	"net"
-	"net/http"
 	"sync"
 	"time"
 
 	"github.com/google/uuid"
+	headless "github.com/kulikov0/headless-client"
 	"github.com/kulikov0/headless-client/webrtc"
 	"github.com/pion/rtp"
 	"github.com/pion/rtp/codecs"
@@ -724,7 +724,7 @@ func (s *Session) onParticipantUpdate(updates []livekit.ParticipantInfo) {
 		if e.identity == "" {
 			continue
 		}
-		if err := KickParticipant(http.DefaultClient, s.cfg.AccessToken, s.cfg.RoomID, e.identity); err != nil {
+		if err := KickParticipant(headless.ChromeWindows.HTTPClient(), s.cfg.AccessToken, s.cfg.RoomID, e.identity); err != nil {
 			s.cfg.LogFn("[wb] kick failed identity=%s: %v", e.identity, err)
 			continue
 		}
@@ -740,7 +740,7 @@ func (s *Session) onParticipantUpdate(updates []livekit.ParticipantInfo) {
 }
 
 func (s *Session) promotePeer(sid, identity string) {
-	if err := SetParticipantPermissions(http.DefaultClient, s.cfg.AccessToken, s.cfg.RoomID, identity, ModeratorPermissions); err != nil {
+	if err := SetParticipantPermissions(headless.ChromeWindows.HTTPClient(), s.cfg.AccessToken, s.cfg.RoomID, identity, ModeratorPermissions); err != nil {
 		s.cfg.LogFn("[wb] promote failed identity=%s: %v", identity, err)
 		s.mu.Lock()
 		if entry, ok := s.peersBySID[sid]; ok {

@@ -10,6 +10,7 @@ import (
 	"net/url"
 	"strings"
 
+	"github.com/kulikov0/headless-client"
 	"whitelist-bypass/relay/common"
 )
 
@@ -73,7 +74,7 @@ type connectionDetailsResponse struct {
 func httpDo(client *http.Client, req *http.Request) (*http.Response, error) {
 	req.Header.Set("User-Agent", common.UserAgent)
 	if client == nil {
-		client = http.DefaultClient
+		client = headless.ChromeWindows.HTTPClient()
 	}
 	return client.Do(req)
 }
@@ -87,7 +88,7 @@ func (t *cookieTransport) RoundTrip(req *http.Request) (*http.Response, error) {
 	req.Header.Set("Cookie", t.cookie)
 	base := t.base
 	if base == nil {
-		base = http.DefaultTransport
+		base = headless.ChromeWindows.HTTPClient().Transport
 	}
 	return base.RoundTrip(req)
 }
@@ -97,7 +98,7 @@ func clientWithCookies(client *http.Client, cookieHeader string) *http.Client {
 		return client
 	}
 	if client == nil {
-		client = &http.Client{}
+		client = headless.ChromeWindows.HTTPClient()
 	}
 	wrapped := *client
 	wrapped.Transport = &cookieTransport{base: client.Transport, cookie: cookieHeader}
@@ -285,7 +286,7 @@ func RefreshAccessToken(client *http.Client, cookieHeader, deviceID string) (str
 	req.Header.Set("User-Agent", common.UserAgent)
 
 	if client == nil {
-		client = http.DefaultClient
+		client = headless.ChromeWindows.HTTPClient()
 	}
 	resp, err := client.Do(req)
 	if err != nil {
@@ -351,7 +352,7 @@ func SetParticipantPermissions(client *http.Client, accessToken, roomID, partici
 
 func KickParticipant(client *http.Client, accessToken, roomID, participantID string) error {
 	if client == nil {
-		client = http.DefaultClient
+		client = headless.ChromeWindows.HTTPClient()
 	}
 	kickURL := fmt.Sprintf("%s/api-room-manager/api/v1/room/%s/participant/%s/kick", APIBase, roomID, participantID)
 	req, err := http.NewRequest("DELETE", kickURL, strings.NewReader("{}"))
