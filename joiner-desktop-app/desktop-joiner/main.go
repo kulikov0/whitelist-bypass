@@ -24,13 +24,13 @@ import (
 	"syscall"
 	"time"
 
-	joinerCommon "whitelist-bypass/relay/pion/headless-joiner-common"
 	"whitelist-bypass/relay/common"
+	"whitelist-bypass/relay/desktoptun"
 	"whitelist-bypass/relay/dion"
 	"whitelist-bypass/relay/pion"
+	joinerCommon "whitelist-bypass/relay/pion/headless-joiner-common"
 	"whitelist-bypass/relay/tunnel"
 	"whitelist-bypass/relay/wbstream"
-	"whitelist-bypass/relay/desktoptun"
 )
 
 type statusEmitter struct{}
@@ -175,9 +175,9 @@ func main() {
 	tunReady := make(chan struct{})
 	var tunOnce sync.Once
 	var (
-		pendingMu      sync.Mutex
-		pending        []string
-		tunStarted     bool
+		pendingMu  sync.Mutex
+		pending    []string
+		tunStarted bool
 	)
 	bringUpTun := func() {
 		tunOnce.Do(func() {

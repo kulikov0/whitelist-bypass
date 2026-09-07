@@ -322,13 +322,13 @@ func (h *VKHeadlessJoiner) joinCall() error {
 
 	var joinResp VKJoinResponse
 	if jsonErr := json.Unmarshal(raw, &joinResp); jsonErr != nil {
-		return fmt.Errorf("decode join response: %w (body: %s)", jsonErr, truncateBody(raw))
+		return fmt.Errorf("decode join response: %w (body: %s)", jsonErr, common.BodySnippet(raw))
 	}
 	if joinResp.Endpoint == "" {
 		if rotten := detectVKAuthRotten(raw); rotten != nil {
 			return rotten
 		}
-		return fmt.Errorf("empty endpoint in join response: %s", truncateBody(raw))
+		return fmt.Errorf("empty endpoint in join response: %s", common.BodySnippet(raw))
 	}
 
 	h.joinResp = &joinResp
@@ -359,14 +359,6 @@ func detectVKAuthRotten(raw []byte) *vkAuthRottenError {
 		return &vkAuthRottenError{Code: errCode, Msg: errMsg}
 	}
 	return nil
-}
-
-func truncateBody(raw []byte) string {
-	const maxLen = 200
-	if len(raw) > maxLen {
-		return string(raw[:maxLen]) + "..."
-	}
-	return string(raw)
 }
 
 func (h *VKHeadlessJoiner) connectSFU() {

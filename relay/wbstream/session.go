@@ -61,12 +61,13 @@ type Session struct {
 	pubReliableDCReady bool
 	subReliableDC      *webrtc.DataChannel
 
-	vp8tun   *tunnel.MultiTrackTunnel
-	kcptun   *tunnel.MultiTrackKCPTunnel
-	dctun    *tunnel.DCTunnel
-	mu       sync.Mutex
-	tunFired bool
-	done     chan struct{}
+	vp8tun    *tunnel.MultiTrackTunnel
+	kcptun    *tunnel.MultiTrackKCPTunnel
+	dctun     *tunnel.DCTunnel
+	dcStarted bool
+	mu        sync.Mutex
+	tunFired  bool
+	done      chan struct{}
 
 	peersBySID map[string]peerEntry // SID -> first-seen time + state
 	kickedSIDs map[string]bool      // SIDs we kicked; SFU may still echo them as Active until it processes the kick
@@ -104,16 +105,21 @@ func (s *Session) MarkConfigAcked() {
 func (s *Session) Done() <-chan struct{} { return s.done }
 
 func (s *Session) Start() error {
-	s.lk = livekit.NewClient(livekit.Config{
+	lk, err := livekit.NewClient(livekit.Config{
 		ServerURL:      s.cfg.ServerURL,
 		Token:          s.cfg.RoomToken,
 		Origin:         Origin,
 		UserAgent:      common.UserAgent,
+		Codec:          livekit.ProtoCodec{},
 		LogFn:          s.cfg.LogFn,
 		SettingEngine:  s.cfg.SettingEngine,
 		NetDialContext: s.cfg.NetDialContext,
 		ResolveICEHost: s.cfg.ResolveICEHost,
 	})
+	if err != nil {
+		return err
+	}
+	s.lk = lk
 	s.lk.OnReady = s.onLKReady
 	s.lk.OnTrack = s.onRemoteTrack
 	s.lk.OnDataChannel = s.onRemoteDataChannel
@@ -312,10 +318,6 @@ func (s *Session) configPingPong(tun tunnel.DataTunnel, trackCount int) {
 
 func (s *Session) maybeStartDCTunnel() {
 	s.mu.Lock()
-	if s.dctun != nil {
-		s.mu.Unlock()
-		return
-	}
 	pubDC := s.pubReliableDC
 	subDC := s.subReliableDC
 	pubReady := s.pubReliableDCReady
@@ -326,6 +328,14 @@ func (s *Session) maybeStartDCTunnel() {
 	if subDC.ReadyState() != webrtc.DataChannelStateOpen {
 		return
 	}
+	s.mu.Lock()
+	if s.dcStarted {
+		s.mu.Unlock()
+		return
+	}
+	s.dcStarted = true
+	s.mu.Unlock()
+
 	subRaw, err := subDC.Detach()
 	if err != nil {
 		s.cfg.LogFn("[lk] detach sub DC: %v", err)
@@ -336,16 +346,13 @@ func (s *Session) maybeStartDCTunnel() {
 		s.cfg.LogFn("[lk] detach pub DC: %v", err)
 		return
 	}
-	readWrapped := newDataPacketWrapper(subRaw, livekit.DataPacketKindReliable)
-	writeWrapped := newDataPacketWrapper(pubRaw, livekit.DataPacketKindReliable)
+	readWrapped := livekit.NewDataPacketWrapper(subRaw, livekit.DataPacketKindReliable)
+	writeWrapped := livekit.NewDataPacketWrapper(pubRaw, livekit.DataPacketKindReliable)
 	readBuf := s.cfg.ReadBuf
 	if readBuf == 0 {
 		readBuf = common.DCBufSize
 	}
 	dctun := tunnel.NewChunkedDCTunnelFromRaw(readWrapped, writeWrapped, s.cfg.Obfuscator, readBuf, s.cfg.LogFn)
-	if dctun == nil {
-		return
-	}
 	s.mu.Lock()
 	s.dctun = dctun
 	s.mu.Unlock()
@@ -575,14 +582,7 @@ func (s *Session) rearmAutoDetect() {
 
 func (s *Session) onRemoteTrack(track *webrtc.TrackRemote, _ *webrtc.RTPReceiver) {
 	if track.Codec().MimeType != webrtc.MimeTypeVP8 {
-		go func() {
-			buf := make([]byte, common.UDPBufSize)
-			for {
-				if _, _, err := track.Read(buf); err != nil {
-					return
-				}
-			}
-		}()
+		go tunnel.DrainTrack(track)
 		return
 	}
 	go s.readVP8Track(track)

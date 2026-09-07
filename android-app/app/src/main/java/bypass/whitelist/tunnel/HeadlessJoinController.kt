@@ -56,6 +56,10 @@ class HeadlessJoinController(
         put("reliable", Prefs.activeReliable)
         when (platform) {
             CallPlatform.TELEMOST -> put("joinLink", url)
+            CallPlatform.BITRIX -> {
+                put("joinLink", url)
+                put("tunnelMode", Prefs.activeTunnelMode.relayArg)
+            }
             CallPlatform.WBSTREAM -> {
                 put("roomId", CallPlatform.extractRoomId(url))
                 put("tunnelMode", Prefs.activeTunnelMode.relayArg)

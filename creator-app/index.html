@@ -19,6 +19,7 @@
   <button class="btn-headless-tm" id="btnHeadlessTM">Telemost</button>
   <button class="btn-headless-wb" id="btnHeadlessWB">WBStream</button>
   <button class="btn-headless-dion" id="btnHeadlessDion">DION</button>
+  <button class="btn-headless-bitrix" id="btnHeadlessBitrix">Bitrix</button>
   <button class="btn-vk" id="btnVk">VK (legacy)</button>
   <button class="btn-telemost" id="btnTelemost">Telemost (legacy)</button>
   <span class="toolbar-spacer"></span>
@@ -54,6 +55,11 @@
         <div class="headless-start-card-desc">Store an email and password so the session renews itself and never asks for a browser login.</div>
         <button class="headless-start-btn" id="btnDionAccount">Edit credentials</button>
       </div>
+      <div class="headless-start-card" id="headlessBitrixAccountCard" style="display:none">
+        <div class="headless-start-card-title">Bitrix account (optional)</div>
+        <div class="headless-start-card-desc">Create or Join opens the Bitrix login, you pick your portal there and the app captures the cookies. Optionally store portal, email and password here so the session renews itself without a browser login.</div>
+        <button class="headless-start-btn" id="btnBitrixAccount">Edit credentials</button>
+      </div>
     </div>
     <div class="headless-status" id="headlessStatus">Starting...</div>
     <div class="headless-call-info" id="headlessCallInfo">
@@ -70,6 +76,9 @@
     </div>
     <div class="headless-call-info" id="headlessCallInfoDion">
       <div class="headless-row"><span class="headless-label">Join link:</span> <a id="headlessDionJoinLink" href="#" class="headless-link"></a><img class="headless-copy" src="resources/icons8-copy-50.png" data-copy="headlessDionJoinLink" title="Copy"></div>
+    </div>
+    <div class="headless-call-info" id="headlessCallInfoBitrix">
+      <div class="headless-row"><span class="headless-label">Join link:</span> <a id="headlessBitrixJoinLink" href="#" class="headless-link"></a><img class="headless-copy" src="resources/icons8-copy-50.png" data-copy="headlessBitrixJoinLink" title="Copy"></div>
     </div>
     <div class="headless-qr" id="headlessQrWrap" style="display:none">
       <img id="headlessQr" alt="Join link QR code">
@@ -111,6 +120,7 @@
       <button type="button" class="btn-clear-cookies" data-platform="telemost">Telemost</button>
       <button type="button" class="btn-clear-cookies" data-platform="wbstream">WBStream</button>
       <button type="button" class="btn-clear-cookies" data-platform="dion">DION</button>
+      <button type="button" class="btn-clear-cookies" data-platform="bitrix">Bitrix</button>
     </div>
     <div class="clear-cookies-status" id="clearCookiesStatus"></div>
     <div class="popup-buttons">
@@ -130,6 +140,22 @@
     <div class="popup-buttons">
       <button class="btn-cancel" id="btnDionAccountCancel">Cancel</button>
       <button class="btn-save" id="btnDionAccountSave">Save</button>
+    </div>
+  </div>
+</div>
+<div class="popup-overlay" id="bitrixAccountPopup">
+  <div class="popup">
+    <h2>Bitrix account</h2>
+    <label for="bitrixPortal">Portal</label>
+    <input type="text" id="bitrixPortal" placeholder="https://your-portal.bitrix24.ru">
+    <label for="bitrixEmail">Email</label>
+    <input type="text" id="bitrixEmail" placeholder="you@example.com">
+    <label for="bitrixPassword">Password</label>
+    <input type="text" id="bitrixPassword" placeholder="">
+    <div class="clear-cookies-status" id="bitrixAccountStatus"></div>
+    <div class="popup-buttons">
+      <button class="btn-cancel" id="btnBitrixAccountCancel">Cancel</button>
+      <button class="btn-save" id="btnBitrixAccountSave">Save</button>
     </div>
   </div>
 </div>

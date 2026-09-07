@@ -152,8 +152,8 @@ func IceServerEntriesToWebRTC(entries []ICEServerEntry) []webrtc.ICEServer {
 
 func BuildPionPeer(api *webrtc.API, iceServers []ICEServerEntry) (*PionPeer, error) {
 	pc, err := api.NewPeerConnection(webrtc.Configuration{
-		ICEServers:   IceServerEntriesToWebRTC(iceServers),
-		BundlePolicy: webrtc.BundlePolicyMaxBundle,
+		ICEServers:    IceServerEntriesToWebRTC(iceServers),
+		BundlePolicy:  webrtc.BundlePolicyMaxBundle,
 		RTCPMuxPolicy: webrtc.RTCPMuxPolicyRequire,
 	})
 	if err != nil {

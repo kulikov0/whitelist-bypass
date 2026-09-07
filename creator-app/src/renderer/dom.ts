@@ -56,6 +56,7 @@ export function renderContent(tm: RendererTabManager): void {
     if (activeTab.platform === Platform.Telemost) title = 'Telemost';
     else if (activeTab.platform === Platform.WBStream) title = 'WBStream';
     else if (activeTab.platform === Platform.Dion) title = 'DION';
+    else if (activeTab.platform === Platform.Bitrix) title = 'Bitrix';
     document.getElementById('headlessTitle')!.textContent = title;
     const startEl = document.getElementById('headlessStart')!;
     const statusEl = document.getElementById('headlessStatus')!;
@@ -70,12 +71,17 @@ export function renderContent(tm: RendererTabManager): void {
       errorEl.textContent = '';
       const dionAccountCard = document.getElementById('headlessDionAccountCard')!;
       dionAccountCard.style.display = activeTab.platform === Platform.Dion ? '' : 'none';
+      const bitrixAccountCard = document.getElementById('headlessBitrixAccountCard')!;
+      bitrixAccountCard.style.display = activeTab.platform === Platform.Bitrix ? '' : 'none';
       if (activeTab.platform === Platform.WBStream) {
         targetLabel.textContent = 'Paste a room id or stream.wb.ru/room/<id> link.';
         targetInput.placeholder = 'https://stream.wb.ru/room/<id>';
       } else if (activeTab.platform === Platform.Dion) {
         targetLabel.textContent = 'Paste a room id or dion.vc event link.';
         targetInput.placeholder = 'abc-def-ghi';
+      } else if (activeTab.platform === Platform.Bitrix) {
+        targetLabel.textContent = 'Paste a portal /video/ link, or leave empty to create a new room.';
+        targetInput.placeholder = 'https://your-portal.bitrix24.ru/video/CODE';
       } else if (activeTab.platform === Platform.Telemost) {
         targetLabel.textContent = 'Paste a Telemost conference link.';
         targetInput.placeholder = 'https://telemost.yandex.ru/j/...';
@@ -93,10 +99,12 @@ export function renderContent(tm: RendererTabManager): void {
     const callInfoTM = document.getElementById('headlessCallInfoTM')!;
     const callInfoWB = document.getElementById('headlessCallInfoWB')!;
     const callInfoDion = document.getElementById('headlessCallInfoDion')!;
+    const callInfoBitrix = document.getElementById('headlessCallInfoBitrix')!;
     callInfoVK.style.display = 'none';
     callInfoTM.style.display = 'none';
     callInfoWB.style.display = 'none';
     callInfoDion.style.display = 'none';
+    callInfoBitrix.style.display = 'none';
     if (callInfo) {
       if (activeTab.platform === Platform.WBStream) {
         callInfoWB.style.display = 'block';
@@ -108,6 +116,9 @@ export function renderContent(tm: RendererTabManager): void {
       } else if (activeTab.platform === Platform.Dion) {
         callInfoDion.style.display = 'block';
         document.getElementById('headlessDionJoinLink')!.textContent = callInfo.joinLink || '';
+      } else if (activeTab.platform === Platform.Bitrix) {
+        callInfoBitrix.style.display = 'block';
+        document.getElementById('headlessBitrixJoinLink')!.textContent = callInfo.joinLink || '';
       } else {
         callInfoVK.style.display = 'block';
         document.getElementById('headlessJoinLink')!.textContent = callInfo.joinLink || '';

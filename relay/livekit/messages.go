@@ -3,26 +3,26 @@ package livekit
 import "fmt"
 
 const (
-	signalReqOffer       = 1
-	signalReqAnswer      = 2
-	signalReqTrickle     = 3
-	signalReqAddTrack    = 4
-	signalReqLeave       = 8
-	signalReqPingLegacy  = 14
-	signalReqPingReq     = 16
+	signalReqOffer      = 1
+	signalReqAnswer     = 2
+	signalReqTrickle    = 3
+	signalReqAddTrack   = 4
+	signalReqLeave      = 8
+	signalReqPingLegacy = 14
+	signalReqPingReq    = 16
 
-	signalRespJoin             = 1
-	signalRespAnswer           = 2
-	signalRespOffer            = 3
-	signalRespTrickle          = 4
-	signalRespUpdate           = 5
-	signalRespTrackPublished   = 6
-	signalRespLeave            = 8
-	signalRespRoomUpdate       = 11
-	signalRespRefreshToken     = 16
-	signalRespPongResp         = 20
-	signalRespRequestResponse  = 22
-	signalRespTrackSubscribed  = 23
+	signalRespJoin            = 1
+	signalRespAnswer          = 2
+	signalRespOffer           = 3
+	signalRespTrickle         = 4
+	signalRespUpdate          = 5
+	signalRespTrackPublished  = 6
+	signalRespLeave           = 8
+	signalRespRoomUpdate      = 11
+	signalRespRefreshToken    = 16
+	signalRespPongResp        = 20
+	signalRespRequestResponse = 22
+	signalRespTrackSubscribed = 23
 
 	sdpFieldType = 1
 	sdpFieldSDP  = 2
@@ -179,16 +179,16 @@ type iceServer struct {
 }
 
 type joinResponse struct {
-	RoomSID            string
-	RoomName           string
-	ParticipantSID     string
-	ParticipantID      string
-	ServerVersion      string
-	ServerRegion       string
-	ICEServers         []iceServer
-	SubscriberPrimary  bool
-	PingTimeoutSec     int32
-	PingIntervalSec    int32
+	RoomSID           string
+	RoomName          string
+	ParticipantSID    string
+	ParticipantID     string
+	ServerVersion     string
+	ServerRegion      string
+	ICEServers        []iceServer
+	SubscriberPrimary bool
+	PingTimeoutSec    int32
+	PingIntervalSec   int32
 }
 
 type signalResponse struct {

@@ -143,6 +143,10 @@ func main() {
 		c := android.NewDionHeadlessJoiner(log.Printf)
 		c.OnConnected = newPersistentJoinerBridge(nil)
 		c.Run()
+	case "bitrix-headless-joiner":
+		c := android.NewBitrixHeadlessJoiner(log.Printf)
+		c.OnConnected = newPersistentJoinerBridge(c.MarkConfigAcked)
+		c.Run()
 	default:
 		fmt.Fprintf(os.Stderr, "Unknown mode: %s\n", *mode)
 		os.Exit(1)

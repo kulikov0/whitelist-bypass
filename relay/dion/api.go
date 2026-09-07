@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"whitelist-bypass/relay/common"
 )
 
 var ErrSessionExpired = errors.New("dion: session expired, re-login required")
@@ -114,7 +115,7 @@ type WSSConnectResponse struct {
 
 type Session struct {
 	HTTPClient     *http.Client
-	Device         DeviceProfile
+	Device         common.DeviceProfile
 	AccessToken    string
 	AccessTokenExp time.Time
 	UserID         string
@@ -132,7 +133,7 @@ func (s *Session) setBaseHeaders(req *http.Request, accessToken string) {
 	req.Header.Set("Accept", "*/*")
 	req.Header.Set("Accept-Language", "en")
 	req.Header.Set("X-Request-Id", uuid.New().String())
-	for name, value := range s.Device.Headers() {
+	for name, value := range deviceHeaders(s.Device) {
 		req.Header.Set(name, value)
 	}
 	if accessToken != "" {
@@ -175,7 +176,7 @@ func NewSession(httpClient *http.Client) (*Session, error) {
 		}
 		httpClient.Jar = jar
 	}
-	return &Session{HTTPClient: httpClient, Device: RandomDeviceProfile()}, nil
+	return &Session{HTTPClient: httpClient, Device: common.RandomDeviceProfile()}, nil
 }
 
 func (s *Session) RegisterGuest() (*GuestAuthResponse, error) {

@@ -721,7 +721,7 @@ class MainActivity :
         mainFragment()?.onConnectedChanged(false)
 
         val headlessMode =
-            Prefs.headless || platform == CallPlatform.WBSTREAM || platform == CallPlatform.DION
+            Prefs.headless || platform == CallPlatform.WBSTREAM || platform == CallPlatform.DION || platform == CallPlatform.BITRIX
 
         if (headlessMode && platform != CallPlatform.VK) {
             setJoinOverlayVisible(false)

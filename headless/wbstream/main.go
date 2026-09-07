@@ -71,12 +71,14 @@ func main() {
 	cookieHeader := common.FilterCookies(rawCookies, wbstream.WBStreamCookieAllowlist)
 	bearer, err := wbstream.RefreshAccessToken(nil, cookieHeader, deviceID)
 	if err != nil {
+		common.EmitAuthErrorFor(err)
 		log.Fatalf("[auth] slide-v3 refresh: %v", err)
 	}
 	log.Printf("[auth] bearer refreshed (len=%d)", len(bearer))
 	requestedRoom := wbstream.ParseRoomID(*roomFlag)
 	roomID, roomToken, accessToken, serverURL, err := wbstream.AuthAsLoggedIn(nil, cookieHeader, bearer, requestedRoom, *displayName)
 	if err != nil {
+		common.EmitAuthErrorFor(err)
 		log.Fatalf("[auth] %v", err)
 	}
 	log.Printf("[auth] room=%s server=%s", roomID, serverURL)

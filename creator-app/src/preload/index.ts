@@ -38,6 +38,12 @@ import { IPC } from '../constants';
   setDionCredentials(email: string, password: string) {
     return ipcRenderer.invoke(IPC.SET_DION_CREDENTIALS, email, password);
   },
+  getBitrixCredentials() {
+    return ipcRenderer.invoke(IPC.GET_BITRIX_CREDENTIALS);
+  },
+  setBitrixCredentials(portal: string, email: string, password: string) {
+    return ipcRenderer.invoke(IPC.SET_BITRIX_CREDENTIALS, portal, email, password);
+  },
   onCreateBotTab(cb: (data: any) => void) {
     ipcRenderer.on(IPC.CREATE_BOT_TAB, (_e, data) => cb(data));
   },

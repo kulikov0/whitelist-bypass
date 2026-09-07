@@ -996,11 +996,13 @@ func main() {
 	if *tmLink != "" {
 		connInfo, err = joinExistingConference(cookieStr, *tmLink, cfg)
 		if err != nil {
+			common.EmitAuthErrorFor(err)
 			log.Fatalf("Failed to join existing conference: %v", err)
 		}
 	} else {
 		connInfo, err = createAndJoinCall(cookieStr, cfg)
 		if err != nil {
+			common.EmitAuthErrorFor(err)
 			log.Fatalf("Failed to create call: %v", err)
 		}
 	}

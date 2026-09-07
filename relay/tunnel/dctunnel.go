@@ -60,20 +60,17 @@ func NewDCTunnel(dc *webrtc.DataChannel, obf *TunnelObfuscator, readBuf int, log
 				t.onClose()
 			}
 		})
-		go t.statsLoop()
 		return t
 	}
 
 	t.raw = raw
 	go t.readLoop()
-	go t.statsLoop()
 	return t
 }
 
 func NewDCTunnelFromRaw(dc *webrtc.DataChannel, raw datachannel.ReadWriteCloser, obf *TunnelObfuscator, readBuf int, logFn func(string, ...any)) *DCTunnel {
 	t := &DCTunnel{dc: dc, raw: raw, obf: obf, readBuf: readBuf, logFn: logFn}
 	go t.readLoop()
-	go t.statsLoop()
 	return t
 }
 
@@ -85,19 +82,18 @@ func NewChunkedDCTunnel(readRaw datachannel.ReadWriteCloser, writeDC *webrtc.Dat
 	}
 	t := &DCTunnel{raw: readRaw, writeRaw: writeRaw, obf: obf, readBuf: readBuf, logFn: logFn, chunked: true}
 	go t.readLoop()
-	go t.statsLoop()
 	return t
 }
 
 func NewChunkedDCTunnelFromRaw(readRaw, writeRaw datachannel.ReadWriteCloser, obf *TunnelObfuscator, readBuf int, logFn func(string, ...any)) *DCTunnel {
 	t := &DCTunnel{raw: readRaw, writeRaw: writeRaw, obf: obf, readBuf: readBuf, logFn: logFn, chunked: true}
 	go t.readLoop()
-	go t.statsLoop()
 	return t
 }
 
 func (t *DCTunnel) readLoop() {
 	buf := make([]byte, t.readBuf)
+	var stats dcStats
 	for {
 		n, isString, err := t.raw.ReadDataChannel(buf)
 		if err != nil {
@@ -118,6 +114,9 @@ func (t *DCTunnel) readLoop() {
 			t.handleChunk(buf[:n])
 		} else if n > 0 {
 			t.deliverMessage(buf[:n])
+		}
+		if common.Debug {
+			t.logStats(&stats)
 		}
 	}
 }
@@ -255,30 +254,38 @@ func (t *DCTunnel) OnData() func([]byte)       { return t.onData }
 func (t *DCTunnel) SetOnClose(fn func())       { t.onClose = fn }
 func (t *DCTunnel) Reconfigure(fps, batch int) {}
 
-func (t *DCTunnel) statsLoop() {
-	if !common.Debug {
+type dcStats struct {
+	last         time.Time
+	lastRecv     uint64
+	lastSend     uint64
+	lastRecvMsgs uint64
+	lastSendMsgs uint64
+}
+
+func (t *DCTunnel) logStats(s *dcStats) {
+	recv := t.recvBytes.Load()
+	send := t.sendBytes.Load()
+	recvMsgs := t.recvMsgs.Load()
+	sendMsgs := t.sendMsgs.Load()
+	now := time.Now()
+	elapsed := now.Sub(s.last)
+	if s.last.IsZero() || elapsed < 2*time.Second {
+		if s.last.IsZero() {
+			s.last = now
+		}
 		return
 	}
-	var lastRecv, lastSend uint64
-	var lastRecvMsgs, lastSendMsgs uint64
-	for {
-		time.Sleep(2 * time.Second)
-		recv := t.recvBytes.Load()
-		send := t.sendBytes.Load()
-		recvMsgs := t.recvMsgs.Load()
-		sendMsgs := t.sendMsgs.Load()
-		recvDelta := recv - lastRecv
-		sendDelta := send - lastSend
-		recvMsgsDelta := recvMsgs - lastRecvMsgs
-		sendMsgsDelta := sendMsgs - lastSendMsgs
-		lastRecv = recv
-		lastSend = send
-		lastRecvMsgs = recvMsgs
-		lastSendMsgs = sendMsgs
-		if recvDelta > 0 || sendDelta > 0 {
-			fmt.Printf("DC-STATS: recv=%dKB/s(%dmsg) send=%dKB/s(%dmsg)\n",
-				recvDelta/2/1024, recvMsgsDelta/2,
-				sendDelta/2/1024, sendMsgsDelta/2)
-		}
+	secs := elapsed.Seconds()
+	recvDelta := recv - s.lastRecv
+	sendDelta := send - s.lastSend
+	if recvDelta > 0 || sendDelta > 0 {
+		fmt.Printf("DC-STATS: recv=%dKB/s(%dmsg) send=%dKB/s(%dmsg)\n",
+			uint64(float64(recvDelta)/secs)/1024, uint64(float64(recvMsgs-s.lastRecvMsgs)/secs),
+			uint64(float64(sendDelta)/secs)/1024, uint64(float64(sendMsgs-s.lastSendMsgs)/secs))
 	}
+	s.last = now
+	s.lastRecv = recv
+	s.lastSend = send
+	s.lastRecvMsgs = recvMsgs
+	s.lastSendMsgs = sendMsgs
 }

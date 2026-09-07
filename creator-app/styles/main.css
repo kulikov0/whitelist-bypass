@@ -188,6 +188,12 @@ body {
   opacity: 0.85;
 }
 
+.btn-headless-bitrix {
+  background: #2fc7f7;
+  color: white;
+  opacity: 0.85;
+}
+
 .toolbar-spacer {
   margin-left: auto;
 }

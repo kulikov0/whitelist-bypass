@@ -65,6 +65,7 @@ func main() {
 		log.Printf("[auth] credentials present, session will re-login automatically when the refresh token dies")
 	}
 	if err := auth.EnsureValidToken(); err != nil {
+		common.EmitAuthErrorFor(err)
 		log.Fatalf("[FATAL] EnsureValidToken: %v", err)
 	}
 
