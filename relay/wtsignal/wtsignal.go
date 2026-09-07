@@ -28,6 +28,11 @@ const (
 	webTransportFrameType     uint64 = 0x41
 	webTransportUniStreamType uint64 = 0x54
 
+	settingsQPACKMaxTableCapacity      = 0x01
+	settingsMaxFieldSectionSize        = 0x06
+	settingsQPACKBlockedStreams        = 0x07
+	settingsDatagram                   = 0x33
+	settingsDatagramDraft04            = 0xffd277
 	settingsEnableWebtransportDraft06  = 0x2b603742
 	settingsWebTransportEnabled        = 0x2c7cf000
 	settingsWebTransportMaxSessions    = 0x14e9cd29
@@ -72,14 +77,19 @@ func Dial(endpoint, serverName, resolvedIP string) (*Conn, error) {
 		return nil, fmt.Errorf("wt dial: %w", err)
 	}
 
-	// The VK/OK SFU advertises the HTTP/3 datagram setting but does not
-	// negotiate QUIC transport-level datagrams, which makes quic-go's http3
-	// layer close the connection. Signaling only uses WebTransport streams, so
-	// disable HTTP/3 datagrams on our side, and send the draft-06
-	// ENABLE_WEBTRANSPORT codepoint the SFU expects.
+	// The SFU advertises HTTP/3 datagrams but never negotiates them at the QUIC
+	// layer, and only EnableDatagrams feeds the check that closes the connection.
 	tr := &http3.Transport{
-		EnableDatagrams:    false,
-		AdditionalSettings: map[uint64]uint64{settingsEnableWebtransportDraft06: 1},
+		EnableDatagrams:  false,
+		SendGreaseFrames: true,
+		AdditionalSettings: map[uint64]uint64{
+			settingsQPACKMaxTableCapacity:     65536,
+			settingsMaxFieldSectionSize:       16384,
+			settingsQPACKBlockedStreams:       100,
+			settingsDatagram:                  1,
+			settingsDatagramDraft04:           1,
+			settingsEnableWebtransportDraft06: 1,
+		},
 	}
 	control := tr.NewRawClientConn(qconn)
 	context.AfterFunc(qconn.Context(), func() { tr.Close() })
