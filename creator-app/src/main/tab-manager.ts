@@ -1,6 +1,4 @@
-import { app } from 'electron';
-import { spawn, ChildProcess } from 'child_process';
-import { BrowserWindow, session } from 'electron';
+import { app, BrowserWindow } from 'electron';
 import * as net from 'net';
 import * as path from 'path';
 import * as fs from 'fs/promises';
@@ -10,36 +8,20 @@ import {
   TabListEntry,
   Platform,
   TunnelMode,
-  RelayMode,
   CallStatus,
   HeadlessStartArgs,
-  HeadlessMode,
   UpstreamProxy,
   DionCredentials,
+  BitrixCredentials,
 } from '../types';
 import {
   INITIAL_PORT_BASE,
-  IPC,
   RELAY_RESTART_DELAY_MS,
-  SESSION_PARTITION,
-  VK_COOKIE_DOMAINS,
-  YANDEX_COOKIE_DOMAINS,
-  DION_COOKIE_DOMAINS,
-  WBSTREAM_COOKIE_DOMAINS,
-  VK_LOGIN_URL,
-  YANDEX_LOGIN_URL,
-  DION_LOGIN_URL,
-  WBSTREAM_LOGIN_URL,
-  VK_AUTH_COOKIE,
-  YANDEX_AUTH_COOKIE,
-  DION_AUTH_COOKIE,
-  WBSTREAM_AUTH_COOKIE,
   LOG_CAPTURE_SNIPPET,
 } from '../constants';
 import { BotManager } from '../bot/bot-manager';
-import { DionCookieFile } from './dion-cookie-file';
-import { buildStoredZip } from './util/zip';
-import { resolveResourcePath, binaryName } from './util/paths';
+import { CookieStore } from './cookie-store';
+import { HeadlessLauncher } from './headless-launcher';
 
 export class TabManager {
   private tabs = new Map<string, TabState>();
@@ -48,39 +30,15 @@ export class TabManager {
   private nextPortBase = INITIAL_PORT_BASE;
   private _mainWindow: BrowserWindow | null = null;
   private _botManager: BotManager | null = null;
-  private relayPath: string;
-  private headlessVKPath: string;
-  private headlessTelemostPath: string;
-  private headlessWBStreamPath: string;
-  private headlessDionPath: string;
   private hooksDir: string;
-  private upstreamProxy: UpstreamProxy = { socks: '', user: '', pass: '' };
-  private debugLogging = false;
+  private cookies = new CookieStore();
+  private launcher: HeadlessLauncher;
 
   constructor() {
-    this.relayPath = resolveResourcePath(
-      path.join('relay', binaryName('relay')),
-      binaryName('relay'),
-    );
-    this.headlessVKPath = resolveResourcePath(
-      path.join('headless', 'vk', binaryName('headless-vk-creator')),
-      binaryName('headless-vk-creator'),
-    );
-    this.headlessTelemostPath = resolveResourcePath(
-      path.join('headless', 'telemost', binaryName('headless-telemost-creator')),
-      binaryName('headless-telemost-creator'),
-    );
-    this.headlessWBStreamPath = resolveResourcePath(
-      path.join('headless', 'wbstream', binaryName('headless-wbstream-creator')),
-      binaryName('headless-wbstream-creator'),
-    );
-    this.headlessDionPath = resolveResourcePath(
-      path.join('headless', 'dion', binaryName('headless-dion-creator')),
-      binaryName('headless-dion-creator'),
-    );
     this.hooksDir = app.isPackaged
       ? path.join(process.resourcesPath!, 'hooks')
       : path.join(__dirname, '..', '..', '..', 'hooks');
+    this.launcher = new HeadlessLauncher(this, this.cookies);
   }
 
   get mainWindow(): BrowserWindow | null {
@@ -142,7 +100,7 @@ export class TabManager {
   deleteTab(tabId: string): void {
     const tab = this.tabs.get(tabId);
     if (tab) {
-      this.killRelay(tabId, tab);
+      this.launcher.killRelay(tabId, tab);
       this.tabs.delete(tabId);
     }
     this.botTabIds.delete(tabId);
@@ -183,33 +141,6 @@ export class TabManager {
     return result;
   }
 
-  private sendLog(tabId: string, msg: string): void {
-    if (this._mainWindow && !this._mainWindow.isDestroyed()) {
-      this._mainWindow.webContents.send(IPC.RELAY_LOG, { tabId, msg });
-    }
-  }
-
-  private attachProcessOutput(
-    proc: ChildProcess,
-    tabId: string,
-    inspect?: (msg: string) => void,
-  ): void {
-    const onData = (data: Buffer) => {
-      data
-        .toString()
-        .trim()
-        .split('\n')
-        .forEach((msg) => {
-          if (!msg) return;
-          console.log(`[relay:${tabId}]`, msg);
-          this.sendLog(tabId, msg);
-          if (inspect) inspect(msg);
-        });
-    };
-    proc.stdout?.on('data', onData);
-    proc.stderr?.on('data', onData);
-  }
-
   sendBotCallLink(tabId: string, link: string): void {
     if (!this.botTabIds.has(tabId) || !this._botManager) return;
     const tab = this.tabs.get(tabId);
@@ -219,292 +150,42 @@ export class TabManager {
   }
 
   setUpstreamProxy(proxy: UpstreamProxy): void {
-    this.upstreamProxy = {
-      socks: (proxy?.socks || '').trim(),
-      user: (proxy?.user || '').trim(),
-      pass: (proxy?.pass || '').trim(),
-    };
+    this.launcher.setUpstreamProxy(proxy);
   }
 
   setDebugLogging(enabled: boolean): void {
-    this.debugLogging = enabled;
-  }
-
-  private appendUpstreamArgs(args: string[]): void {
-    if (!this.upstreamProxy.socks) return;
-    args.push('--upstream-socks', this.upstreamProxy.socks);
-    if (this.upstreamProxy.user) args.push('--upstream-user', this.upstreamProxy.user);
-    if (this.upstreamProxy.pass) args.push('--upstream-pass', this.upstreamProxy.pass);
+    this.launcher.setDebugLogging(enabled);
   }
 
   startRelay(tabId: string, tab: TabState): void {
-    this.killRelay(tabId, tab);
-    const port = tab.tunnelMode === TunnelMode.PionVideo ? tab.pionPort : tab.dcPort;
-    let relayMode: RelayMode = RelayMode.DCCreator;
-    if (tab.tunnelMode === TunnelMode.PionVideo) {
-      relayMode = tab.platform === Platform.Telemost
-        ? RelayMode.TelemostVideoCreator
-        : RelayMode.VKVideoCreator;
-    }
-    const relayArgs = ['--mode', relayMode, '--ws-port', String(port)];
-    this.appendUpstreamArgs(relayArgs);
-    if (this.debugLogging) relayArgs.push('--debug');
-    const proc = spawn(this.relayPath, relayArgs, {
-      stdio: ['ignore', 'pipe', 'pipe'],
-    });
-    tab.relay = proc;
-    this.attachProcessOutput(proc, tabId);
-    proc.on('close', (code) => {
-      this.sendLog(tabId, `Relay exited with code ${code}`);
-    });
+    this.launcher.startRelay(tabId, tab);
   }
 
-  private headlessConfig(platform: Platform): {
-    tunnelMode: TunnelMode;
-    authCookie: string;
-    loginUrl: string;
-    cookieDomains: string[];
-    platformName: string;
-    binaryPath: string;
-  } | null {
-    switch (platform) {
-      case Platform.Telemost:
-        return {
-          tunnelMode: TunnelMode.HeadlessTelemost,
-          authCookie: YANDEX_AUTH_COOKIE,
-          loginUrl: YANDEX_LOGIN_URL,
-          cookieDomains: YANDEX_COOKIE_DOMAINS,
-          platformName: 'Yandex',
-          binaryPath: this.headlessTelemostPath,
-        };
-      case Platform.Dion:
-        return {
-          tunnelMode: TunnelMode.HeadlessDion,
-          authCookie: DION_AUTH_COOKIE,
-          loginUrl: DION_LOGIN_URL,
-          cookieDomains: DION_COOKIE_DOMAINS,
-          platformName: 'DION',
-          binaryPath: this.headlessDionPath,
-        };
-      case Platform.VK:
-        return {
-          tunnelMode: TunnelMode.HeadlessVK,
-          authCookie: VK_AUTH_COOKIE,
-          loginUrl: VK_LOGIN_URL,
-          cookieDomains: VK_COOKIE_DOMAINS,
-          platformName: 'VK',
-          binaryPath: this.headlessVKPath,
-        };
-      case Platform.WBStream:
-        return {
-          tunnelMode: TunnelMode.HeadlessWBStream,
-          authCookie: WBSTREAM_AUTH_COOKIE,
-          loginUrl: WBSTREAM_LOGIN_URL,
-          cookieDomains: WBSTREAM_COOKIE_DOMAINS,
-          platformName: 'WB Stream',
-          binaryPath: this.headlessWBStreamPath,
-        };
-      default:
-        return null;
-    }
-  }
-
-  private joinFlagFor(platform: Platform): string | null {
-    switch (platform) {
-      case Platform.VK:
-        return '--vk-link';
-      case Platform.Telemost:
-        return '--tm-link';
-      case Platform.WBStream:
-      case Platform.Dion:
-        return '--room';
-      default:
-        return null;
-    }
-  }
-
-  async startHeadless(tabId: string, platform: Platform, args: HeadlessStartArgs): Promise<void> {
-    const tab = await this.getOrCreateTab(tabId);
-    tab.platform = platform;
-    const joinTarget = args.mode === HeadlessMode.Join ? (args.target || '').trim() : '';
-    if (args.mode === HeadlessMode.Join && !joinTarget) {
-      this.sendLog(tabId, 'Join requested but no target link/room provided.');
-      return;
-    }
-
-    const config = this.headlessConfig(platform);
-    if (!config) {
-      this.sendLog(tabId, `Unsupported headless platform: ${platform}`);
-      return;
-    }
-    tab.tunnelMode = config.tunnelMode;
-    const cookiesPath = this.cookieFilePath(platform);
-    const refreshCookie = platform === Platform.WBStream ? 'wbx-refresh' : config.authCookie;
-    const dionCookieFile = platform === Platform.Dion ? new DionCookieFile(cookiesPath) : null;
-    const fileHasSession = dionCookieFile != null && await dionCookieFile.hasSession();
-    let cookies = await this.getCookiesForDomains(config.cookieDomains);
-    const needsLogin = !fileHasSession && !cookies.some((c) => c.name === refreshCookie);
-    if (needsLogin) {
-      if (tab.isBot) {
-        const reply = `Please log into ${config.platformName} in the creator app first, then try again.`;
-        this.sendLog(tabId, reply);
-        if (this._botManager && tab.peerId != null) {
-          await this._botManager.sendMessage(tab.peerId, reply);
-        }
-        return;
-      }
-      this.sendLog(tabId, `No ${config.platformName} session found, opening login.`);
-      if (this._mainWindow && !this._mainWindow.isDestroyed()) {
-        this._mainWindow.webContents.send(IPC.LOGIN_REQUIRED, { tabId, url: config.loginUrl });
-      }
-      if (platform === Platform.WBStream) {
-        this.sendLog(tabId, 'Waiting for x_wbaas_token, wbx-refresh, wbx-validation-key...');
-        await this.waitForCookies(['x_wbaas_token', 'wbx-refresh', 'wbx-validation-key']);
-      } else if (platform === Platform.Dion) {
-        this.sendLog(tabId, 'Waiting for vc-refresh-token, vc-access-token...');
-        await this.waitForCookies(['vc-refresh-token', 'vc-access-token']);
-      } else {
-        await this.waitForLogin(config.cookieDomains, config.authCookie);
-      }
-      if (this._mainWindow && !this._mainWindow.isDestroyed()) {
-        this._mainWindow.webContents.send(IPC.LOGIN_DONE, { tabId });
-      }
-      this.sendLog(tabId, `${config.platformName} login captured.`);
-      cookies = await this.getCookiesForDomains(config.cookieDomains);
-    }
-    if (fileHasSession) {
-      this.sendLog(tabId, `${config.platformName} session file is still active, keeping it as is.`);
-    } else {
-      this.sendLog(tabId, `${config.platformName} cookies (${cookies.length}): ${cookies.map((c) => c.name).join(', ')}`);
-      await fs.writeFile(cookiesPath, JSON.stringify(cookies));
-    }
-    const spawnArgs = ['--resources', 'default', '--cookies', cookiesPath];
-    this.killRelay(tabId, tab);
-    if (joinTarget) {
-      const flag = this.joinFlagFor(platform);
-      if (flag) spawnArgs.push(flag, joinTarget);
-    }
-    this.appendUpstreamArgs(spawnArgs);
-    if (this.debugLogging) spawnArgs.push('--debug');
-    const proc = spawn(config.binaryPath, spawnArgs, {
-      stdio: ['ignore', 'pipe', 'pipe'],
-    });
-    tab.relay = proc;
-    let sawAuthFailure = false;
-    let sawInvalidCredentials = false;
-    this.attachProcessOutput(proc, tabId, (msg) => {
-      if (dionCookieFile && (msg.includes('"code":1086') || msg.includes('Invalid credentials'))) {
-        sawInvalidCredentials = true;
-      }
-      if (
-        msg.includes('status 401') ||
-        msg.includes('"UnauthorizedError"') ||
-        msg.includes('"error":"unauthorized') ||
-        msg.includes('empty access_token')
-      ) {
-        sawAuthFailure = true;
-      }
-    });
-    proc.on('close', async (code) => {
-      this.sendLog(tabId, `Headless exited with code ${code}`);
-      if (sawInvalidCredentials) {
-        this.sendLog(tabId, `${config.platformName} rejected the email and password stored in ${cookiesPath}, fix them or clear cookies to log in through the browser.`);
-        return;
-      }
-      if (sawAuthFailure) {
-        if (dionCookieFile) await dionCookieFile.clearTokens();
-        await this.clearAuthCookies(config.cookieDomains, config.authCookie);
-        if (this.tabs.get(tabId) === tab) this.startHeadless(tabId, platform, args);
-      }
-    });
-  }
-
-  private async clearAuthCookies(cookieDomains: string[], authCookieName: string): Promise<void> {
-    const ses = session.fromPartition(SESSION_PARTITION);
-    const matches = await ses.cookies.get({ name: authCookieName });
-    for (const cookie of matches) {
-      if (!cookie.domain || !cookieDomains.some((d) => cookie.domain!.includes(d))) continue;
-      const host = cookie.domain.startsWith('.') ? cookie.domain.slice(1) : cookie.domain;
-      const url = `https://${host}${cookie.path || '/'}`;
-      try {
-        await ses.cookies.remove(url, cookie.name);
-      } catch (err) {
-        console.log(`[COOKIES] failed to remove ${cookie.name} on ${url}:`, err);
-      }
-    }
-  }
-
-  private cookieFilePath(platform: Platform): string {
-    return path.join(app.getPath('userData'), `cookies-${platform}.json`);
-  }
-
-  async getDionCredentials(): Promise<DionCredentials> {
-    return new DionCookieFile(this.cookieFilePath(Platform.Dion)).readCredentials();
-  }
-
-  async setDionCredentials(email: string, password: string): Promise<void> {
-    await new DionCookieFile(this.cookieFilePath(Platform.Dion)).writeCredentials(email, password);
-  }
-
-  async clearPlatformCookies(platform: Platform): Promise<number> {
-    const config = this.headlessConfig(platform);
-    if (!config) return 0;
-    const ses = session.fromPartition(SESSION_PARTITION);
-    const all = await ses.cookies.get({});
-    let removed = 0;
-    for (const cookie of all) {
-      if (!cookie.domain || !config.cookieDomains.some((d) => cookie.domain!.includes(d))) continue;
-      const host = cookie.domain.startsWith('.') ? cookie.domain.slice(1) : cookie.domain;
-      const url = `https://${host}${cookie.path || '/'}`;
-      try {
-        await ses.cookies.remove(url, cookie.name);
-        removed++;
-      } catch (err) {
-        console.log(`[COOKIES] failed to remove ${cookie.name} on ${url}:`, err);
-      }
-    }
-    await fs.unlink(this.cookieFilePath(platform)).catch(() => {});
-    console.log(`[COOKIES] cleared ${removed} cookies for ${platform}`);
-    return removed;
-  }
-
-  private waitForLogin(cookieDomains: string[], authCookieName: string): Promise<void> {
-    return new Promise((resolve) => {
-      const ses = session.fromPartition(SESSION_PARTITION);
-      const finish = () => {
-        ses.cookies.removeListener('changed', onChanged);
-        resolve();
-      };
-      const onChanged = (
-        _e: Electron.Event,
-        cookie: Electron.Cookie,
-        _cause: string,
-        removed: boolean,
-      ) => {
-        if (removed) return;
-        if (cookie.name !== authCookieName) return;
-        if (!cookie.domain || !cookieDomains.some((d) => cookie.domain!.includes(d))) return;
-        finish();
-      };
-      ses.cookies.on('changed', onChanged);
-      ses.cookies.get({ name: authCookieName }).then((found) => {
-        if (found.some((c) => c.domain && cookieDomains.some((d) => c.domain!.includes(d)))) {
-          finish();
-        }
-      });
-    });
+  startHeadless(tabId: string, platform: Platform, args: HeadlessStartArgs): Promise<void> {
+    return this.launcher.startHeadless(tabId, platform, args);
   }
 
   killRelay(tabId: string, tab: TabState): void {
-    if (tab.relay) {
-      console.log(`[${tabId}] killing process pid=${tab.relay.pid}`);
-      tab.relay.kill();
-      tab.relay = null;
-    }
+    this.launcher.killRelay(tabId, tab);
   }
 
   killAllRelays(): void {
-    this.tabs.forEach((tab, tabId) => this.killRelay(tabId, tab));
+    this.tabs.forEach((tab, tabId) => this.launcher.killRelay(tabId, tab));
+  }
+
+  async setTunnelMode(tabId: string, mode: TunnelMode, platform?: Platform): Promise<void> {
+    const tab = await this.getOrCreateTab(tabId);
+    tab.tunnelMode = mode;
+    if (platform) tab.platform = platform;
+    if (
+      mode === TunnelMode.HeadlessVK ||
+      mode === TunnelMode.HeadlessTelemost ||
+      mode === TunnelMode.HeadlessWBStream ||
+      mode === TunnelMode.HeadlessDion ||
+      mode === TunnelMode.HeadlessBitrix
+    ) return;
+    this.launcher.killRelay(tabId, tab);
+    setTimeout(() => this.launcher.startRelay(tabId, tab), RELAY_RESTART_DELAY_MS);
   }
 
   async loadHook(tabId: string, url: string, tab: TabState): Promise<string> {
@@ -526,93 +207,31 @@ export class TabManager {
     return LOG_CAPTURE_SNIPPET + `window.WS_PORT=${tab.dcPort};` + hook;
   }
 
-  async setTunnelMode(tabId: string, mode: TunnelMode, platform?: Platform): Promise<void> {
-    const tab = await this.getOrCreateTab(tabId);
-    tab.tunnelMode = mode;
-    if (platform) tab.platform = platform;
-    if (
-      mode === TunnelMode.HeadlessVK ||
-      mode === TunnelMode.HeadlessTelemost ||
-      mode === TunnelMode.HeadlessWBStream ||
-      mode === TunnelMode.HeadlessDion
-    ) return;
-    this.killRelay(tabId, tab);
-    setTimeout(() => this.startRelay(tabId, tab), RELAY_RESTART_DELAY_MS);
+  getDionCredentials(): Promise<DionCredentials> {
+    return this.cookies.getDionCredentials();
   }
 
-  private async getCookiesForDomains(domains: string[]): Promise<{ name: string; value: string }[]> {
-    const ses = session.fromPartition(SESSION_PARTITION);
-    const all = await ses.cookies.get({});
-    return all
-      .filter((c) => c.domain != null && domains.some((d) => c.domain!.includes(d)))
-      .map((c) => ({ name: c.name, value: c.value }));
+  setDionCredentials(email: string, password: string): Promise<void> {
+    return this.cookies.setDionCredentials(email, password);
   }
 
-  private waitForCookies(names: string[]): Promise<void> {
-    return new Promise((resolve) => {
-      const ses = session.fromPartition(SESSION_PARTITION);
-      const remaining = new Set(names);
-      const finish = () => {
-        ses.cookies.removeListener('changed', onChanged);
-        resolve();
-      };
-      const onChanged = (
-        _e: Electron.Event,
-        cookie: Electron.Cookie,
-        _cause: string,
-        removed: boolean,
-      ) => {
-        if (removed) return;
-        if (!remaining.has(cookie.name)) return;
-        remaining.delete(cookie.name);
-        if (remaining.size === 0) finish();
-      };
-      ses.cookies.on('changed', onChanged);
-      Promise.all(names.map((name) => ses.cookies.get({ name }))).then((results) => {
-        results.forEach((found, i) => {
-          if (found.length > 0) remaining.delete(names[i]);
-        });
-        if (remaining.size === 0) finish();
-      });
-    });
+  getBitrixCredentials(): Promise<BitrixCredentials> {
+    return this.cookies.getBitrixCredentials();
   }
 
-  async buildCookiesZip(): Promise<Buffer> {
-    const platforms: { filename: string; domains: string[]; platform: Platform }[] = [
-      { filename: 'cookies-vk.json', domains: VK_COOKIE_DOMAINS, platform: Platform.VK },
-      { filename: 'cookies-yandex.json', domains: YANDEX_COOKIE_DOMAINS, platform: Platform.Telemost },
-      { filename: 'cookies-dion.json', domains: DION_COOKIE_DOMAINS, platform: Platform.Dion },
-      { filename: 'cookies-wbstream.json', domains: WBSTREAM_COOKIE_DOMAINS, platform: Platform.WBStream },
-    ];
-    const cookies = await Promise.all(platforms.map((p) => this.getCookiesForDomains(p.domains)));
-    const dionContent = await new DionCookieFile(this.cookieFilePath(Platform.Dion)).readContent();
-    const entries = platforms.map((p, i) => {
-      const content = p.platform === Platform.Dion && dionContent ? dionContent : cookies[i];
-      return { name: p.filename, data: Buffer.from(JSON.stringify(content, null, 2), 'utf8') };
-    });
-    return buildStoredZip(entries);
+  setBitrixCredentials(portal: string, email: string, password: string): Promise<void> {
+    return this.cookies.setBitrixCredentials(portal, email, password);
   }
 
-  async setWBStreamDeviceId(id: string): Promise<void> {
-    if (!id) return;
-    const ses = session.fromPartition(SESSION_PARTITION);
-    const existing = await ses.cookies.get({ url: 'https://stream.wb.ru/', name: '__wb_device_id' });
-    if (existing.length > 0 && existing[0].value === id) return;
-    try {
-      await ses.cookies.set({
-        url: 'https://stream.wb.ru/',
-        name: '__wb_device_id',
-        value: id,
-        domain: 'stream.wb.ru',
-        path: '/',
-        secure: true,
-        httpOnly: false,
-        expirationDate: Math.floor(Date.now() / 1000) + 60 * 60 * 24 * 365 * 5,
-      });
-      console.log(`[wb-device-id] persisted ${id}`);
-    } catch (err) {
-      console.log(`[wb-device-id] failed to persist:`, err);
-    }
+  clearPlatformCookies(platform: Platform): Promise<number> {
+    return this.cookies.clearPlatformCookies(platform);
   }
 
+  buildCookiesZip(): Promise<Buffer> {
+    return this.cookies.buildCookiesZip();
+  }
+
+  setWBStreamDeviceId(id: string): Promise<void> {
+    return this.cookies.setWBStreamDeviceId(id);
+  }
 }

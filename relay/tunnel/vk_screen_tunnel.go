@@ -247,7 +247,7 @@ func (s *SymmetricScreenTunnel) SetOnData(fn func([]byte)) {
 	s.cam.SetOnData(fn)
 }
 
-func (s *SymmetricScreenTunnel) SetOnClose(fn func())      { s.cam.SetOnClose(fn) }
+func (s *SymmetricScreenTunnel) SetOnClose(fn func()) { s.cam.SetOnClose(fn) }
 func (s *SymmetricScreenTunnel) Reconfigure(fps, batch int) {
 	s.cam.Reconfigure(fps, batch)
 	s.screen.Reconfigure(fps, batch)

@@ -70,6 +70,10 @@ export class RendererTabManager {
         tab.mode = TunnelMode.HeadlessDion;
         if (!tab.isBot) tab.name = 'DION';
         break;
+      case Platform.Bitrix:
+        tab.mode = TunnelMode.HeadlessBitrix;
+        if (!tab.isBot) tab.name = 'Bitrix';
+        break;
       default:
         tab.mode = TunnelMode.HeadlessVK;
         if (!tab.isBot) tab.name = 'VK';
@@ -109,11 +113,13 @@ export class RendererTabManager {
         data.mode === TunnelMode.HeadlessVK ||
         data.mode === TunnelMode.HeadlessTelemost ||
         data.mode === TunnelMode.HeadlessWBStream ||
-        data.mode === TunnelMode.HeadlessDion;
+        data.mode === TunnelMode.HeadlessDion ||
+        data.mode === TunnelMode.HeadlessBitrix;
       let platformName = 'VK';
       if (data.platform === Platform.Telemost) platformName = 'Telemost';
       else if (data.platform === Platform.WBStream) platformName = 'WBStream';
       else if (data.platform === Platform.Dion) platformName = 'DION';
+      else if (data.platform === Platform.Bitrix) platformName = 'Bitrix';
       const botName = isHeadless ? `Bot-${platformName}` : `Bot-${platformName} (legacy)`;
       this.tabs[data.tabId] = {
         wv: null,

@@ -81,7 +81,8 @@ class HeadlessSessionService : Service() {
             Prefs.headless ||
             platform == CallPlatform.WBSTREAM ||
             platform == CallPlatform.DION ||
-            platform == CallPlatform.TELEMOST
+            platform == CallPlatform.TELEMOST ||
+            platform == CallPlatform.BITRIX
         if (!headlessMode) {
             showToast(R.string.tile_requires_headless_destination)
             safeStopSelf()

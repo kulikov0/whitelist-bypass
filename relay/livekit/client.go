@@ -2,11 +2,9 @@ package livekit
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"net"
 	"net/http"
-	"net/url"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -43,6 +41,7 @@ type Config struct {
 	Token                  string
 	Origin                 string
 	UserAgent              string
+	Codec                  Codec
 	LogFn                  func(string, ...any)
 	ConfigureSettingEngine func(*webrtc.SettingEngine)
 	NetDialContext         func(ctx context.Context, network, addr string) (net.Conn, error)
@@ -56,6 +55,7 @@ type Client struct {
 	token  string
 	origin string
 	ua     string
+	codec  Codec
 
 	configureSettingEngine func(*webrtc.SettingEngine)
 	netDialContext         func(ctx context.Context, network, addr string) (net.Conn, error)
@@ -72,13 +72,18 @@ type Client struct {
 	subMu        sync.Mutex
 	pubRemoteSet bool
 	subRemoteSet bool
+	pubPending   []webrtc.ICECandidateInit
+	subPending   []webrtc.ICECandidateInit
 
-	closed atomic.Bool
+	joined     chan struct{}
+	joinedOnce sync.Once
+	closed     atomic.Bool
 
 	OnReady             func()
 	OnTrack             func(*webrtc.TrackRemote, *webrtc.RTPReceiver)
 	OnDataChannel       func(*webrtc.DataChannel)
 	OnPubConnected      func()
+	OnSubConnected      func()
 	OnParticipantUpdate func([]ParticipantInfo)
 	// OnRemoteCandidate fires once for every trickle ICE candidate
 	// arriving from the SFU. Used by the Windows joiner to install
@@ -91,7 +96,10 @@ type Client struct {
 	OnRemoteSDP func(target int, sdpType, sdp string)
 }
 
-func NewClient(cfg Config) *Client {
+func NewClient(cfg Config) (*Client, error) {
+	if cfg.Codec == nil {
+		return nil, fmt.Errorf("livekit: no codec")
+	}
 	logFn := cfg.LogFn
 	if logFn == nil {
 		logFn = func(string, ...any) {}
@@ -102,35 +110,31 @@ func NewClient(cfg Config) *Client {
 		token:                  cfg.Token,
 		origin:                 cfg.Origin,
 		ua:                     cfg.UserAgent,
+		codec:                  cfg.Codec,
 		configureSettingEngine: cfg.ConfigureSettingEngine,
 		netDialContext:         cfg.NetDialContext,
 		resolveICEHost:         cfg.ResolveICEHost,
-	}
+		joined:                 make(chan struct{}),
+	}, nil
 }
 
 func (c *Client) Join() JoinResponse            { return c.join }
 func (c *Client) PubPC() *webrtc.PeerConnection { return c.pubPC }
 func (c *Client) SubPC() *webrtc.PeerConnection { return c.subPC }
+func (c *Client) Joined() <-chan struct{}       { return c.joined }
 
 func (c *Client) Connect() error {
-	u, err := url.Parse(c.wsURL)
+	target, err := c.codec.DialURL(c.wsURL, c.token)
 	if err != nil {
-		return fmt.Errorf("parse url: %w", err)
+		return err
 	}
-	u.Path = "/rtc"
-	q := u.Query()
-	q.Set("access_token", c.token)
-	q.Set("protocol", ProtocolVersion)
-	q.Set("sdk", SDKName)
-	q.Set("version", SDKVersion)
-	q.Set("auto_subscribe", "1")
-	q.Set("adaptive_stream", "true")
-	u.RawQuery = q.Encode()
 
 	headers := http.Header{}
-	if c.ua != "" {
-		headers.Set("User-Agent", c.ua)
+	ua := c.ua
+	if ua == "" {
+		ua = common.UserAgent
 	}
+	headers.Set("User-Agent", ua)
 	if c.origin != "" {
 		headers.Set("Origin", c.origin)
 	}
@@ -139,51 +143,59 @@ func (c *Client) Connect() error {
 	if c.netDialContext != nil {
 		dialer.NetDialContext = c.netDialContext
 	}
-	conn, resp, err := dialer.Dial(u.String(), headers)
+	conn, resp, err := dialer.Dial(target, headers)
 	if err != nil {
 		if resp != nil {
-			return fmt.Errorf("ws dial: %w (status %d)", err, resp.StatusCode)
+			return fmt.Errorf("ws dial: %w, status %d", err, resp.StatusCode)
 		}
 		return fmt.Errorf("ws dial: %w", err)
 	}
+	c.wsMu.Lock()
 	c.ws = conn
+	c.wsMu.Unlock()
 	c.logFn("[lk] signaling connected")
 	return nil
 }
 
 func (c *Client) sendSignal(payload []byte) error {
+	if payload == nil {
+		return nil
+	}
 	c.wsMu.Lock()
 	defer c.wsMu.Unlock()
 	if c.ws == nil {
 		return fmt.Errorf("ws not connected")
 	}
-	return c.ws.WriteMessage(websocket.BinaryMessage, payload)
+	return c.ws.WriteMessage(c.codec.MessageType(), payload)
 }
 
 func (c *Client) SendOffer(sdp string) error {
-	return c.sendSignal(encSignalRequestOffer(sessionDescription{Type: "offer", SDP: sdp}))
+	return c.sendSignal(c.codec.EncodeOffer(sdp))
 }
 
 func (c *Client) SendAnswer(sdp string) error {
-	return c.sendSignal(encSignalRequestAnswer(sessionDescription{Type: "answer", SDP: sdp}))
+	return c.sendSignal(c.codec.EncodeAnswer(sdp))
 }
 
 func (c *Client) SendTrickle(candidate webrtc.ICECandidateInit, target int) error {
-	js, _ := json.Marshal(candidate)
-	return c.sendSignal(encSignalRequestTrickle(trickleMsg{
-		CandidateInit: string(js),
-		Target:        target,
-	}))
+	return c.sendSignal(c.codec.EncodeTrickle(candidate, target))
 }
 
 func (c *Client) SendAddTrack(cid, name string, trackType, source int, width, height uint32) error {
-	return c.sendSignal(encSignalRequestAddTrack(cid, name, trackType, source, width, height))
+	return c.sendSignal(c.codec.EncodeAddTrack(AddTrackParams{
+		CID:    cid,
+		Name:   name,
+		Type:   trackType,
+		Source: source,
+		Width:  width,
+		Height: height,
+	}))
 }
 
-func (c *Client) SendLeave() error { return c.sendSignal(encSignalRequestLeave()) }
+func (c *Client) SendLeave() error { return c.sendSignal(c.codec.EncodeLeave()) }
 
 func (c *Client) SendPing() error {
-	return c.sendSignal(encSignalRequestPing(time.Now().UnixMilli()))
+	return c.sendSignal(c.codec.EncodePing(time.Now().UnixMilli()))
 }
 
 func (c *Client) Close() {
@@ -192,13 +204,20 @@ func (c *Client) Close() {
 	}
 	c.wsMu.Lock()
 	ws := c.ws
+	c.ws = nil
 	c.wsMu.Unlock()
 	common.CloseWS(ws)
-	if c.pubPC != nil {
-		_ = c.pubPC.Close()
+	c.pubMu.Lock()
+	pubPC := c.pubPC
+	c.pubMu.Unlock()
+	c.subMu.Lock()
+	subPC := c.subPC
+	c.subMu.Unlock()
+	if pubPC != nil {
+		_ = pubPC.Close()
 	}
-	if c.subPC != nil {
-		_ = c.subPC.Close()
+	if subPC != nil {
+		_ = subPC.Close()
 	}
 }
 
@@ -264,8 +283,12 @@ func (c *Client) buildPeerConnections() error {
 		return fmt.Errorf("create sub pc: %w", err)
 	}
 
+	c.pubMu.Lock()
 	c.pubPC = pubPC
+	c.pubMu.Unlock()
+	c.subMu.Lock()
 	c.subPC = subPC
+	c.subMu.Unlock()
 
 	pubPC.OnICECandidate(func(cand *webrtc.ICECandidate) {
 		if cand == nil {
@@ -292,6 +315,9 @@ func (c *Client) buildPeerConnections() error {
 	})
 	subPC.OnConnectionStateChange(func(state webrtc.PeerConnectionState) {
 		c.logFn("[lk] sub PC state: %s", state.String())
+		if state == webrtc.PeerConnectionStateConnected && c.OnSubConnected != nil {
+			c.OnSubConnected()
+		}
 	})
 	pubPC.OnICEConnectionStateChange(func(state webrtc.ICEConnectionState) {
 		c.logFn("[lk] pub ICE state: %s", state.String())
@@ -313,7 +339,7 @@ func (c *Client) buildPeerConnections() error {
 		}
 	})
 
-	c.logFn("[lk] PCs created (%d ICE servers)", len(c.join.ICEServers))
+	c.logFn("[lk] PCs created, %d ICE servers", len(c.join.ICEServers))
 	for i, s := range c.join.ICEServers {
 		c.logFn("[lk] iceServer[%d]: urls=%v hasCred=%v", i, s.URLs, s.Username != "")
 	}
@@ -321,60 +347,51 @@ func (c *Client) buildPeerConnections() error {
 }
 
 func (c *Client) handleSignal(data []byte) {
-	sr, err := decSignalResponse(data)
+	ev, err := c.codec.Decode(data)
 	if err != nil {
 		c.logFn("[lk] decode signal: %v", err)
 		return
 	}
-	switch sr.Kind {
-	case signalRespJoin:
-		if sr.Join != nil {
-			c.join = *sr.Join
-			c.logFn("[lk] join: room=%s participant=%s subscriberPrimary=%v iceServers=%d pingTimeout=%ds pingInterval=%ds",
-				c.join.RoomName, c.join.ParticipantID, c.join.SubscriberPrimary, len(c.join.ICEServers),
-				c.join.PingTimeoutSec, c.join.PingIntervalSec)
-			if err := c.buildPeerConnections(); err != nil {
-				c.logFn("[lk] %v", err)
-				return
-			}
-			if c.OnReady != nil {
-				c.OnReady()
-			}
+	switch ev.Kind {
+	case EventJoin:
+		c.join = *ev.Join
+		c.logFn("[lk] join: room=%s participant=%s subscriberPrimary=%v iceServers=%d pingTimeout=%ds pingInterval=%ds",
+			c.join.RoomName, c.join.ParticipantID, c.join.SubscriberPrimary, len(c.join.ICEServers),
+			c.join.PingTimeoutSec, c.join.PingIntervalSec)
+		if err := c.buildPeerConnections(); err != nil {
+			c.logFn("[lk] %v", err)
+			return
 		}
-	case signalRespAnswer:
-		c.logFn("[lk] <- pub answer (%d bytes)", len(sr.SDP.SDP))
-		if sr.SDP != nil {
-			c.applyPubAnswer(sr.SDP.SDP)
+		c.joinedOnce.Do(func() { close(c.joined) })
+		if c.OnReady != nil {
+			c.OnReady()
 		}
-	case signalRespOffer:
-		c.logFn("[lk] <- sub offer (%d bytes)", len(sr.SDP.SDP))
-		if sr.SDP != nil {
-			c.applySubOfferAndAnswer(sr.SDP.SDP)
-		}
-	case signalRespTrickle:
-		if sr.Trickle != nil {
-			c.logFn("[lk] <- trickle target=%d", sr.Trickle.Target)
-			c.applyRemoteTrickle(*sr.Trickle)
-		}
-	case signalRespRefreshToken:
-		if sr.Token != "" {
-			c.token = sr.Token
-			c.logFn("[lk] token refreshed")
-		}
-	case signalRespLeave:
-		if sr.Leave != nil {
+	case EventAnswer:
+		c.logFn("[lk] pub answer received, %d bytes", len(ev.SDP))
+		c.applyPubAnswer(ev.SDP)
+	case EventOffer:
+		c.logFn("[lk] sub offer received, %d bytes", len(ev.SDP))
+		c.applySubOfferAndAnswer(ev.SDP)
+	case EventTrickle:
+		c.logFn("[lk] trickle target=%d", ev.Trickle.Target)
+		c.applyRemoteTrickle(*ev.Trickle)
+	case EventToken:
+		c.token = ev.Token
+		c.logFn("[lk] token refreshed")
+	case EventLeave:
+		if ev.Leave != nil {
 			c.logFn("[lk] ignored leave reason=%s action=%s",
-				DisconnectReasonName(sr.Leave.Reason), LeaveActionName(sr.Leave.Action))
+				DisconnectReasonName(ev.Leave.Reason), LeaveActionName(ev.Leave.Action))
 		} else {
 			c.logFn("[lk] ignored leave")
 		}
-	case signalRespUpdate:
-		if c.OnParticipantUpdate != nil && len(sr.Participants) > 0 {
-			c.OnParticipantUpdate(sr.Participants)
+	case EventUpdate:
+		if c.OnParticipantUpdate != nil {
+			c.OnParticipantUpdate(ev.Participants)
 		}
 	default:
 		if common.Debug {
-			c.logFn("[lk] <- signal kind=%d (%d bytes)", sr.Kind, len(data))
+			c.logFn("[lk] unhandled signal, %d bytes", len(data))
 		}
 	}
 }
@@ -393,6 +410,7 @@ func (c *Client) applyPubAnswer(sdp string) {
 		return
 	}
 	c.pubRemoteSet = true
+	c.drainPendingLocked(c.pubPC, &c.pubPending)
 }
 
 func (c *Client) applySubOfferAndAnswer(sdp string) {
@@ -400,21 +418,26 @@ func (c *Client) applySubOfferAndAnswer(sdp string) {
 		c.OnRemoteSDP(TargetSubscriber, "offer", sdp)
 	}
 	c.subMu.Lock()
-	defer c.subMu.Unlock()
 	if c.subPC == nil {
+		c.subMu.Unlock()
 		return
 	}
-	if err := c.subPC.SetRemoteDescription(webrtc.SessionDescription{Type: webrtc.SDPTypeOffer, SDP: sdp}); err != nil {
+	subPC := c.subPC
+	if err := subPC.SetRemoteDescription(webrtc.SessionDescription{Type: webrtc.SDPTypeOffer, SDP: sdp}); err != nil {
+		c.subMu.Unlock()
 		c.logFn("[lk] set sub remote offer: %v", err)
 		return
 	}
 	c.subRemoteSet = true
-	answer, err := c.subPC.CreateAnswer(nil)
+	c.drainPendingLocked(subPC, &c.subPending)
+	c.subMu.Unlock()
+
+	answer, err := subPC.CreateAnswer(nil)
 	if err != nil {
 		c.logFn("[lk] create sub answer: %v", err)
 		return
 	}
-	if err := c.subPC.SetLocalDescription(answer); err != nil {
+	if err := subPC.SetLocalDescription(answer); err != nil {
 		c.logFn("[lk] set sub local answer: %v", err)
 		return
 	}
@@ -423,44 +446,57 @@ func (c *Client) applySubOfferAndAnswer(sdp string) {
 	}
 }
 
-func (c *Client) applyRemoteTrickle(m trickleMsg) {
-	if m.CandidateInit == "" {
-		return
+func (c *Client) drainPendingLocked(pc *webrtc.PeerConnection, pending *[]webrtc.ICECandidateInit) {
+	for _, ic := range *pending {
+		if err := pc.AddICECandidate(ic); err != nil {
+			c.logFn("[lk] add pending candidate: %v", err)
+		}
 	}
-	var ic webrtc.ICECandidateInit
-	if err := json.Unmarshal([]byte(m.CandidateInit), &ic); err != nil {
-		c.logFn("[lk] decode trickle candidate: %v", err)
-		return
-	}
+	*pending = nil
+}
+
+func (c *Client) applyRemoteTrickle(m TrickleEvent) {
 	if c.OnRemoteCandidate != nil {
-		c.OnRemoteCandidate(m.Target, ic)
+		c.OnRemoteCandidate(m.Target, m.Candidate)
 	}
-	switch m.Target {
-	case TargetPublisher:
-		c.pubMu.Lock()
-		ready := c.pubRemoteSet
-		c.pubMu.Unlock()
-		if ready {
-			_ = c.pubPC.AddICECandidate(ic)
-		}
-	case TargetSubscriber:
-		c.subMu.Lock()
-		ready := c.subRemoteSet
-		c.subMu.Unlock()
-		if ready {
-			_ = c.subPC.AddICECandidate(ic)
-		}
+	mu := &c.subMu
+	pc := &c.subPC
+	ready := &c.subRemoteSet
+	pending := &c.subPending
+	if m.Target == TargetPublisher {
+		mu = &c.pubMu
+		pc = &c.pubPC
+		ready = &c.pubRemoteSet
+		pending = &c.pubPending
+	}
+	mu.Lock()
+	defer mu.Unlock()
+	if *pc == nil || !*ready {
+		*pending = append(*pending, m.Candidate)
+		return
+	}
+	if err := (*pc).AddICECandidate(m.Candidate); err != nil {
+		c.logFn("[lk] add candidate: %v", err)
 	}
 }
 
 func (c *Client) ReadLoop() error {
 	defer c.Close()
+	c.wsMu.Lock()
+	ws := c.ws
+	c.wsMu.Unlock()
+	if ws == nil {
+		return fmt.Errorf("ws not connected")
+	}
 	for {
-		mt, data, err := c.ws.ReadMessage()
+		mt, data, err := ws.ReadMessage()
 		if err != nil {
+			if c.closed.Load() {
+				return nil
+			}
 			return err
 		}
-		if mt != websocket.BinaryMessage {
+		if !c.codec.Accepts(mt) {
 			continue
 		}
 		c.handleSignal(data)
@@ -468,6 +504,11 @@ func (c *Client) ReadLoop() error {
 }
 
 func (c *Client) PingLoop() {
+	select {
+	case <-c.joined:
+	case <-time.After(30 * time.Second):
+		return
+	}
 	period := PingPeriod
 	if c.join.PingIntervalSec > 0 {
 		period = time.Duration(c.join.PingIntervalSec) * time.Second

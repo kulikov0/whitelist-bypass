@@ -239,7 +239,7 @@ func (c *Call) Start() error {
 		c.cfg.LogFn("[call] OnTrack id=%q kind=%s codec=%s ssrc=%d",
 			remoteTrack.ID(), remoteTrack.Kind().String(), remoteTrack.Codec().MimeType, remoteTrack.SSRC())
 		if remoteTrack.Codec().MimeType != webrtc.MimeTypeVP8 {
-			go drainTrack(remoteTrack)
+			go tunnel.DrainTrack(remoteTrack)
 			return
 		}
 		go c.readVP8Track(remoteTrack)
@@ -734,13 +734,4 @@ func (c *Call) buildVideoInStats() []ClientStatVideoIn {
 		})
 	}
 	return out
-}
-
-func drainTrack(track *webrtc.TrackRemote) {
-	buf := make([]byte, 1500)
-	for {
-		if _, _, err := track.Read(buf); err != nil {
-			return
-		}
-	}
 }

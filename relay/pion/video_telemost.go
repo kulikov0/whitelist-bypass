@@ -13,9 +13,9 @@ import (
 )
 
 type tmPCState struct {
-	pc          *webrtc.PeerConnection
-	remoteSet   bool
-	pending     []webrtc.ICECandidateInit
+	pc        *webrtc.PeerConnection
+	remoteSet bool
+	pending   []webrtc.ICECandidateInit
 }
 
 type TelemostClient struct {

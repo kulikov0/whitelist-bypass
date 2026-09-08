@@ -40,7 +40,7 @@ func RequestResolve(hostname string) (string, error) {
 
 type StatusEmitter struct{}
 
-func (StatusEmitter) EmitStatus(status string)  { common.EmitStatus(status) }
+func (StatusEmitter) EmitStatus(status string)   { common.EmitStatus(status) }
 func (StatusEmitter) EmitStatusError(msg string) { common.EmitStatusError(msg) }
 
 type PCConfigurer struct{}

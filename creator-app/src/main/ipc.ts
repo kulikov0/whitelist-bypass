@@ -120,6 +120,14 @@ export function registerIpcHandlers(tabManager: TabManager): void {
     return tabManager.setDionCredentials(email, password);
   });
 
+  ipcMain.handle(IPC.GET_BITRIX_CREDENTIALS, () => {
+    return tabManager.getBitrixCredentials();
+  });
+
+  ipcMain.handle(IPC.SET_BITRIX_CREDENTIALS, (_e, portal: string, email: string, password: string) => {
+    return tabManager.setBitrixCredentials(portal, email, password);
+  });
+
   ipcMain.handle(IPC.SEND_BOT_CALL_LINK, (_e, tabId: string, link: string) => {
     tabManager.sendBotCallLink(tabId, link);
   });

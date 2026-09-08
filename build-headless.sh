@@ -14,6 +14,9 @@ go -C "$ROOT/headless/wbstream" build -trimpath -ldflags="-s -w" -o headless-wbs
 echo "Building headless-dion-creator..."
 go -C "$ROOT/headless/dion" build -trimpath -ldflags="-s -w" -o headless-dion-creator .
 
+echo "Building headless-bitrix-creator..."
+go -C "$ROOT/headless/bitrix" build -trimpath -ldflags="-s -w" -o headless-bitrix-creator .
+
 echo "Building headless-dion-joiner..."
 go -C "$ROOT/headless/dion-joiner" build -trimpath -ldflags="-s -w" -o headless-dion-joiner .
 
@@ -27,4 +30,4 @@ echo "Building headless-vk-bot..."
 go -C "$ROOT/headless/vk-bot" build -trimpath -ldflags="-s -w" -o headless-vk-bot .
 
 echo "Done."
-ls -lh "$ROOT/headless/vk/headless-vk-creator" "$ROOT/headless/telemost/headless-telemost-creator" "$ROOT/headless/wbstream/headless-wbstream-creator" "$ROOT/headless/dion/headless-dion-creator" "$ROOT/headless/dion-joiner/headless-dion-joiner" "$ROOT/headless/wbstream-joiner/headless-wbstream-joiner" "$ROOT/headless/telemost-joiner/headless-telemost-joiner" "$ROOT/headless/vk-bot/headless-vk-bot"
+ls -lh "$ROOT/headless/vk/headless-vk-creator" "$ROOT/headless/telemost/headless-telemost-creator" "$ROOT/headless/wbstream/headless-wbstream-creator" "$ROOT/headless/dion/headless-dion-creator" "$ROOT/headless/bitrix/headless-bitrix-creator" "$ROOT/headless/dion-joiner/headless-dion-joiner" "$ROOT/headless/wbstream-joiner/headless-wbstream-joiner" "$ROOT/headless/telemost-joiner/headless-telemost-joiner" "$ROOT/headless/vk-bot/headless-vk-bot"

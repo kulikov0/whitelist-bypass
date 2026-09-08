@@ -5,8 +5,8 @@ import (
 	"io"
 	"sync"
 
-	"github.com/pion/datachannel"
 	"github.com/kulikov0/headless-client/webrtc"
+	"github.com/pion/datachannel"
 	"whitelist-bypass/relay/common"
 )
 

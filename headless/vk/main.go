@@ -698,11 +698,13 @@ func main() {
 	if *vkLink != "" {
 		callInfo, err = joinExistingCall(cookieStr, *vkLink, cfg)
 		if err != nil {
+			common.EmitAuthErrorFor(err)
 			log.Fatalf("Failed to join existing call: %v", err)
 		}
 	} else {
 		callInfo, err = createAndJoinCall(cookieStr, *peerId, cfg)
 		if err != nil {
+			common.EmitAuthErrorFor(err)
 			log.Fatalf("Failed to create call: %v", err)
 		}
 	}

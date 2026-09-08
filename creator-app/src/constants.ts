@@ -18,10 +18,13 @@ export const VK_LOGIN_URL = 'https://vk.ru/';
 export const YANDEX_LOGIN_URL = 'https://passport.yandex.ru/auth?retpath=https%3A%2F%2Ftelemost.yandex.ru%2F';
 export const DION_LOGIN_URL = 'https://dion.vc/login';
 export const WBSTREAM_LOGIN_URL = 'https://stream.wb.ru/login';
+export const BITRIX_LOGIN_URL = 'https://www.bitrix24.ru/';
 export const VK_AUTH_COOKIE = 'remixsid';
 export const YANDEX_AUTH_COOKIE = 'Session_id';
 export const DION_AUTH_COOKIE = 'vc-refresh-token';
 export const WBSTREAM_AUTH_COOKIE = 'x_wbaas_token';
+export const BITRIX_SESSION_COOKIE = 'BITRIX_SM_UIDH';
+export const BITRIX_AUTH_NET_HOST = 'https://auth2.bitrix24.net';
 
 export const SESSION_PARTITION = 'persist:creator';
 export const WINDOW_WIDTH = 1200;
@@ -35,6 +38,7 @@ export const VK_COOKIE_DOMAINS = ['vk.ru'];
 export const YANDEX_COOKIE_DOMAINS = ['yandex.ru', 'yandex.net', 'ya.ru'];
 export const DION_COOKIE_DOMAINS = ['dion.vc'];
 export const WBSTREAM_COOKIE_DOMAINS = ['stream.wb.ru', 'wb.ru', 'wildberries.ru'];
+export const BITRIX_COOKIE_DOMAINS = ['bitrix24.ru', 'bitrix24.net', 'bitrix24.com'];
 
 export enum Selector {
   VK_ADMIT = '[data-testid="calls_waiting_hall_promote"]',
@@ -63,6 +67,8 @@ export enum IPC {
   CLEAR_COOKIES = 'clear-cookies',
   GET_DION_CREDENTIALS = 'get-dion-credentials',
   SET_DION_CREDENTIALS = 'set-dion-credentials',
+  GET_BITRIX_CREDENTIALS = 'get-bitrix-credentials',
+  SET_BITRIX_CREDENTIALS = 'set-bitrix-credentials',
   EXPORT_COOKIES_ZIP = 'export-cookies-zip',
   RENDER_QR = 'render-qr',
   RELAY_LOG = 'relay-log',
