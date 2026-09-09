@@ -1,6 +1,7 @@
 import { Platform, Bridge, LogPanel, TunnelMode, Webview } from '../types';
 import { SESSION_PARTITION, HOOK_POLL_INTERVAL_MS, CALL_CREATOR_INJECT_DELAY_MS, USER_AGENT } from '../constants';
 import { RendererTabManager } from './tab-manager';
+import { appendLogElement } from './log-buffer';
 
 declare const window: Window & { bridge: Bridge };
 
@@ -260,11 +261,7 @@ export function startHookLogPoller(tm: RendererTabManager): void {
       .then((logs: string[]) => {
         if (!logs.length) return;
         const el = document.getElementById('hookLog')!;
-        logs.forEach((msg) => {
-          if (el.textContent!.length > 0) el.textContent += '\n';
-          el.textContent += msg.replace('[HOOK] ', '');
-        });
-        el.scrollTop = el.scrollHeight;
+        appendLogElement(el, logs.map((msg) => msg.replace('[HOOK] ', '')).join('\n'));
       })
       .catch(() => {});
   }, HOOK_POLL_INTERVAL_MS);

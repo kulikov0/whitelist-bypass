@@ -10,6 +10,7 @@ import {
   HeadlessStartArgs,
 } from '../types';
 import { HeadlessLogMarker } from '../constants';
+import { appendLogText, appendLogElement, trimLogText } from './log-buffer';
 
 declare const window: Window & { bridge: Bridge };
 
@@ -160,8 +161,8 @@ export class RendererTabManager {
     if (this.activeTabId && this.tabs[this.activeTabId]) {
       const relayEl = document.getElementById('relayLog');
       const hookEl = document.getElementById('hookLog');
-      if (relayEl) this.tabs[this.activeTabId].relayLogs = relayEl.textContent || '';
-      if (hookEl) this.tabs[this.activeTabId].hookLogs = hookEl.textContent || '';
+      if (relayEl) this.tabs[this.activeTabId].relayLogs = trimLogText(relayEl.textContent || '');
+      if (hookEl) this.tabs[this.activeTabId].hookLogs = trimLogText(hookEl.textContent || '');
     }
   }
 
@@ -183,16 +184,12 @@ export class RendererTabManager {
   appendRelayLog(tabId: string, msg: string): void {
     const tab = this.tabs[tabId];
     if (!tab) return;
-    tab.relayLogs += (tab.relayLogs ? '\n' : '') + msg;
+    tab.relayLogs = appendLogText(tab.relayLogs, msg);
     let rendered = false;
     if (tab.headless) rendered = this.parseHeadlessLog(tabId, msg);
     if (tabId === this.activeTabId && !rendered) {
       const el = document.getElementById('relayLog');
-      if (el) {
-        if (el.textContent!.length > 0) el.textContent += '\n';
-        el.textContent += msg;
-        el.scrollTop = el.scrollHeight;
-      }
+      if (el) appendLogElement(el, msg);
     }
   }
 

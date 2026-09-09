@@ -22,7 +22,8 @@ func main() {
 	common.MaybePrintVersion()
 	cookiesPath := flag.String("cookies", "", "path to cookies-bitrix.json (exported from creator-app: email/password/portal/cookies)")
 	roomFlag := flag.String("room", "", "conference link https://portal/video/CODE or alias to rejoin as host (empty = create new room)")
-	resources := flag.String("resources", "default", "resource mode: moderate, default, unlimited")
+	resources := flag.String("resources", "default", "resource mode: moderate, default, unlimited, custom")
+	customReadBuf := flag.Int("read-buf", 0, "DC read buffer size in bytes, used with -resources custom")
 	writeFile := flag.String("write-file", "", "path to file where the active guest link is appended")
 	upstreamSocks := flag.String("upstream-socks", "", "route tunneled egress through this SOCKS5 proxy (host:port), e.g. a local VPN client")
 	upstreamUser := flag.String("upstream-user", "", "upstream SOCKS5 username")
@@ -33,21 +34,31 @@ func main() {
 	common.Debug = *debugFlag
 	common.AllowPrivateDst = *allowPrivate
 
+	var readBuf int
 	var memLimit int64
 	switch *resources {
 	case "moderate":
+		readBuf = 16384
 		memLimit = 64 << 20
 	case "default":
+		readBuf = common.DCBufSize
 		memLimit = 128 << 20
 	case "unlimited":
+		readBuf = common.RTPBufSize
+		memLimit = 256 << 20
+	case "custom":
+		readBuf = *customReadBuf
+		if readBuf == 0 {
+			readBuf = common.RTPBufSize
+		}
 		memLimit = 256 << 20
 	default:
-		log.Fatalf("[config] unknown resources mode: %s", *resources)
+		log.Fatalf("[config] unknown resources mode: %s (use moderate, default, unlimited, custom)", *resources)
 	}
 	if memLimit > 0 {
 		debug.SetMemoryLimit(memLimit)
 	}
-	log.Printf("[config] resources=%s", *resources)
+	log.Printf("[config] resources=%s read-buf=%d", *resources, readBuf)
 
 	if *cookiesPath == "" {
 		log.Fatalf("[FATAL] --cookies is required")
@@ -151,29 +162,41 @@ func main() {
 	defer sig.Close()
 
 	ms, err := bitrix.NewMediaSession(bitrix.MediaParams{
-		Signal: sig,
-		Alias:  alias,
-		Mode:   bitrix.TunnelModeAuto,
-		FPS:    24,
-		Batch:  30,
-		LogFn:  log.Printf,
+		Signal:  sig,
+		Alias:   alias,
+		Mode:    bitrix.TunnelModeAuto,
+		FPS:     24,
+		Batch:   30,
+		ReadBuf: readBuf,
+		LogFn:   log.Printf,
 	})
 	if err != nil {
 		log.Fatalf("[FATAL] media session: %v", err)
 	}
+	var activeBridge *tunnel.RelayBridge
 	ms.OnConnected = func(tun tunnel.DataTunnel) {
-		readBuf := common.VP8BufSize
+		if activeBridge != nil {
+			activeBridge.Reset()
+		}
+		bridgeReadBuf := common.VP8BufSize
 		switch tun.(type) {
 		case *tunnel.DCTunnel, *tunnel.MultiTrackKCPTunnel:
-			readBuf = common.DCBufSize
+			bridgeReadBuf = readBuf
 		}
-		rb := tunnel.NewRelayBridge(tun, "creator", readBuf, log.Printf)
-		rb.SetUpstreamSocks(*upstreamSocks, *upstreamUser, *upstreamPass)
-		rb.MarkReady()
+		activeBridge = tunnel.NewRelayBridge(tun, "creator", bridgeReadBuf, log.Printf)
+		activeBridge.SetUpstreamSocks(*upstreamSocks, *upstreamUser, *upstreamPass)
+		activeBridge.SetOnPeerConfig(func(_, _, trackCount int) { ms.AdaptTrackCount(trackCount) })
+		activeBridge.MarkReady()
 		log.Printf("[bx] creator egress ready transport=%T upstream=%q", tun, *upstreamSocks)
 		fmt.Println("")
 		fmt.Println("  TUNNEL CONNECTED")
 		fmt.Println("")
+	}
+	ms.OnPeerRestart = func() {
+		if activeBridge != nil {
+			log.Printf("[bx] new peer detected, resetting relay bridge")
+			activeBridge.Reset()
+		}
 	}
 
 	go func() {

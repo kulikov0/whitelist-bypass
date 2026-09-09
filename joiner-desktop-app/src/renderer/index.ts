@@ -59,8 +59,18 @@ function refreshPlatformHint() {
 linkInput.addEventListener('input', refreshPlatformHint);
 refreshPlatformHint();
 
+const MAX_LOG_CHARS = 400000;
+const LOG_TRIM_KEEP_CHARS = 200000;
+
+function trimLogText(text: string): string {
+  if (text.length <= MAX_LOG_CHARS) return text;
+  const cut = text.length - LOG_TRIM_KEEP_CHARS;
+  const newline = text.indexOf('\n', cut);
+  return text.slice(newline === -1 ? cut : newline + 1);
+}
+
 function appendLog(text: string) {
-  logEl.textContent += text;
+  logEl.textContent = trimLogText((logEl.textContent || '') + text);
   logEl.scrollTop = logEl.scrollHeight;
 }
 

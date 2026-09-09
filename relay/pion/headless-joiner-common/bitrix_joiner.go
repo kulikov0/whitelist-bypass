@@ -34,6 +34,7 @@ type BitrixHeadlessJoiner struct {
 	vp8FPS      int
 	vp8Batch    int
 	reliable    bool
+	dualTrack   bool
 
 	sessMu sync.Mutex
 	sig    *bitrix.Signal
@@ -100,6 +101,7 @@ func (j *BitrixHeadlessJoiner) RunWithParams(jsonParams string) {
 		j.vp8Batch = 30
 	}
 	j.reliable = params.Reliable
+	j.dualTrack = params.DualTrack
 
 	u, err := url.Parse(j.joinLink)
 	if err != nil {
@@ -114,8 +116,8 @@ func (j *BitrixHeadlessJoiner) RunWithParams(jsonParams string) {
 		j.Status.EmitStatusError("bad join link")
 		return
 	}
-	j.logFn("bitrix-joiner: portal=%s alias=%s mode=%s vp8Fps=%d vp8Batch=%d reliable=%v",
-		j.portal, j.alias, j.tunnelMode, j.vp8FPS, j.vp8Batch, j.reliable)
+	j.logFn("bitrix-joiner: portal=%s alias=%s mode=%s vp8Fps=%d vp8Batch=%d reliable=%v dualTrack=%v",
+		j.portal, j.alias, j.tunnelMode, j.vp8FPS, j.vp8Batch, j.reliable, j.dualTrack)
 
 	j.Status.EmitStatus(common.StatusConnecting)
 	if err := j.runOnce(); err != nil {
@@ -191,13 +193,14 @@ func (j *BitrixHeadlessJoiner) runOnce() error {
 	}
 
 	ms, err := bitrix.NewMediaSession(bitrix.MediaParams{
-		Signal:   sig,
-		Alias:    j.alias,
-		Mode:     j.tunnelMode,
-		FPS:      j.vp8FPS,
-		Batch:    j.vp8Batch,
-		Reliable: j.reliable,
-		LogFn:    j.logFn,
+		Signal:    sig,
+		Alias:     j.alias,
+		Mode:      j.tunnelMode,
+		FPS:       j.vp8FPS,
+		Batch:     j.vp8Batch,
+		Reliable:  j.reliable,
+		DualTrack: j.dualTrack,
+		LogFn:     j.logFn,
 	})
 	if err != nil {
 		sig.Close()
