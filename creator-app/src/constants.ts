@@ -8,6 +8,10 @@ export const CALL_CREATOR_INJECT_DELAY_MS = 1000;
 export const BOT_POLL_RETRY_DELAY_MS = 1000;
 export const BOT_POLL_WAIT_SECONDS = 25;
 
+export const MAX_LOG_CHARS = 400000;
+export const LOG_TRIM_KEEP_CHARS = 200000;
+export const HOOK_LOG_BUFFER_LIMIT = 500;
+
 export const VK_API_VERSION = '5.131';
 export const VK_API_BASE_URL = 'https://api.vk.ru/method';
 export const VK_IM_URL = 'https://vk.ru/im';
@@ -88,7 +92,14 @@ export const LOG_CAPTURE_SNIPPET = [
   'console.log=function(){',
   '_ol.apply(null,arguments);',
   "var m=Array.prototype.slice.call(arguments).join(' ');",
-  "if(m.indexOf('[HOOK]')!==-1)window.__hookLogs.push(m)",
+  "if(m.indexOf('[HOOK]')!==-1){",
+  'window.__hookLogs.push(m);',
+  'if(window.__hookLogs.length>' +
+    HOOK_LOG_BUFFER_LIMIT +
+    ')window.__hookLogs.splice(0,window.__hookLogs.length-' +
+    HOOK_LOG_BUFFER_LIMIT +
+    ')',
+  '}',
   '}}',
 ].join('');
 
