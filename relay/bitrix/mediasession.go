@@ -27,6 +27,7 @@ type MediaParams struct {
 	Batch     int
 	Reliable  bool
 	DualTrack bool
+	ReadBuf   int
 	LogFn     func(string, ...any)
 }
 
@@ -252,7 +253,11 @@ func (s *MediaSession) maybeStartDCTunnel() {
 	}
 	readWrapped := livekit.NewDataPacketWrapper(subRaw, livekit.DataPacketKindReliable)
 	writeWrapped := livekit.NewDataPacketWrapper(pubRaw, livekit.DataPacketKindReliable)
-	dctun := tunnel.NewChunkedDCTunnelFromRaw(readWrapped, writeWrapped, s.obf, common.DCBufSize, s.p.LogFn)
+	readBuf := s.p.ReadBuf
+	if readBuf == 0 {
+		readBuf = common.DCBufSize
+	}
+	dctun := tunnel.NewChunkedDCTunnelFromRaw(readWrapped, writeWrapped, s.obf, readBuf, s.p.LogFn)
 	s.mu.Lock()
 	s.dctun = dctun
 	s.mu.Unlock()
