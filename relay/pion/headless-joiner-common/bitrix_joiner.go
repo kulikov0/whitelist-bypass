@@ -154,7 +154,7 @@ func (j *BitrixHeadlessJoiner) Close() {
 }
 
 func (j *BitrixHeadlessJoiner) runOnce() error {
-	userAgent := common.RandomDeviceProfile().UserAgent
+	userAgent := headless.ChromeWindows.UserAgent()
 	c, err := bitrix.NewClient(j.portal, userAgent)
 	if err != nil {
 		return fmt.Errorf("new client: %w", err)

@@ -12,6 +12,7 @@ import (
 	"sync"
 	"syscall"
 
+	headless "github.com/kulikov0/headless-client"
 	"whitelist-bypass/relay/bitrix"
 	"whitelist-bypass/relay/common"
 	"whitelist-bypass/relay/tunnel"
@@ -75,7 +76,7 @@ func main() {
 		log.Fatalf("[FATAL] no portal: set \"portal\" in %s or pass a full --room link", *cookiesPath)
 	}
 
-	userAgent := common.RandomDeviceProfile().UserAgent
+	userAgent := headless.ChromeWindows.UserAgent()
 	c, err := bitrix.NewClient(portal, userAgent)
 	if err != nil {
 		log.Fatalf("[FATAL] NewClient: %v", err)

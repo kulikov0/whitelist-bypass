@@ -189,16 +189,35 @@ func (c *Client) resetJar() error {
 	return nil
 }
 
+func secFetchSiteFor(endpoint, origin string) string {
+	endpointURL, err := url.Parse(endpoint)
+	if err != nil {
+		return "cross-site"
+	}
+	originURL, err := url.Parse(origin)
+	if err != nil {
+		return "cross-site"
+	}
+	if endpointURL.Host == originURL.Host {
+		return "same-origin"
+	}
+	return "cross-site"
+}
+
 func (c *Client) do(method, endpoint, contentType string, body io.Reader) ([]byte, int, error) {
 	req, err := http.NewRequest(method, endpoint, body)
 	if err != nil {
 		return nil, 0, err
 	}
-	req.Header.Set("User-Agent", c.userAgent)
+	req.Header = headless.ChromeWindows.Headers(headless.DestEmpty)
+	if c.userAgent != "" {
+		req.Header.Set("User-Agent", c.userAgent)
+	}
 	req.Header.Set("Accept", "application/json, text/plain, */*")
 	if c.portal != "" {
 		req.Header.Set("Origin", c.portal)
 		req.Header.Set("Referer", c.portal+"/")
+		req.Header.Set("Sec-Fetch-Site", secFetchSiteFor(endpoint, c.portal))
 	}
 	if contentType != "" {
 		req.Header.Set("Content-Type", contentType)

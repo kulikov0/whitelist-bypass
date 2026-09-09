@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"net"
-	"net/http"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -129,12 +128,10 @@ func (c *Client) Connect() error {
 		return err
 	}
 
-	headers := http.Header{}
-	ua := c.ua
-	if ua == "" {
-		ua = common.UserAgent
+	headers := headless.ChromeWindows.Headers(headless.DestWebSocket)
+	if c.ua != "" {
+		headers.Set("User-Agent", c.ua)
 	}
-	headers.Set("User-Agent", ua)
 	if c.origin != "" {
 		headers.Set("Origin", c.origin)
 	}
