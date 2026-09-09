@@ -27,6 +27,8 @@ const vkMaxReconnectAttempts = 10
 
 const vkTopologyDirect = "DIRECT"
 
+const vkOrigin = "https://vk.ru"
+
 type vkAuthRottenError struct {
 	Code string
 	Msg  string
@@ -390,7 +392,7 @@ func (h *VKHeadlessJoiner) connectSFU() {
 		"&version=" + h.authParams.ProtocolVersion +
 		"&device=browser&capabilities=" + capabilities + "&clientType=VK&tgt=join&compression=deflate-raw"
 
-	sfu, err := wtsignal.Dial(wtURL, hostname, resolvedIP)
+	sfu, err := wtsignal.Dial(wtURL, hostname, resolvedIP, vkOrigin)
 	if err != nil {
 		h.logFn("vk-joiner: WebTransport connect failed: %s", common.MaskError(err))
 		return

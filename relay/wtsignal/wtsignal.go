@@ -51,7 +51,7 @@ type Conn struct {
 	writeMu  sync.Mutex
 }
 
-func Dial(endpoint, serverName, resolvedIP string) (*Conn, error) {
+func Dial(endpoint, serverName, resolvedIP, origin string) (*Conn, error) {
 	target, err := url.Parse(endpoint)
 	if err != nil {
 		return nil, err
@@ -80,8 +80,9 @@ func Dial(endpoint, serverName, resolvedIP string) (*Conn, error) {
 	// The SFU advertises HTTP/3 datagrams but never negotiates them at the QUIC
 	// layer, and only EnableDatagrams feeds the check that closes the connection.
 	tr := &http3.Transport{
-		EnableDatagrams:  false,
-		SendGreaseFrames: true,
+		EnableDatagrams:    false,
+		SendGreaseFrames:   true,
+		DisableCompression: true,
 		AdditionalSettings: map[uint64]uint64{
 			settingsQPACKMaxTableCapacity:     65536,
 			settingsMaxFieldSectionSize:       16384,
@@ -125,7 +126,7 @@ func Dial(endpoint, serverName, resolvedIP string) (*Conn, error) {
 
 	req := (&http.Request{
 		Method: http.MethodConnect,
-		Header: http.Header{},
+		Header: headless.ChromeWindows.WebTransportConnectHeader(origin),
 		Proto:  protocolHeaderLegacy,
 		Host:   target.Host,
 		URL:    target,

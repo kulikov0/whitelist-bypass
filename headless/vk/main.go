@@ -23,6 +23,8 @@ import (
 )
 
 const TopologyDirect = "DIRECT"
+
+const vkOrigin = "https://vk.ru"
 const maxServerBounces = 5
 
 type CallInfo struct {
@@ -480,7 +482,7 @@ func (b *Bridge) connectVKWs(wtURL string) error {
 	if err != nil || len(ips) == 0 {
 		return fmt.Errorf("resolve %s: %w", host, err)
 	}
-	sfu, err := wtsignal.Dial(wtURL, host, ips[0])
+	sfu, err := wtsignal.Dial(wtURL, host, ips[0], vkOrigin)
 	if err != nil {
 		return err
 	}
