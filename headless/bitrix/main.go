@@ -160,19 +160,30 @@ func main() {
 	if err != nil {
 		log.Fatalf("[FATAL] media session: %v", err)
 	}
+	var activeBridge *tunnel.RelayBridge
 	ms.OnConnected = func(tun tunnel.DataTunnel) {
+		if activeBridge != nil {
+			activeBridge.Reset()
+		}
 		readBuf := common.VP8BufSize
 		switch tun.(type) {
 		case *tunnel.DCTunnel, *tunnel.MultiTrackKCPTunnel:
 			readBuf = common.DCBufSize
 		}
-		rb := tunnel.NewRelayBridge(tun, "creator", readBuf, log.Printf)
-		rb.SetUpstreamSocks(*upstreamSocks, *upstreamUser, *upstreamPass)
-		rb.MarkReady()
+		activeBridge = tunnel.NewRelayBridge(tun, "creator", readBuf, log.Printf)
+		activeBridge.SetUpstreamSocks(*upstreamSocks, *upstreamUser, *upstreamPass)
+		activeBridge.SetOnPeerConfig(func(_, _, trackCount int) { ms.AdaptTrackCount(trackCount) })
+		activeBridge.MarkReady()
 		log.Printf("[bx] creator egress ready transport=%T upstream=%q", tun, *upstreamSocks)
 		fmt.Println("")
 		fmt.Println("  TUNNEL CONNECTED")
 		fmt.Println("")
+	}
+	ms.OnPeerRestart = func() {
+		if activeBridge != nil {
+			log.Printf("[bx] new peer detected, resetting relay bridge")
+			activeBridge.Reset()
+		}
 	}
 
 	go func() {

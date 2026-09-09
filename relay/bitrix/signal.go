@@ -112,12 +112,20 @@ func (s *Signal) PubReliableDC() *webrtc.DataChannel {
 	return s.pubReliable
 }
 
-func (s *Signal) PublishVP8(track *webrtc.TrackLocalStaticSample, name string) (*webrtc.RTPSender, error) {
+func (s *Signal) PubPC() *webrtc.PeerConnection { return s.lk.PubPC() }
+
+func (s *Signal) Joined() <-chan struct{} { return s.lk.Joined() }
+
+func (s *Signal) WaitJoined(timeout time.Duration) error {
 	select {
 	case <-s.lk.Joined():
-	case <-time.After(30 * time.Second):
-		return nil, fmt.Errorf("join did not arrive")
+		return nil
+	case <-time.After(timeout):
+		return fmt.Errorf("join did not arrive")
 	}
+}
+
+func (s *Signal) AddPublisherTrack(track *webrtc.TrackLocalStaticSample, source int) (*webrtc.RTPTransceiver, error) {
 	pubPC := s.lk.PubPC()
 	if pubPC == nil {
 		return nil, fmt.Errorf("pub pc not ready")
@@ -131,21 +139,26 @@ func (s *Signal) PublishVP8(track *webrtc.TrackLocalStaticSample, name string) (
 	if err != nil {
 		return nil, err
 	}
-	if err := s.lk.SendAddTrack(track.ID(), name, livekit.TrackTypeVideo, livekit.TrackSourceCamera, 1280, 720); err != nil {
+	if err := s.lk.SendAddTrack(track.ID(), "tunnel", livekit.TrackTypeVideo, source, 1280, 720); err != nil {
 		return nil, err
 	}
-	s.logFn("[bx] published vp8 track cid=%s name=%s", track.ID(), name)
+	s.logFn("[bx] published vp8 track cid=%s source=%d", track.ID(), source)
+	return transceiver, nil
+}
+
+func (s *Signal) Renegotiate() error {
+	pubPC := s.lk.PubPC()
+	if pubPC == nil {
+		return fmt.Errorf("pub pc not ready")
+	}
 	offer, err := pubPC.CreateOffer(nil)
 	if err != nil {
-		return nil, err
+		return err
 	}
 	if err := pubPC.SetLocalDescription(offer); err != nil {
-		return nil, err
+		return err
 	}
-	if err := s.lk.SendOffer(offer.SDP); err != nil {
-		return nil, err
-	}
-	return transceiver.Sender(), nil
+	return s.lk.SendOffer(offer.SDP)
 }
 
 func (s *Signal) dispatchTrack(track *webrtc.TrackRemote, receiver *webrtc.RTPReceiver) {
