@@ -146,11 +146,9 @@ func (h *WSHelper) ReadMessages(handler func([]byte), onDisconnect func()) {
 func AddTunnelTracks(pc *webrtc.PeerConnection, logFn func(string, ...any), prefix string) *webrtc.TrackLocalStaticSample {
 	sampleTrack, _ := webrtc.NewTrackLocalStaticSample(
 		webrtc.RTPCodecCapability{MimeType: webrtc.MimeTypeVP8},
-		"video", "tunnel-video",
 	)
 	audioTrack, _ := webrtc.NewTrackLocalStaticRTP(
 		webrtc.RTPCodecCapability{MimeType: webrtc.MimeTypeOpus},
-		"audio", "tunnel-audio",
 	)
 	audioSender, audioErr := pc.AddTrack(audioTrack)
 	videoSender, videoErr := pc.AddTrack(sampleTrack)

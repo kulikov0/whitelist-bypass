@@ -7,7 +7,6 @@ import (
 	"sync"
 	"time"
 
-	"github.com/google/uuid"
 	headless "github.com/kulikov0/headless-client"
 	"github.com/kulikov0/headless-client/webrtc"
 	"github.com/pion/rtp"
@@ -171,10 +170,8 @@ func (s *Session) onLKReady() {
 		return
 	}
 
-	camID := "videochannel-" + uuid.New().String()
 	trackCam, err := webrtc.NewTrackLocalStaticSample(
 		webrtc.RTPCodecCapability{MimeType: webrtc.MimeTypeVP8, ClockRate: 90000},
-		camID, "tunnel-video-"+uuid.New().String(),
 	)
 	if err != nil {
 		s.cfg.LogFn("[lk] create local cam track: %v", err)
@@ -183,10 +180,8 @@ func (s *Session) onLKReady() {
 	tracks := []*webrtc.TrackLocalStaticSample{trackCam}
 
 	if s.cfg.ScreenShare {
-		screenID := "screenchannel-" + uuid.New().String()
 		trackScreen, err := webrtc.NewTrackLocalStaticSample(
 			webrtc.RTPCodecCapability{MimeType: webrtc.MimeTypeVP8, ClockRate: 90000},
-			screenID, "tunnel-screen-"+uuid.New().String(),
 		)
 		if err != nil {
 			s.cfg.LogFn("[lk] create local screen track: %v", err)
@@ -510,17 +505,12 @@ func (s *Session) removePublisherTrack() bool {
 }
 
 func (s *Session) addPublisherTrack(pubPC *webrtc.PeerConnection, slot int) bool {
-	labelPrefix := "screenchannel-"
-	streamPrefix := "tunnel-screen-"
 	source := livekit.TrackSourceScreenShare
 	if slot == 0 {
-		labelPrefix = "videochannel-"
-		streamPrefix = "tunnel-video-"
 		source = livekit.TrackSourceCamera
 	}
 	track, err := webrtc.NewTrackLocalStaticSample(
 		webrtc.RTPCodecCapability{MimeType: webrtc.MimeTypeVP8, ClockRate: 90000},
-		labelPrefix+uuid.New().String(), streamPrefix+uuid.New().String(),
 	)
 	if err != nil {
 		s.cfg.LogFn("[lk] adapt-track-count: new track slot=%d: %v", slot, err)

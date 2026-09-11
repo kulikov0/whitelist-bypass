@@ -209,14 +209,11 @@ func (c *Call) Start() error {
 	c.peer = peer
 
 	sendMidIndex := sendVideoMidIndex
-	trackLabel := "dion-tunnel-" + sessionID
 	if c.cfg.Role == RoleCreator {
 		sendMidIndex = sendScreenShareMidIndex
-		trackLabel = "dion-tunnel-screen-" + sessionID
 	}
 	track, err := webrtc.NewTrackLocalStaticSample(
 		webrtc.RTPCodecCapability{MimeType: webrtc.MimeTypeVP8, ClockRate: 90000},
-		"video", trackLabel,
 	)
 	if err != nil {
 		return fmt.Errorf("NewTrackLocalStaticSample: %w", err)

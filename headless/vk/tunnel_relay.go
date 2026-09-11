@@ -101,13 +101,11 @@ func (u *TunnelRelay) Init(iceServers []webrtc.ICEServer) error {
 
 	sampleTrack, _ := webrtc.NewTrackLocalStaticSample(
 		webrtc.RTPCodecCapability{MimeType: webrtc.MimeTypeVP8},
-		"video", "tunnel-video",
 	)
 	u.sampleTrack = sampleTrack
 
 	audioTrack, _ := webrtc.NewTrackLocalStaticRTP(
 		webrtc.RTPCodecCapability{MimeType: webrtc.MimeTypeOpus},
-		"audio", "tunnel-audio",
 	)
 	pc.AddTrack(audioTrack)
 	videoSender, _ := pc.AddTrack(sampleTrack)
