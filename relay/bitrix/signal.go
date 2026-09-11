@@ -21,6 +21,7 @@ type SignalConfig struct {
 	OnConnected            func()
 	OnDataChannel          func(*webrtc.DataChannel)
 	OnTrack                func(*webrtc.TrackRemote, *webrtc.RTPReceiver)
+	OnRemoteCandidate      func(target int, candidateOrSDP string)
 }
 
 type Signal struct {
@@ -67,6 +68,14 @@ func ConnectSignal(cfg SignalConfig) (*Signal, error) {
 	s.lk.OnTrack = s.dispatchTrack
 	s.lk.OnDataChannel = s.dispatchDataChannel
 	s.lk.OnSubConnected = cfg.OnConnected
+	if cfg.OnRemoteCandidate != nil {
+		s.lk.OnRemoteCandidate = func(target int, ic webrtc.ICECandidateInit) {
+			cfg.OnRemoteCandidate(target, ic.Candidate)
+		}
+		s.lk.OnRemoteSDP = func(target int, _, sdp string) {
+			cfg.OnRemoteCandidate(-1, sdp)
+		}
+	}
 	if err := s.lk.Connect(); err != nil {
 		return nil, err
 	}

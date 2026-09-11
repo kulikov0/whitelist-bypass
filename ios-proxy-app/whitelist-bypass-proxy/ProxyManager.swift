@@ -121,10 +121,12 @@ enum CallPlatform: String {
     case telemost = "telemost"
     case wbstream = "wbstream"
     case dion = "dion"
+    case bitrix = "bitrix"
 
     static let wbstreamPrefix = "wbstream://"
     static let dionPrefix = "dion://"
     static let dionEventInfix = "dion.vc/event/"
+    static let bitrixMarker = "/video/"
 
     static func detect(url: String) -> CallPlatform {
         if url.hasPrefix(dionPrefix) || url.contains(dionEventInfix) {
@@ -132,6 +134,9 @@ enum CallPlatform: String {
         }
         if url.hasPrefix(wbstreamPrefix) {
             return .wbstream
+        }
+        if url.contains("bitrix24") && url.contains(bitrixMarker) {
+            return .bitrix
         }
         if url.contains("telemost") {
             return .telemost
@@ -346,6 +351,24 @@ class ProxyManager: ObservableObject {
                 "displayName": displayName,
                 "vp8Fps": vp8Fps,
                 "vp8Batch": vp8Batch,
+            ]
+            if let jsonData = try? JSONSerialization.data(withJSONObject: joinParams),
+               let jsonString = String(data: jsonData, encoding: .utf8) {
+                IosSendJoinParams(jsonString)
+                appendLog("Sent join params")
+            }
+
+        case .bitrix:
+            IosStartBitrixHeadless(socksPort, activeSocksUser, activeSocksPass, bridge)
+            appendLog("Started Bitrix headless joiner")
+            let joinParams: [String: Any] = [
+                "joinLink": callUrl,
+                "displayName": displayName,
+                "tunnelMode": tunnelMode.rawValue,
+                "vp8Fps": vp8Fps,
+                "vp8Batch": vp8Batch,
+                "dualTrack": dualTrack,
+                "reliable": reliable,
             ]
             if let jsonData = try? JSONSerialization.data(withJSONObject: joinParams),
                let jsonString = String(data: jsonData, encoding: .utf8) {

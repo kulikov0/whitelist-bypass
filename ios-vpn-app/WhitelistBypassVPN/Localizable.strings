@@ -50,6 +50,7 @@
 "suggest_name_telemost" = "Telemost";
 "suggest_name_wbstream" = "WB Stream";
 "suggest_name_dion" = "DION";
+"suggest_name_bitrix" = "Bitrix";
 
 "destination_menu_rename" = "Rename";
 "destination_menu_delete" = "Delete";

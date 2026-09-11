@@ -12,6 +12,7 @@ enum JoinerFactory {
         case .wbstream: return WBStreamJoiner()
         case .dion: return DionJoiner()
         case .vk: return VKJoiner()
+        case .bitrix: return BitrixJoiner()
         }
     }
 }
@@ -85,6 +86,31 @@ struct DionJoiner: HeadlessJoiner {
             displayName: config.displayName,
             vp8Fps: config.vp8Fps,
             vp8Batch: config.vp8Batch
+        ))
+    }
+}
+
+struct BitrixJoiner: HeadlessJoiner {
+    private struct Params: Encodable {
+        let joinLink: String
+        let displayName: String
+        let tunnelMode: String
+        let vp8Fps: Int
+        let vp8Batch: Int
+        let dualTrack: Bool
+        let reliable: Bool
+    }
+
+    func start(_ config: TunnelConfig, callback: IosHeadlessCallbackProtocol) {
+        IosStartBitrixHeadless(config.socksPort, config.socksUser, config.socksPass, callback)
+        sendJoinParams(Params(
+            joinLink: config.url,
+            displayName: config.displayName,
+            tunnelMode: config.tunnelMode.rawValue,
+            vp8Fps: config.vp8Fps,
+            vp8Batch: config.vp8Batch,
+            dualTrack: config.dualTrack,
+            reliable: config.reliable
         ))
     }
 }

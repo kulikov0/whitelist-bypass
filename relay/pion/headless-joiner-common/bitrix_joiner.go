@@ -20,11 +20,12 @@ import (
 )
 
 type BitrixHeadlessJoiner struct {
-	logFn       func(string, ...any)
-	OnConnected func(tunnel.DataTunnel)
-	ResolveFn   ResolveFunc
-	Status      StatusEmitter
-	PCConfig    PeerConnectionConfigurer
+	logFn             func(string, ...any)
+	OnConnected       func(tunnel.DataTunnel)
+	OnRemoteCandidate func(target int, candidateOrSDP string)
+	ResolveFn         ResolveFunc
+	Status            StatusEmitter
+	PCConfig          PeerConnectionConfigurer
 
 	joinLink    string
 	displayName string
@@ -187,6 +188,7 @@ func (j *BitrixHeadlessJoiner) runOnce() error {
 		OnConnected: func() {
 			once.Do(func() { close(connected) })
 		},
+		OnRemoteCandidate: j.OnRemoteCandidate,
 	})
 	if err != nil {
 		return fmt.Errorf("signal connect: %w", err)
