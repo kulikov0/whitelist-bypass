@@ -31,7 +31,7 @@ private final class PingOnce: @unchecked Sendable {
 }
 
 enum Ping {
-    static let host = "ya.ru"
+    static let host = "google.com"
     static let port: UInt16 = 443
     static let timeoutSeconds = 5.0
 

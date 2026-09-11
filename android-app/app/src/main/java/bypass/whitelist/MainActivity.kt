@@ -338,7 +338,7 @@ class MainActivity :
         thread {
             val started = System.nanoTime()
             val ok = try {
-                probeViaSocks5(host = "ya.ru", port = 443)
+                probeViaSocks5(host = "google.com", port = 443)
             } catch (_: Exception) {
                 false
             }
