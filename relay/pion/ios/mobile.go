@@ -180,6 +180,26 @@ func StartTelemostHeadless(socksPort int, socksUser, socksPass string, callback 
 	callback.OnStatus(common.StatusReady)
 }
 
+func StartBitrixHeadless(socksPort int, socksUser, socksPass string, callback HeadlessCallback) {
+	StopHeadless()
+
+	activeHeadless.Lock()
+	activeHeadless.callback = callback
+	activeHeadless.stopped = false
+	activeHeadless.platform = "bitrix"
+	activeHeadless.Unlock()
+
+	logFn, resolveFn, statusEmitter := makeHelpers(callback)
+	bxJoiner := joiner.NewBitrixHeadlessJoiner(logFn, resolveFn, statusEmitter, nil)
+	bxJoiner.OnConnected = makeOnConnected(socksPort, socksUser, socksPass, logFn, callback, bxJoiner.MarkConfigAcked)
+
+	activeHeadless.Lock()
+	activeHeadless.joiner = bxJoiner
+	activeHeadless.Unlock()
+
+	callback.OnStatus(common.StatusReady)
+}
+
 func StartVKHeadless(socksPort int, socksUser, socksPass string, joinLink, displayName, tunnelMode string, vp8Fps, vp8Batch int, dualTrack bool, callback HeadlessCallback) {
 	StopHeadless()
 
@@ -249,6 +269,10 @@ func SendJoinParams(jsonParams string) {
 	case "dion":
 		if dionJoiner, ok := currentJoiner.(*joiner.DionHeadlessJoiner); ok {
 			go dionJoiner.RunWithParams(jsonParams)
+		}
+	case "bitrix":
+		if bxJoiner, ok := currentJoiner.(*joiner.BitrixHeadlessJoiner); ok {
+			go bxJoiner.RunWithParams(jsonParams)
 		}
 	}
 }
