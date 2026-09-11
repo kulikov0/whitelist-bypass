@@ -59,16 +59,17 @@ type session struct {
 }
 
 type bot struct {
-	token       string
-	groupID     string
-	userIDs     []string
-	binsDir     string
-	vkCookies   string
-	tmCookies   string
-	wbCookies   string
-	dionCookies string
-	sessionsDir string
-	resources   string
+	token         string
+	groupID       string
+	userIDs       []string
+	binsDir       string
+	vkCookies     string
+	tmCookies     string
+	wbCookies     string
+	dionCookies   string
+	bitrixCookies string
+	sessionsDir   string
+	resources     string
 
 	upstreamSocks string
 	upstreamUser  string
@@ -207,7 +208,7 @@ func (b *bot) handleMessage(peerID, fromID int64, text, payload string) {
 			delete(b.awaitingJoin, peerID)
 			b.mu.Unlock()
 			switch p.Cmd {
-			case "vk", "tm", "wb", "dion":
+			case "vk", "tm", "wb", "dion", "bitrix":
 				b.handleSpawn(peerID, p.Cmd, "")
 				return
 			case "list":
@@ -236,7 +237,7 @@ func (b *bot) handleMessage(peerID, fromID int64, text, payload string) {
 		return
 	}
 	if wasAwaiting {
-		b.sendMessage(peerID, "Couldn't detect a VK / Telemost / WBStream / DION link. Paste a join link or press Back.", waitingKeyboard())
+		b.sendMessage(peerID, "Couldn't detect a VK / Telemost / WBStream / DION / Bitrix link. Paste a join link or press Back.", waitingKeyboard())
 		return
 	}
 
@@ -251,6 +252,8 @@ func (b *bot) handleMessage(peerID, fromID int64, text, payload string) {
 		b.handleSpawn(peerID, "wb", "")
 	case strings.HasPrefix(text, "/dion"):
 		b.handleSpawn(peerID, "dion", "")
+	case strings.HasPrefix(text, "/bitrix"):
+		b.handleSpawn(peerID, "bitrix", "")
 	case text == "/list":
 		b.handleList(peerID)
 	case strings.HasPrefix(text, "/close "):
@@ -272,6 +275,8 @@ func detectJoinLink(text string) (platform, target string, ok bool) {
 		return "tm", trimmed, true
 	case strings.HasPrefix(lower, "dion://"), strings.Contains(lower, "dion.vc"):
 		return "dion", trimmed, true
+	case strings.Contains(lower, "bitrix24") && strings.Contains(lower, "/video/"):
+		return "bitrix", trimmed, true
 	case strings.Contains(lower, "vk.ru/call/join"):
 		return "vk", trimmed, true
 	}
@@ -323,6 +328,10 @@ func (b *bot) spawn(platform, joinTarget string) (*session, error) {
 	case "dion":
 		binName = "headless-dion-creator"
 		cookies = b.dionCookies
+		joinFlag = "--room"
+	case "bitrix":
+		binName = "headless-bitrix-creator"
+		cookies = b.bitrixCookies
 		joinFlag = "--room"
 	default:
 		return nil, fmt.Errorf("unknown platform: %s", platform)
@@ -490,6 +499,7 @@ func main() {
 	tmCookies := flag.String("tm-cookies", "", "path to Yandex cookies JSON for Telemost")
 	wbCookies := flag.String("wb-cookies", "", "path to WB Stream cookies JSON")
 	dionCookies := flag.String("dion-cookies", "", "path to DION cookies JSON")
+	bitrixCookies := flag.String("bitrix-cookies", "", "path to Bitrix cookies JSON")
 	sessionsDir := flag.String("sessions-dir", "", "directory for per-session creator logs (optional)")
 	resources := flag.String("resources", "default", "resource mode forwarded to spawned creators: default, moderate, unlimited")
 	upstreamSocks := flag.String("upstream-socks", "", "forward to spawned creators: route tunneled egress through this SOCKS5 proxy (host:port), e.g. a local VPN client")
@@ -531,6 +541,7 @@ func main() {
 		tmCookies:     *tmCookies,
 		wbCookies:     *wbCookies,
 		dionCookies:   *dionCookies,
+		bitrixCookies: *bitrixCookies,
 		sessionsDir:   *sessionsDir,
 		resources:     *resources,
 		upstreamSocks: *upstreamSocks,

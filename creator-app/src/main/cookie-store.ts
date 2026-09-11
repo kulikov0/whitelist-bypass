@@ -237,6 +237,8 @@ export class CookieStore {
       const content = p.platform === Platform.Dion && dionContent ? dionContent : cookies[i];
       return { name: p.filename, data: Buffer.from(JSON.stringify(content, null, 2), 'utf8') };
     });
+    const bitrixContent = await new BitrixCookieFile(this.cookieFilePath(Platform.Bitrix)).readRaw();
+    entries.push({ name: 'cookies-bitrix.json', data: Buffer.from(JSON.stringify(bitrixContent ?? {}, null, 2), 'utf8') });
     return buildStoredZip(entries);
   }
 

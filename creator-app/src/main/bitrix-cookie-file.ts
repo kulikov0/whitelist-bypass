@@ -44,6 +44,15 @@ export class BitrixCookieFile {
     await fs.writeFile(this.filePath, JSON.stringify(content));
   }
 
+  async readRaw(): Promise<unknown | null> {
+    try {
+      const raw = await fs.readFile(this.filePath, 'utf8');
+      return JSON.parse(raw);
+    } catch {
+      return null;
+    }
+  }
+
   private async read(): Promise<BitrixCredentials | null> {
     try {
       const raw = await fs.readFile(this.filePath, 'utf8');

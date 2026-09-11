@@ -34,6 +34,7 @@ export enum BotCommand {
   TM = 'tm',
   WB = 'wb',
   Dion = 'dion',
+  Bitrix = 'bitrix',
   JoinPrompt = 'join-prompt',
   List = 'list',
   Menu = 'menu',

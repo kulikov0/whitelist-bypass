@@ -27,6 +27,8 @@ func platformSquare(platform string) string {
 		return "🟪"
 	case "dion":
 		return "🟩"
+	case "bitrix":
+		return "🟧"
 	}
 	return ""
 }
@@ -42,6 +44,9 @@ func mainMenuKeyboard() string {
 			{
 				{Action: kbAction{Type: "text", Label: "🟪 WBStream", Payload: `{"cmd":"wb"}`}},
 				{Action: kbAction{Type: "text", Label: "🟩 DION", Payload: `{"cmd":"dion"}`}},
+			},
+			{
+				{Action: kbAction{Type: "text", Label: "🟧 Bitrix", Payload: `{"cmd":"bitrix"}`}},
 			},
 			{
 				{Action: kbAction{Type: "text", Label: "🔗 Join by link", Payload: `{"cmd":"join-prompt"}`}},

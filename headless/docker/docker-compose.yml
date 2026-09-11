@@ -16,6 +16,7 @@ services:
       - ./cookies-yandex.json:/data/cookies-yandex.json:ro
       - ./cookies-wbstream.json:/data/cookies-wbstream.json:ro
       - ./cookies-dion.json:/data/cookies-dion.json
+      - ./cookies-bitrix.json:/data/cookies-bitrix.json
       # Per-session creator logs persist here.
       - bot-sessions:/data/sessions
 

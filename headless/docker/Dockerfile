@@ -11,6 +11,7 @@ RUN go -C /src/headless/vk        build -trimpath -ldflags="-s -w" -o /out/headl
  && go -C /src/headless/telemost  build -trimpath -ldflags="-s -w" -o /out/headless-telemost-creator . \
  && go -C /src/headless/wbstream  build -trimpath -ldflags="-s -w" -o /out/headless-wbstream-creator . \
  && go -C /src/headless/dion      build -trimpath -ldflags="-s -w" -o /out/headless-dion-creator . \
+ && go -C /src/headless/bitrix    build -trimpath -ldflags="-s -w" -o /out/headless-bitrix-creator . \
  && go -C /src/headless/vk-bot    build -trimpath -ldflags="-s -w" -o /out/headless-vk-bot .
 
 FROM debian:bookworm-slim
@@ -26,6 +27,7 @@ COPY --from=build /out/headless-vk-creator        /opt/wlb/bin/
 COPY --from=build /out/headless-telemost-creator  /opt/wlb/bin/
 COPY --from=build /out/headless-wbstream-creator  /opt/wlb/bin/
 COPY --from=build /out/headless-dion-creator      /opt/wlb/bin/
+COPY --from=build /out/headless-bitrix-creator    /opt/wlb/bin/
 COPY --from=build /out/headless-vk-bot            /usr/local/bin/
 
 COPY headless/docker/entrypoint.sh /usr/local/bin/wlb-entrypoint
