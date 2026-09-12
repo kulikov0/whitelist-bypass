@@ -8,10 +8,12 @@ import (
 	"sync"
 	"time"
 
+	"github.com/kulikov0/headless-client"
+	"github.com/kulikov0/headless-client/webrtc"
 	"github.com/pion/rtp"
 	"github.com/pion/rtp/codecs"
-	"github.com/pion/webrtc/v4"
 	"whitelist-bypass/relay/common"
+	"whitelist-bypass/relay/headlessapi"
 	"whitelist-bypass/relay/tunnel"
 )
 
@@ -59,7 +61,11 @@ func NewTunnelRelay() *TunnelRelay {
 }
 
 func (u *TunnelRelay) Init(iceServers []webrtc.ICEServer) error {
-	pc, err := webrtc.NewPeerConnection(webrtc.Configuration{ICEServers: iceServers})
+	api, err := headlessapi.WebRTCAPI(headlessapi.Options{Profile: headless.ChromeWindows.WithDTLS13Mimicry()})
+	if err != nil {
+		return err
+	}
+	pc, err := api.NewPeerConnection(webrtc.Configuration{ICEServers: iceServers})
 	if err != nil {
 		return err
 	}
@@ -95,13 +101,11 @@ func (u *TunnelRelay) Init(iceServers []webrtc.ICEServer) error {
 
 	sampleTrack, _ := webrtc.NewTrackLocalStaticSample(
 		webrtc.RTPCodecCapability{MimeType: webrtc.MimeTypeVP8},
-		"video", "tunnel-video",
 	)
 	u.sampleTrack = sampleTrack
 
 	audioTrack, _ := webrtc.NewTrackLocalStaticRTP(
 		webrtc.RTPCodecCapability{MimeType: webrtc.MimeTypeOpus},
-		"audio", "tunnel-audio",
 	)
 	pc.AddTrack(audioTrack)
 	videoSender, _ := pc.AddTrack(sampleTrack)

@@ -10,10 +10,12 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	headless "github.com/kulikov0/headless-client"
+	"github.com/kulikov0/headless-client/webrtc"
 	"github.com/pion/rtp/codecs"
-	"github.com/pion/webrtc/v4"
 
 	"whitelist-bypass/relay/common"
+	"whitelist-bypass/relay/headlessapi"
 	"whitelist-bypass/relay/tunnel"
 )
 
@@ -37,9 +39,6 @@ const (
 	RoleJoiner  Role = "joiner"
 )
 
-// CallConfig configures a Call lifecycle. Auth must already have a valid
-// access token (caller did LoadCookiesFromFile + EnsureValidToken). Event
-// must be a usable EventInfo (CreateRoom or GetEventBySlug result).
 type CallConfig struct {
 	Auth        *Session
 	Event       *EventInfo
@@ -49,16 +48,11 @@ type CallConfig struct {
 	RecvMid     string
 	Role        Role
 
-	// SettingEngine, NetDialContext, and ResolveICEHost are forwarded to Pion
-	// and the WebSocket dialer. All three are no-ops if nil (desktop default).
-	// They exist so the Android relay can plug in AndroidNet plus stdin-based
-	// DNS resolution before the VPN starts intercepting traffic.
-	SettingEngine  *webrtc.SettingEngine
-	NetDialContext func(ctx context.Context, network, addr string) (net.Conn, error)
-	ResolveICEHost func(host string) (string, error)
+	ConfigureSettingEngine func(*webrtc.SettingEngine)
+	NetDialContext         func(ctx context.Context, network, addr string) (net.Conn, error)
+	ResolveICEHost         func(host string) (string, error)
 }
 
-// PeerEntry tracks one remote peer's signaling state.
 type PeerEntry struct {
 	SessionID string
 	UserID    string
@@ -67,12 +61,6 @@ type PeerEntry struct {
 	JoinedAt  time.Time
 }
 
-// Call drives one full DION room session: signaling, Pion peer, VP8 send
-// track on mid=12, OnTrack reader on the bound recv mid, plus discovery and
-// subscription to other peers via conf_speakers_state and get_video_from_user.
-//
-// Lifecycle: NewCall(cfg) -> Start() -> wait OnConnected(tunnel.DataTunnel) ->
-// use tunnel via RelayBridge -> wait Done() (read-loop or ICE death) -> Close().
 type Call struct {
 	cfg         CallConfig
 	signaling   *SignalingClient
@@ -147,10 +135,6 @@ func (c *Call) Close() {
 	})
 }
 
-// Start runs the full lifecycle to the point where the VP8 tunnel is up and
-// OnConnected has fired. It returns nil on success; from that point the call
-// continues in the background until ICE death or signaling read-loop end, at
-// which point Done() is closed.
 func (c *Call) Start() error {
 	sessionID := uuid.New().String()
 	c.mySessionID = sessionID
@@ -218,7 +202,13 @@ func (c *Call) Start() error {
 	}
 	c.cfg.LogFn("[call] you_joined ice_servers=%d", len(youJoined.IceServers))
 
-	pionAPI := NewPionAPI(c.cfg.SettingEngine)
+	pionAPI, err := headlessapi.WebRTCAPI(headlessapi.Options{
+		Profile:   headless.ChromeWindows,
+		Configure: c.cfg.ConfigureSettingEngine,
+	})
+	if err != nil {
+		return fmt.Errorf("build webrtc api: %w", err)
+	}
 	iceServers := ResolveICEServerHosts(youJoined.IceServers, c.cfg.ResolveICEHost, c.cfg.LogFn)
 	peer, err := BuildPionPeer(pionAPI, iceServers)
 	if err != nil {
@@ -227,14 +217,11 @@ func (c *Call) Start() error {
 	c.peer = peer
 
 	sendMidIndex := sendVideoMidIndex
-	trackLabel := "dion-tunnel-" + sessionID
 	if c.cfg.Role == RoleCreator {
 		sendMidIndex = sendScreenShareMidIndex
-		trackLabel = "dion-tunnel-screen-" + sessionID
 	}
 	track, err := webrtc.NewTrackLocalStaticSample(
 		webrtc.RTPCodecCapability{MimeType: webrtc.MimeTypeVP8, ClockRate: 90000},
-		"video", trackLabel,
 	)
 	if err != nil {
 		return fmt.Errorf("NewTrackLocalStaticSample: %w", err)

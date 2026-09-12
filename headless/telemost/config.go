@@ -3,10 +3,12 @@ package main
 import (
 	"encoding/json"
 	"fmt"
+	"io"
 	"log"
+	"net/http"
 	"regexp"
 
-	"whitelist-bypass/relay/common"
+	"github.com/kulikov0/headless-client"
 )
 
 type TMConfig struct {
@@ -17,7 +19,7 @@ type TMConfig struct {
 func fetchConfig() (TMConfig, error) {
 	var cfg TMConfig
 
-	page, err := common.HttpGet("https://telemost.yandex.ru/")
+	page, err := tmHttpGet("https://telemost.yandex.ru/", headless.DestDocument)
 	if err != nil {
 		return cfg, fmt.Errorf("failed to fetch telemost.yandex.ru: %w", err)
 	}
@@ -52,7 +54,7 @@ func fetchConfig() (TMConfig, error) {
 	}
 	log.Printf("[config] Found bundle: %s", bundleURL)
 
-	bundle, err := common.HttpGet(bundleURL)
+	bundle, err := tmHttpGet(bundleURL, headless.DestScript)
 	if err != nil {
 		return cfg, fmt.Errorf("failed to fetch bundle: %w", err)
 	}
@@ -74,4 +76,21 @@ func fetchConfig() (TMConfig, error) {
 
 	log.Printf("[config] app=%s sdk=%s", cfg.AppVersion, cfg.SDKVersion)
 	return cfg, nil
+}
+
+func tmHttpGet(endpoint string, dest headless.RequestDest) ([]byte, error) {
+	request, err := http.NewRequest("GET", endpoint, nil)
+	if err != nil {
+		return nil, err
+	}
+	request.Header = headless.ChromeWindows.Headers(dest)
+	if dest == headless.DestScript {
+		request.Header.Set("Referer", "https://telemost.yandex.ru/")
+	}
+	response, err := headless.ChromeWindows.HTTPClient().Do(request)
+	if err != nil {
+		return nil, err
+	}
+	defer response.Body.Close()
+	return io.ReadAll(response.Body)
 }

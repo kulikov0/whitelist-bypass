@@ -9,7 +9,7 @@ import (
 	"sync"
 	"sync/atomic"
 
-	"github.com/gorilla/websocket"
+	"github.com/kulikov0/headless-client/websocket"
 	_ "golang.org/x/mobile/bind"
 	"whitelist-bypass/relay/common"
 )

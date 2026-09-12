@@ -7,21 +7,21 @@ import (
 	"sync"
 	"time"
 
-	"github.com/pion/webrtc/v4"
+	"github.com/kulikov0/headless-client/webrtc"
 	"whitelist-bypass/relay/livekit"
 )
 
 type SignalConfig struct {
-	SignalURL         string
-	Origin            string
-	UserAgent         string
-	LogFn             func(string, ...any)
-	SettingEngine     *webrtc.SettingEngine
-	NetDialContext    func(ctx context.Context, network, addr string) (net.Conn, error)
-	OnConnected       func()
-	OnDataChannel     func(*webrtc.DataChannel)
-	OnTrack           func(*webrtc.TrackRemote, *webrtc.RTPReceiver)
-	OnRemoteCandidate func(target int, candidateOrSDP string)
+	SignalURL              string
+	Origin                 string
+	UserAgent              string
+	LogFn                  func(string, ...any)
+	ConfigureSettingEngine func(*webrtc.SettingEngine)
+	NetDialContext         func(ctx context.Context, network, addr string) (net.Conn, error)
+	OnConnected            func()
+	OnDataChannel          func(*webrtc.DataChannel)
+	OnTrack                func(*webrtc.TrackRemote, *webrtc.RTPReceiver)
+	OnRemoteCandidate      func(target int, candidateOrSDP string)
 }
 
 type Signal struct {
@@ -53,13 +53,13 @@ func ConnectSignal(cfg SignalConfig) (*Signal, error) {
 		onDC:    cfg.OnDataChannel,
 	}
 	lk, err := livekit.NewClient(livekit.Config{
-		ServerURL:      cfg.SignalURL,
-		Origin:         cfg.Origin,
-		UserAgent:      cfg.UserAgent,
-		Codec:          livekit.JSONCodec{},
-		LogFn:          logFn,
-		SettingEngine:  cfg.SettingEngine,
-		NetDialContext: cfg.NetDialContext,
+		ServerURL:              cfg.SignalURL,
+		Origin:                 cfg.Origin,
+		UserAgent:              cfg.UserAgent,
+		Codec:                  livekit.JSONCodec{},
+		LogFn:                  logFn,
+		ConfigureSettingEngine: cfg.ConfigureSettingEngine,
+		NetDialContext:         cfg.NetDialContext,
 	})
 	if err != nil {
 		return nil, err

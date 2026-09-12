@@ -2,14 +2,10 @@ package common
 
 import (
 	"encoding/json"
-	"io"
 	"log"
-	"net/http"
 	"os"
 	"strings"
 )
-
-const UserAgent = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/148.0.0.0 Safari/537.36"
 
 const bodySnippetLimit = 300
 
@@ -99,15 +95,4 @@ func FilterCookies(cookieHeader string, allow []string) string {
 		}
 	}
 	return strings.Join(out, "; ")
-}
-
-func HttpGet(endpoint string) ([]byte, error) {
-	req, _ := http.NewRequest("GET", endpoint, nil)
-	req.Header.Set("User-Agent", UserAgent)
-	resp, err := http.DefaultClient.Do(req)
-	if err != nil {
-		return nil, err
-	}
-	defer resp.Body.Close()
-	return io.ReadAll(resp.Body)
 }

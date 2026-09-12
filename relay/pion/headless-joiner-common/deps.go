@@ -1,7 +1,7 @@
 package joiner
 
 import (
-	"github.com/pion/webrtc/v4"
+	"github.com/kulikov0/headless-client/webrtc"
 )
 
 type ResolveFunc func(hostname string) (string, error)

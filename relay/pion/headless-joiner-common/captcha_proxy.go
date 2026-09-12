@@ -14,6 +14,8 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	headless "github.com/kulikov0/headless-client"
 )
 
 var activeCaptchaProxy struct {
@@ -56,7 +58,9 @@ func StartCaptchaProxy(redirectURI string, resolveFn ResolveFunc) int {
 			if err != nil {
 				return nil, err
 			}
-			return (&net.Dialer{Timeout: 10 * time.Second}).DialContext(ctx, network, resolvedIP+":"+port)
+			dialer := headless.ChromeDialer()
+			dialer.Timeout = 10 * time.Second
+			return dialer.DialContext(ctx, network, resolvedIP+":"+port)
 		}
 	}
 

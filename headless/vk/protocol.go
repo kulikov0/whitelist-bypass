@@ -1,6 +1,6 @@
 package main
 
-import "github.com/pion/webrtc/v4"
+import "github.com/kulikov0/headless-client/webrtc"
 
 type Relay interface {
 	Init(iceServers []webrtc.ICEServer) error

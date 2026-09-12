@@ -13,6 +13,7 @@ import (
 	"strings"
 
 	"github.com/google/uuid"
+	headless "github.com/kulikov0/headless-client"
 	"whitelist-bypass/relay/common"
 )
 
@@ -99,7 +100,7 @@ func NewClient(portal, userAgent string) (*Client, error) {
 		return nil, err
 	}
 	return &Client{
-		HTTP:       &http.Client{Jar: jar},
+		HTTP:       &http.Client{Jar: jar, Transport: headless.ChromeWindows.HTTPClient().Transport},
 		LogFn:      log.Printf,
 		portal:     strings.TrimRight(portal, "/"),
 		userAgent:  userAgent,
@@ -202,16 +203,35 @@ func (c *Client) resetJar() error {
 	return nil
 }
 
+func secFetchSiteFor(endpoint, origin string) string {
+	endpointURL, err := url.Parse(endpoint)
+	if err != nil {
+		return "cross-site"
+	}
+	originURL, err := url.Parse(origin)
+	if err != nil {
+		return "cross-site"
+	}
+	if endpointURL.Host == originURL.Host {
+		return "same-origin"
+	}
+	return "cross-site"
+}
+
 func (c *Client) do(method, endpoint, contentType string, body io.Reader) ([]byte, int, error) {
 	req, err := http.NewRequest(method, endpoint, body)
 	if err != nil {
 		return nil, 0, err
 	}
-	req.Header.Set("User-Agent", c.userAgent)
+	req.Header = headless.ChromeWindows.Headers(headless.DestEmpty)
+	if c.userAgent != "" {
+		req.Header.Set("User-Agent", c.userAgent)
+	}
 	req.Header.Set("Accept", "application/json, text/plain, */*")
 	if c.portal != "" {
 		req.Header.Set("Origin", c.portal)
 		req.Header.Set("Referer", c.portal+"/")
+		req.Header.Set("Sec-Fetch-Site", secFetchSiteFor(endpoint, c.portal))
 	}
 	if contentType != "" {
 		req.Header.Set("Content-Type", contentType)

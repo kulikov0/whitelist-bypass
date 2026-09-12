@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/kulikov0/headless-client"
 	"whitelist-bypass/relay/common"
 )
 
@@ -132,6 +133,11 @@ func (s *Session) setBaseHeaders(req *http.Request, accessToken string) {
 	req.Header.Set("Referer", Origin+"/")
 	req.Header.Set("Accept", "*/*")
 	req.Header.Set("Accept-Language", "en")
+	for name, values := range headless.ChromeWindows.Headers(headless.DestEmpty) {
+		if strings.HasPrefix(name, "Sec-Fetch-") {
+			req.Header[name] = values
+		}
+	}
 	req.Header.Set("X-Request-Id", uuid.New().String())
 	for name, value := range deviceHeaders(s.Device) {
 		req.Header.Set(name, value)
@@ -168,7 +174,7 @@ func NewSession(httpClient *http.Client) (*Session, error) {
 		if err != nil {
 			return nil, fmt.Errorf("cookiejar: %w", err)
 		}
-		httpClient = &http.Client{Jar: jar}
+		httpClient = &http.Client{Jar: jar, Transport: headless.ChromeWindows.HTTPClient().Transport}
 	} else if httpClient.Jar == nil {
 		jar, err := cookiejar.New(nil)
 		if err != nil {

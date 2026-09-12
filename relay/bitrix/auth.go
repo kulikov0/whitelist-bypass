@@ -10,6 +10,7 @@ import (
 	"regexp"
 	"strings"
 
+	headless "github.com/kulikov0/headless-client"
 	"whitelist-bypass/relay/common"
 )
 
@@ -80,10 +81,10 @@ func (c *Client) bootstrapLogin() (flowToken, sessid, currentURI string, err err
 	if err != nil {
 		return "", "", "", err
 	}
-	req.Header.Set("User-Agent", c.userAgent)
-	req.Header.Set("Accept", "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8")
-	req.Header.Set("Accept-Language", "ru,en;q=0.9")
-	req.Header.Set("Upgrade-Insecure-Requests", "1")
+	req.Header = headless.ChromeWindows.Headers(headless.DestDocument)
+	if c.userAgent != "" {
+		req.Header.Set("User-Agent", c.userAgent)
+	}
 	resp, err := c.HTTP.Do(req)
 	if err != nil {
 		return "", "", "", err
@@ -183,11 +184,15 @@ func (c *Client) authDo(action string, form url.Values, sessid string) ([]byte, 
 	if err != nil {
 		return nil, 0, err
 	}
-	req.Header.Set("User-Agent", c.userAgent)
+	req.Header = headless.ChromeWindows.Headers(headless.DestEmpty)
+	if c.userAgent != "" {
+		req.Header.Set("User-Agent", c.userAgent)
+	}
 	req.Header.Set("Accept", "application/json, text/plain, */*")
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded; charset=UTF-8")
 	req.Header.Set("Origin", authNetBase)
 	req.Header.Set("Referer", authNetBase+"/authorization/")
+	req.Header.Set("Sec-Fetch-Site", secFetchSiteFor(endpoint, authNetBase))
 	req.Header.Set("X-Requested-With", "XMLHttpRequest")
 	if sessid != "" {
 		req.Header.Set("X-Bitrix-Csrf-Token", sessid)
@@ -206,9 +211,10 @@ func (c *Client) getPage(target string) (body, final string, err error) {
 	if err != nil {
 		return "", "", err
 	}
-	req.Header.Set("User-Agent", c.userAgent)
-	req.Header.Set("Accept", "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8")
-	req.Header.Set("Accept-Language", "ru,en;q=0.9")
+	req.Header = headless.ChromeWindows.Headers(headless.DestDocument)
+	if c.userAgent != "" {
+		req.Header.Set("User-Agent", c.userAgent)
+	}
 	resp, err := c.HTTP.Do(req)
 	if err != nil {
 		return "", "", err

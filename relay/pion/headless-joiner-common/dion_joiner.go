@@ -10,7 +10,8 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/pion/webrtc/v4"
+	"github.com/kulikov0/headless-client"
+	"github.com/kulikov0/headless-client/webrtc"
 	"whitelist-bypass/relay/common"
 	"whitelist-bypass/relay/dion"
 	"whitelist-bypass/relay/tunnel"
@@ -63,17 +64,15 @@ func (j *DionHeadlessJoiner) RunWithParams(jsonParams string) {
 	httpClient := j.makeHTTPClient()
 	j.logFn("dion-joiner: room=%s name=%s", slug, params.DisplayName)
 
-	var settingEngine *webrtc.SettingEngine
+	var configureSettingEngine func(*webrtc.SettingEngine)
 	if j.PCConfig != nil {
-		se := webrtc.SettingEngine{}
-		j.PCConfig.ConfigureSettingEngine(&se)
-		settingEngine = &se
+		configureSettingEngine = j.PCConfig.ConfigureSettingEngine
 	}
 
 	var attempt atomic.Int32
 
 	j.Status.EmitStatus(common.StatusConnecting)
-	if err := j.runOnce(httpClient, slug, params.DisplayName, settingEngine, &attempt); err != nil {
+	if err := j.runOnce(httpClient, slug, params.DisplayName, configureSettingEngine, &attempt); err != nil {
 		j.Status.EmitStatusError(err.Error())
 		return
 	}
@@ -93,13 +92,13 @@ func (j *DionHeadlessJoiner) RunWithParams(jsonParams string) {
 		}
 		j.logFn("dion-joiner: reconnect attempt #%d", attempt.Load())
 		j.Status.EmitStatus(common.StatusReconnecting)
-		if err := j.runOnce(httpClient, slug, params.DisplayName, settingEngine, &attempt); err != nil {
+		if err := j.runOnce(httpClient, slug, params.DisplayName, configureSettingEngine, &attempt); err != nil {
 			j.logFn("dion-joiner: %v, will retry", err)
 		}
 	}
 }
 
-func (j *DionHeadlessJoiner) runOnce(httpClient *http.Client, slug, displayName string, settingEngine *webrtc.SettingEngine, attempt *atomic.Int32) error {
+func (j *DionHeadlessJoiner) runOnce(httpClient *http.Client, slug, displayName string, configureSettingEngine func(*webrtc.SettingEngine), attempt *atomic.Int32) error {
 	auth, event, err := dion.JoinAsGuest(httpClient, slug, displayName)
 	if err != nil {
 		return fmt.Errorf("auth: %w", err)
@@ -112,15 +111,15 @@ func (j *DionHeadlessJoiner) runOnce(httpClient *http.Client, slug, displayName 
 	j.logFn("dion-joiner: obf key-source=%q localEpoch=0x%08x", event.Slug, obf.LocalEpoch())
 
 	call := dion.NewCall(dion.CallConfig{
-		Auth:           auth,
-		Event:          event,
-		Obfuscator:     obf,
-		DisplayName:    displayName,
-		LogFn:          j.logFn,
-		SettingEngine:  settingEngine,
-		NetDialContext: j.makeDialContext(),
-		ResolveICEHost: j.ResolveFn,
-		Role:           dion.RoleJoiner,
+		Auth:                   auth,
+		Event:                  event,
+		Obfuscator:             obf,
+		DisplayName:            displayName,
+		LogFn:                  j.logFn,
+		ConfigureSettingEngine: configureSettingEngine,
+		NetDialContext:         j.makeDialContext(),
+		ResolveICEHost:         j.ResolveFn,
+		Role:                   dion.RoleJoiner,
 	})
 	call.OnConnected = func(tun tunnel.DataTunnel) {
 		attempt.Store(0)
@@ -195,13 +194,17 @@ func (j *DionHeadlessJoiner) makeDialContext() func(ctx context.Context, network
 		if err != nil {
 			return nil, err
 		}
-		return (&net.Dialer{Timeout: 10 * time.Second}).DialContext(ctx, network, resolvedIP+":"+port)
+		dialer := headless.ChromeDialer()
+		dialer.Timeout = 10 * time.Second
+		return dialer.DialContext(ctx, network, resolvedIP+":"+port)
 	}
 }
 
 func (j *DionHeadlessJoiner) makeHTTPClient() *http.Client {
-	transport := &http.Transport{DialContext: j.makeDialContext()}
-	return &http.Client{Timeout: 60 * time.Second, Transport: transport}
+	return &http.Client{
+		Timeout:   60 * time.Second,
+		Transport: headless.ChromeWindows.Transport(headless.TLSOptions{DialContext: j.makeDialContext()}),
+	}
 }
 
 // normalizeDionSlug accepts a bare slug, a dion:// URI, or a full

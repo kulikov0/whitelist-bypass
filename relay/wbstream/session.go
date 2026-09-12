@@ -4,14 +4,13 @@ import (
 	"context"
 	"log"
 	"net"
-	"net/http"
 	"sync"
 	"time"
 
-	"github.com/google/uuid"
+	headless "github.com/kulikov0/headless-client"
+	"github.com/kulikov0/headless-client/webrtc"
 	"github.com/pion/rtp"
 	"github.com/pion/rtp/codecs"
-	"github.com/pion/webrtc/v4"
 	"whitelist-bypass/relay/common"
 	"whitelist-bypass/relay/livekit"
 	"whitelist-bypass/relay/tunnel"
@@ -31,23 +30,23 @@ const (
 )
 
 type SessionConfig struct {
-	RoomToken      string
-	ServerURL      string
-	DisplayName    string
-	TunnelMode     string
-	Obfuscator     *tunnel.TunnelObfuscator
-	LogFn          func(string, ...any)
-	SettingEngine  *webrtc.SettingEngine
-	NetDialContext func(ctx context.Context, network, addr string) (net.Conn, error)
-	ResolveICEHost func(host string) (string, error)
-	VP8FPS         int
-	VP8Batch       int
-	RoomID         string
-	AccessToken    string
-	ReadBuf        int
-	ScreenShare    bool // when true, publish a second VP8 track as ScreenShare and shard outbound across both
-	IsJoiner       bool // when true, run the configPingPong loop; only the joiner sends VP8 config to the peer
-	Reliable       bool
+	RoomToken              string
+	ServerURL              string
+	DisplayName            string
+	TunnelMode             string
+	Obfuscator             *tunnel.TunnelObfuscator
+	LogFn                  func(string, ...any)
+	ConfigureSettingEngine func(*webrtc.SettingEngine)
+	NetDialContext         func(ctx context.Context, network, addr string) (net.Conn, error)
+	ResolveICEHost         func(host string) (string, error)
+	VP8FPS                 int
+	VP8Batch               int
+	RoomID                 string
+	AccessToken            string
+	ReadBuf                int
+	ScreenShare            bool // when true, publish a second VP8 track as ScreenShare and shard outbound across both
+	IsJoiner               bool // when true, run the configPingPong loop; only the joiner sends VP8 config to the peer
+	Reliable               bool
 }
 
 type Session struct {
@@ -106,15 +105,15 @@ func (s *Session) Done() <-chan struct{} { return s.done }
 
 func (s *Session) Start() error {
 	lk, err := livekit.NewClient(livekit.Config{
-		ServerURL:      s.cfg.ServerURL,
-		Token:          s.cfg.RoomToken,
-		Origin:         Origin,
-		UserAgent:      common.UserAgent,
-		Codec:          livekit.ProtoCodec{},
-		LogFn:          s.cfg.LogFn,
-		SettingEngine:  s.cfg.SettingEngine,
-		NetDialContext: s.cfg.NetDialContext,
-		ResolveICEHost: s.cfg.ResolveICEHost,
+		ServerURL:              s.cfg.ServerURL,
+		Token:                  s.cfg.RoomToken,
+		Origin:                 Origin,
+		UserAgent:              headless.ChromeWindows.UserAgent(),
+		Codec:                  livekit.ProtoCodec{},
+		LogFn:                  s.cfg.LogFn,
+		ConfigureSettingEngine: s.cfg.ConfigureSettingEngine,
+		NetDialContext:         s.cfg.NetDialContext,
+		ResolveICEHost:         s.cfg.ResolveICEHost,
 	})
 	if err != nil {
 		return err
@@ -171,10 +170,8 @@ func (s *Session) onLKReady() {
 		return
 	}
 
-	camID := "videochannel-" + uuid.New().String()
 	trackCam, err := webrtc.NewTrackLocalStaticSample(
 		webrtc.RTPCodecCapability{MimeType: webrtc.MimeTypeVP8, ClockRate: 90000},
-		camID, "tunnel-video-"+uuid.New().String(),
 	)
 	if err != nil {
 		s.cfg.LogFn("[lk] create local cam track: %v", err)
@@ -183,10 +180,8 @@ func (s *Session) onLKReady() {
 	tracks := []*webrtc.TrackLocalStaticSample{trackCam}
 
 	if s.cfg.ScreenShare {
-		screenID := "screenchannel-" + uuid.New().String()
 		trackScreen, err := webrtc.NewTrackLocalStaticSample(
 			webrtc.RTPCodecCapability{MimeType: webrtc.MimeTypeVP8, ClockRate: 90000},
-			screenID, "tunnel-screen-"+uuid.New().String(),
 		)
 		if err != nil {
 			s.cfg.LogFn("[lk] create local screen track: %v", err)
@@ -482,10 +477,6 @@ func (s *Session) AdaptTrackCount(peerCount int) {
 	s.cfg.LogFn("[lk] adapt-track-count: renegotiation offer sent (%d bytes)", len(offer.SDP))
 }
 
-// removePublisherTrack stops the trailing transceiver, drops its sub-tunnel
-// from the multi-track wrapper, and trims the bookkeeping slices. The SFU
-// sees the transceiver go inactive on the next renegotiation and stops
-// forwarding the track to subscribers. Slot 0 is preserved.
 func (s *Session) removePublisherTrack() bool {
 	s.mu.Lock()
 	if len(s.sampleTransceivers) <= 1 || len(s.sampleTracks) <= 1 {
@@ -514,17 +505,12 @@ func (s *Session) removePublisherTrack() bool {
 }
 
 func (s *Session) addPublisherTrack(pubPC *webrtc.PeerConnection, slot int) bool {
-	labelPrefix := "screenchannel-"
-	streamPrefix := "tunnel-screen-"
 	source := livekit.TrackSourceScreenShare
 	if slot == 0 {
-		labelPrefix = "videochannel-"
-		streamPrefix = "tunnel-video-"
 		source = livekit.TrackSourceCamera
 	}
 	track, err := webrtc.NewTrackLocalStaticSample(
 		webrtc.RTPCodecCapability{MimeType: webrtc.MimeTypeVP8, ClockRate: 90000},
-		labelPrefix+uuid.New().String(), streamPrefix+uuid.New().String(),
 	)
 	if err != nil {
 		s.cfg.LogFn("[lk] adapt-track-count: new track slot=%d: %v", slot, err)
@@ -728,7 +714,7 @@ func (s *Session) onParticipantUpdate(updates []livekit.ParticipantInfo) {
 		if e.identity == "" {
 			continue
 		}
-		if err := KickParticipant(http.DefaultClient, s.cfg.AccessToken, s.cfg.RoomID, e.identity); err != nil {
+		if err := KickParticipant(headless.ChromeWindows.HTTPClient(), s.cfg.AccessToken, s.cfg.RoomID, e.identity); err != nil {
 			s.cfg.LogFn("[wb] kick failed identity=%s: %v", e.identity, err)
 			continue
 		}
@@ -744,7 +730,7 @@ func (s *Session) onParticipantUpdate(updates []livekit.ParticipantInfo) {
 }
 
 func (s *Session) promotePeer(sid, identity string) {
-	if err := SetParticipantPermissions(http.DefaultClient, s.cfg.AccessToken, s.cfg.RoomID, identity, ModeratorPermissions); err != nil {
+	if err := SetParticipantPermissions(headless.ChromeWindows.HTTPClient(), s.cfg.AccessToken, s.cfg.RoomID, identity, ModeratorPermissions); err != nil {
 		s.cfg.LogFn("[wb] promote failed identity=%s: %v", identity, err)
 		s.mu.Lock()
 		if entry, ok := s.peersBySID[sid]; ok {

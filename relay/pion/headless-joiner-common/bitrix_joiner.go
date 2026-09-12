@@ -2,7 +2,6 @@ package joiner
 
 import (
 	"context"
-	"crypto/tls"
 	"encoding/json"
 	"fmt"
 	"net"
@@ -13,7 +12,8 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/pion/webrtc/v4"
+	headless "github.com/kulikov0/headless-client"
+	"github.com/kulikov0/headless-client/webrtc"
 	"whitelist-bypass/relay/bitrix"
 	"whitelist-bypass/relay/common"
 	"whitelist-bypass/relay/tunnel"
@@ -158,7 +158,7 @@ func (j *BitrixHeadlessJoiner) Close() {
 }
 
 func (j *BitrixHeadlessJoiner) runOnce() error {
-	userAgent := common.RandomDeviceProfile().UserAgent
+	userAgent := headless.ChromeWindows.UserAgent()
 	c, err := bitrix.NewClient(j.portal, userAgent)
 	if err != nil {
 		return fmt.Errorf("new client: %w", err)
@@ -172,20 +172,20 @@ func (j *BitrixHeadlessJoiner) runOnce() error {
 	}
 	j.logFn("bitrix-joiner: roomId=%s mediaServer=%s", res.RoomID, res.MediaServerURL)
 
-	settingEngine := webrtc.SettingEngine{}
+	var configureSettingEngine func(*webrtc.SettingEngine)
 	if j.PCConfig != nil {
-		j.PCConfig.ConfigureSettingEngine(&settingEngine)
+		configureSettingEngine = j.PCConfig.ConfigureSettingEngine
 	}
 
 	var once sync.Once
 	connected := make(chan struct{})
 	sig, err := bitrix.ConnectSignal(bitrix.SignalConfig{
-		SignalURL:      bitrix.SignalURL(res),
-		Origin:         j.portal,
-		UserAgent:      userAgent,
-		LogFn:          j.logFn,
-		SettingEngine:  &settingEngine,
-		NetDialContext: j.makeDialContext(),
+		SignalURL:              bitrix.SignalURL(res),
+		Origin:                 j.portal,
+		UserAgent:              userAgent,
+		LogFn:                  j.logFn,
+		ConfigureSettingEngine: configureSettingEngine,
+		NetDialContext:         j.makeDialContext(),
 		OnConnected: func() {
 			once.Do(func() { close(connected) })
 		},
@@ -264,15 +264,17 @@ func (j *BitrixHeadlessJoiner) makeDialContext() func(ctx context.Context, netwo
 		if err != nil {
 			return nil, err
 		}
-		return (&net.Dialer{Timeout: 10 * time.Second}).DialContext(ctx, network, resolvedIP+":"+port)
+		dialer := headless.ChromeDialer()
+		dialer.Timeout = 10 * time.Second
+		return dialer.DialContext(ctx, network, resolvedIP+":"+port)
 	}
 }
 
-func (j *BitrixHeadlessJoiner) makeTransport() *http.Transport {
-	return &http.Transport{
-		TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
-		DialContext:     j.makeDialContext(),
-	}
+func (j *BitrixHeadlessJoiner) makeTransport() http.RoundTripper {
+	return headless.ChromeWindows.Transport(headless.TLSOptions{
+		DialContext:        j.makeDialContext(),
+		InsecureSkipVerify: true,
+	})
 }
 
 func (j *BitrixHeadlessJoiner) setSession(sig *bitrix.Signal, ms *bitrix.MediaSession) {

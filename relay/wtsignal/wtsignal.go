@@ -5,7 +5,6 @@ import (
 	"bytes"
 	"compress/flate"
 	"context"
-	"crypto/tls"
 	"fmt"
 	"io"
 	"net"
@@ -14,9 +13,10 @@ import (
 	"sync"
 	"time"
 
-	"github.com/quic-go/quic-go"
-	"github.com/quic-go/quic-go/http3"
-	"github.com/quic-go/quic-go/quicvarint"
+	headless "github.com/kulikov0/headless-client"
+	"github.com/kulikov0/headless-client/quic"
+	"github.com/kulikov0/headless-client/quic/http3"
+	"github.com/kulikov0/headless-client/quic/quicvarint"
 )
 
 const (
@@ -28,6 +28,11 @@ const (
 	webTransportFrameType     uint64 = 0x41
 	webTransportUniStreamType uint64 = 0x54
 
+	settingsQPACKMaxTableCapacity      = 0x01
+	settingsMaxFieldSectionSize        = 0x06
+	settingsQPACKBlockedStreams        = 0x07
+	settingsDatagram                   = 0x33
+	settingsDatagramDraft04            = 0xffd277
 	settingsEnableWebtransportDraft06  = 0x2b603742
 	settingsWebTransportEnabled        = 0x2c7cf000
 	settingsWebTransportMaxSessions    = 0x14e9cd29
@@ -46,7 +51,7 @@ type Conn struct {
 	writeMu  sync.Mutex
 }
 
-func Dial(endpoint, serverName, resolvedIP string) (*Conn, error) {
+func Dial(endpoint, serverName, resolvedIP, origin string) (*Conn, error) {
 	target, err := url.Parse(endpoint)
 	if err != nil {
 		return nil, err
@@ -57,34 +62,35 @@ func Dial(endpoint, serverName, resolvedIP string) (*Conn, error) {
 	}
 	compress := target.Query().Get("compression") == "deflate-raw"
 
-	tlsConf := &tls.Config{
-		InsecureSkipVerify: true,
-		ServerName:         serverName,
-		NextProtos:         []string{"h3"},
-	}
-	quicConf := &quic.Config{
-		EnableDatagrams:                  true,
-		EnableStreamResetPartialDelivery: true,
-		KeepAlivePeriod:                  keepAlivePeriod,
-		MaxIdleTimeout:                   maxIdleTimeout,
-	}
-
 	dialCtx, cancel := context.WithTimeout(context.Background(), dialTimeout)
 	defer cancel()
 
-	qconn, err := quic.DialAddrEarly(dialCtx, net.JoinHostPort(resolvedIP, port), tlsConf, quicConf)
+	qconn, err := headless.ChromeWindows.DialQUIC(dialCtx, net.JoinHostPort(resolvedIP, port), headless.QUICOptions{
+		Transport:          headless.QUICWebTransport,
+		ServerName:         serverName,
+		InsecureSkipVerify: true,
+		EnableDatagrams:    true,
+		KeepAlivePeriod:    keepAlivePeriod,
+		MaxIdleTimeout:     maxIdleTimeout,
+	})
 	if err != nil {
 		return nil, fmt.Errorf("wt dial: %w", err)
 	}
 
-	// The VK/OK SFU advertises the HTTP/3 datagram setting but does not
-	// negotiate QUIC transport-level datagrams, which makes quic-go's http3
-	// layer close the connection. Signaling only uses WebTransport streams, so
-	// disable HTTP/3 datagrams on our side, and send the draft-06
-	// ENABLE_WEBTRANSPORT codepoint the SFU expects.
+	// The SFU advertises HTTP/3 datagrams but never negotiates them at the QUIC
+	// layer, and only EnableDatagrams feeds the check that closes the connection.
 	tr := &http3.Transport{
 		EnableDatagrams:    false,
-		AdditionalSettings: map[uint64]uint64{settingsEnableWebtransportDraft06: 1},
+		SendGreaseFrames:   true,
+		DisableCompression: true,
+		AdditionalSettings: map[uint64]uint64{
+			settingsQPACKMaxTableCapacity:     65536,
+			settingsMaxFieldSectionSize:       16384,
+			settingsQPACKBlockedStreams:       100,
+			settingsDatagram:                  1,
+			settingsDatagramDraft04:           1,
+			settingsEnableWebtransportDraft06: 1,
+		},
 	}
 	control := tr.NewRawClientConn(qconn)
 	context.AfterFunc(qconn.Context(), func() { tr.Close() })
@@ -120,7 +126,7 @@ func Dial(endpoint, serverName, resolvedIP string) (*Conn, error) {
 
 	req := (&http.Request{
 		Method: http.MethodConnect,
-		Header: http.Header{},
+		Header: headless.ChromeWindows.WebTransportConnectHeader(origin),
 		Proto:  protocolHeaderLegacy,
 		Host:   target.Host,
 		URL:    target,

@@ -16,13 +16,16 @@ import (
 	"sync"
 	"time"
 
-	"github.com/pion/webrtc/v4"
+	headless "github.com/kulikov0/headless-client"
+	"github.com/kulikov0/headless-client/webrtc"
 	"whitelist-bypass/relay/common"
 	"whitelist-bypass/relay/tunnel"
 	"whitelist-bypass/relay/wtsignal"
 )
 
 const TopologyDirect = "DIRECT"
+
+const vkOrigin = "https://vk.ru"
 const maxServerBounces = 5
 
 type CallInfo struct {
@@ -102,13 +105,13 @@ func httpPost(endpoint string, form url.Values, extraHeaders map[string]string) 
 		return nil, err
 	}
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
-	req.Header.Set("User-Agent", common.UserAgent)
+	req.Header.Set("User-Agent", headless.ChromeWindows.UserAgent())
 	req.Header.Set("Origin", "https://vk.ru")
 	req.Header.Set("Referer", "https://vk.ru/")
 	for k, v := range extraHeaders {
 		req.Header.Set(k, v)
 	}
-	resp, err := http.DefaultClient.Do(req)
+	resp, err := headless.ChromeWindows.HTTPClient().Do(req)
 	if err != nil {
 		return nil, err
 	}
@@ -480,7 +483,7 @@ func (b *Bridge) connectVKWs(wtURL string) error {
 	if err != nil || len(ips) == 0 {
 		return fmt.Errorf("resolve %s: %w", host, err)
 	}
-	sfu, err := wtsignal.Dial(wtURL, host, ips[0])
+	sfu, err := wtsignal.Dial(wtURL, host, ips[0], vkOrigin)
 	if err != nil {
 		return err
 	}

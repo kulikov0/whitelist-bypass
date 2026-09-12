@@ -5,9 +5,8 @@ import (
 	"sync"
 	"time"
 
-	"github.com/google/uuid"
+	"github.com/kulikov0/headless-client/webrtc"
 	"github.com/pion/rtp/codecs"
-	"github.com/pion/webrtc/v4"
 	"whitelist-bypass/relay/common"
 	"whitelist-bypass/relay/livekit"
 	"whitelist-bypass/relay/tunnel"
@@ -77,7 +76,7 @@ func NewMediaSession(p MediaParams) (*MediaSession, error) {
 	tracks := make([]*webrtc.TrackLocalStaticSample, 0, count)
 	subs := make([]*tunnel.VP8DataTunnel, 0, count)
 	for i := 0; i < count; i++ {
-		track, err := s.newVP8Track(i)
+		track, err := s.newVP8Track()
 		if err != nil {
 			return nil, err
 		}
@@ -116,14 +115,9 @@ func NewMediaSession(p MediaParams) (*MediaSession, error) {
 	return s, nil
 }
 
-func (s *MediaSession) newVP8Track(slot int) (*webrtc.TrackLocalStaticSample, error) {
-	labelPrefix, streamPrefix := "videochannel-", "tunnel-video-"
-	if slot > 0 {
-		labelPrefix, streamPrefix = "screenchannel-", "tunnel-screen-"
-	}
+func (s *MediaSession) newVP8Track() (*webrtc.TrackLocalStaticSample, error) {
 	return webrtc.NewTrackLocalStaticSample(
-		webrtc.RTPCodecCapability{MimeType: webrtc.MimeTypeVP8, ClockRate: 90000},
-		labelPrefix+uuid.New().String(), streamPrefix+uuid.New().String())
+		webrtc.RTPCodecCapability{MimeType: webrtc.MimeTypeVP8, ClockRate: 90000})
 }
 
 func (s *MediaSession) MarkConfigAcked() {
@@ -415,7 +409,7 @@ func (s *MediaSession) addPublisherTrack(slot int) bool {
 	if slot == 0 {
 		source = livekit.TrackSourceCamera
 	}
-	track, err := s.newVP8Track(slot)
+	track, err := s.newVP8Track()
 	if err != nil {
 		s.p.LogFn("[bx] adapt-track-count: new track slot=%d: %v", slot, err)
 		return false

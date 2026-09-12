@@ -2,7 +2,6 @@ package joiner
 
 import (
 	"context"
-	"crypto/tls"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -15,8 +14,10 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/pion/webrtc/v4"
+	"github.com/kulikov0/headless-client"
+	"github.com/kulikov0/headless-client/webrtc"
 	"whitelist-bypass/relay/common"
+	"whitelist-bypass/relay/headlessapi"
 	"whitelist-bypass/relay/tunnel"
 	"whitelist-bypass/relay/wtsignal"
 )
@@ -24,6 +25,8 @@ import (
 const vkMaxReconnectAttempts = 10
 
 const vkTopologyDirect = "DIRECT"
+
+const vkOrigin = "https://vk.ru"
 
 type vkAuthRottenError struct {
 	Code string
@@ -293,13 +296,16 @@ func (h *VKHeadlessJoiner) joinCall() error {
 
 	client := &http.Client{
 		Timeout: 15 * time.Second,
-		Transport: &http.Transport{
-			TLSClientConfig: &tls.Config{InsecureSkipVerify: true, ServerName: parsed.Hostname()},
+		Transport: headless.ChromeWindows.Transport(headless.TLSOptions{
+			ServerName:         parsed.Hostname(),
+			InsecureSkipVerify: true,
 			DialContext: func(ctx context.Context, network, addr string) (net.Conn, error) {
 				_, port, _ := net.SplitHostPort(addr)
-				return (&net.Dialer{Timeout: 10 * time.Second}).DialContext(ctx, network, resolvedIP+":"+port)
+				dialer := headless.ChromeDialer()
+				dialer.Timeout = 10 * time.Second
+				return dialer.DialContext(ctx, network, resolvedIP+":"+port)
 			},
-		},
+		}),
 	}
 
 	req, err := http.NewRequest("POST", apiURL, strings.NewReader(body.Encode()))
@@ -307,7 +313,7 @@ func (h *VKHeadlessJoiner) joinCall() error {
 		return fmt.Errorf("new request: %w", err)
 	}
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
-	req.Header.Set("User-Agent", common.UserAgent)
+	req.Header.Set("User-Agent", headless.ChromeWindows.UserAgent())
 
 	h.logFn("vk-joiner: calling joinConversationByLink...")
 	resp, err := client.Do(req)
@@ -388,7 +394,7 @@ func (h *VKHeadlessJoiner) connectSFU() {
 		"&version=" + h.authParams.ProtocolVersion +
 		"&device=browser&capabilities=" + capabilities + "&clientType=VK&tgt=join&compression=deflate-raw"
 
-	sfu, err := wtsignal.Dial(wtURL, hostname, resolvedIP)
+	sfu, err := wtsignal.Dial(wtURL, hostname, resolvedIP, vkOrigin)
 	if err != nil {
 		h.logFn("vk-joiner: WebTransport connect failed: %s", common.MaskError(err))
 		return
@@ -561,14 +567,22 @@ func (h *VKHeadlessJoiner) initPC() {
 
 	mode := h.authParams.TunnelMode
 
-	settingEngine := webrtc.SettingEngine{}
-	settingEngine.DisableCloseByDTLS(true)
-	settingEngine.DetachDataChannels()
-	if h.PCConfig != nil {
-		h.PCConfig.ConfigureSettingEngine(&settingEngine)
+	api, err := headlessapi.WebRTCAPI(headlessapi.Options{
+		Profile: headless.ChromeWindows.WithDTLS13Mimicry(),
+		Configure: func(settingEngine *webrtc.SettingEngine) {
+			settingEngine.DisableCloseByDTLS(true)
+			settingEngine.DetachDataChannels()
+			if h.PCConfig != nil {
+				h.PCConfig.ConfigureSettingEngine(settingEngine)
+			}
+		},
+	})
+	if err != nil {
+		h.logFn("vk-joiner: failed to build webrtc api: %v", err)
+		return
 	}
 
-	pc, err := webrtc.NewAPI(webrtc.WithSettingEngine(settingEngine)).NewPeerConnection(webrtc.Configuration{
+	pc, err := api.NewPeerConnection(webrtc.Configuration{
 		ICEServers: iceServers,
 	})
 	if err != nil {

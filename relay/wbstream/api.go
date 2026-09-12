@@ -10,7 +10,7 @@ import (
 	"net/url"
 	"strings"
 
-	"whitelist-bypass/relay/common"
+	"github.com/kulikov0/headless-client"
 )
 
 const (
@@ -71,9 +71,14 @@ type connectionDetailsResponse struct {
 }
 
 func httpDo(client *http.Client, req *http.Request) (*http.Response, error) {
-	req.Header.Set("User-Agent", common.UserAgent)
+	req.Header.Set("User-Agent", headless.ChromeWindows.UserAgent())
+	for name, values := range headless.ChromeWindows.Headers(headless.DestEmpty) {
+		if _, present := req.Header[name]; !present {
+			req.Header[name] = values
+		}
+	}
 	if client == nil {
-		client = http.DefaultClient
+		client = headless.ChromeWindows.HTTPClient()
 	}
 	return client.Do(req)
 }
@@ -87,7 +92,7 @@ func (t *cookieTransport) RoundTrip(req *http.Request) (*http.Response, error) {
 	req.Header.Set("Cookie", t.cookie)
 	base := t.base
 	if base == nil {
-		base = http.DefaultTransport
+		base = headless.ChromeWindows.HTTPClient().Transport
 	}
 	return base.RoundTrip(req)
 }
@@ -97,7 +102,7 @@ func clientWithCookies(client *http.Client, cookieHeader string) *http.Client {
 		return client
 	}
 	if client == nil {
-		client = &http.Client{}
+		client = headless.ChromeWindows.HTTPClient()
 	}
 	wrapped := *client
 	wrapped.Transport = &cookieTransport{base: client.Transport, cookie: cookieHeader}
@@ -282,12 +287,8 @@ func RefreshAccessToken(client *http.Client, cookieHeader, deviceID string) (str
 	req.Header.Set("Origin", Origin)
 	req.Header.Set("Referer", Origin+"/")
 	req.Header.Set("Cookie", cookieHeader)
-	req.Header.Set("User-Agent", common.UserAgent)
 
-	if client == nil {
-		client = http.DefaultClient
-	}
-	resp, err := client.Do(req)
+	resp, err := httpDo(client, req)
 	if err != nil {
 		return "", nil, err
 	}
@@ -357,7 +358,7 @@ func SetParticipantPermissions(client *http.Client, accessToken, roomID, partici
 
 func KickParticipant(client *http.Client, accessToken, roomID, participantID string) error {
 	if client == nil {
-		client = http.DefaultClient
+		client = headless.ChromeWindows.HTTPClient()
 	}
 	kickURL := fmt.Sprintf("%s/api-room-manager/api/v1/room/%s/participant/%s/kick", APIBase, roomID, participantID)
 	req, err := http.NewRequest("DELETE", kickURL, strings.NewReader("{}"))
@@ -366,8 +367,7 @@ func KickParticipant(client *http.Client, accessToken, roomID, participantID str
 	}
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("Authorization", "Bearer "+accessToken)
-	req.Header.Set("User-Agent", common.UserAgent)
-	resp, err := client.Do(req)
+	resp, err := httpDo(client, req)
 	if err != nil {
 		return err
 	}

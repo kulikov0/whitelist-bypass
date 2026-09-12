@@ -5,9 +5,9 @@ import (
 	"log"
 	"sync"
 
+	"github.com/kulikov0/headless-client/webrtc"
 	"github.com/pion/rtp"
 	"github.com/pion/rtp/codecs"
-	"github.com/pion/webrtc/v4"
 	"whitelist-bypass/relay/common"
 	tmapi "whitelist-bypass/relay/telemost"
 	"whitelist-bypass/relay/tunnel"
@@ -145,13 +145,11 @@ func (r *SFURelay) Init(iceServers []webrtc.ICEServer) error {
 
 	sampleTrack, _ := webrtc.NewTrackLocalStaticSample(
 		webrtc.RTPCodecCapability{MimeType: webrtc.MimeTypeVP8},
-		"video", "tunnel-video",
 	)
 	r.sampleTrack = sampleTrack
 
 	audioTrack, _ := webrtc.NewTrackLocalStaticRTP(
 		webrtc.RTPCodecCapability{MimeType: webrtc.MimeTypeOpus},
-		"audio", "tunnel-audio",
 	)
 	pubPC.AddTransceiverFromTrack(audioTrack, webrtc.RTPTransceiverInit{Direction: webrtc.RTPTransceiverDirectionSendonly})
 	videoTr, _ := pubPC.AddTransceiverFromTrack(sampleTrack, webrtc.RTPTransceiverInit{Direction: webrtc.RTPTransceiverDirectionSendonly})
