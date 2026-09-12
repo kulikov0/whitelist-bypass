@@ -3,14 +3,12 @@ module headless-creator
 go 1.26.1
 
 require (
-	github.com/kulikov0/headless-client v0.0.0
+	github.com/kulikov0/headless-client v0.1.0
 	github.com/pion/rtp v1.10.1
 	whitelist-bypass/relay v0.0.0
 )
 
 replace whitelist-bypass/relay => ../../relay
-
-replace github.com/kulikov0/headless-client => ../../../headlessclient
 
 require (
 	github.com/andybalholm/brotli v1.1.1 // indirect

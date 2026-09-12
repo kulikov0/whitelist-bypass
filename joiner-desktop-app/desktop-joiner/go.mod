@@ -20,7 +20,7 @@ require (
 	github.com/klauspost/compress v1.17.11 // indirect
 	github.com/klauspost/cpuid/v2 v2.2.6 // indirect
 	github.com/klauspost/reedsolomon v1.12.0 // indirect
-	github.com/kulikov0/headless-client v0.0.0 // indirect
+	github.com/kulikov0/headless-client v0.1.0 // indirect
 	github.com/pion/datachannel v1.6.0 // indirect
 	github.com/pion/dtls/v3 v3.1.2 // indirect
 	github.com/pion/interceptor v0.1.44 // indirect
@@ -55,5 +55,3 @@ require (
 )
 
 replace whitelist-bypass/relay => ../../relay
-
-replace github.com/kulikov0/headless-client => ../../../headlessclient
