@@ -4,6 +4,7 @@ ARG TARGETARCH
 ENV CGO_ENABLED=0 GOOS=$TARGETOS GOARCH=$TARGETARCH
 WORKDIR /src
 
+COPY go.mod go.sum /src/
 COPY relay /src/relay
 COPY headless /src/headless
 
