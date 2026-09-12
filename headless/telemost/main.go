@@ -986,6 +986,11 @@ func main() {
 		cookieStr = strings.TrimSpace(line)
 	}
 
+	if common.CookieValue(cookieStr, "Session_id") == "" {
+		common.EmitAuthError(common.AuthErrorSessionExpired)
+		log.Fatalf("[auth] cookies missing Session_id; log into Yandex and re-export via creator-app's 'Export Cookies' button")
+	}
+
 	log.Println("[config] Fetching live config from Telemost bundle...")
 	cfg, err := fetchConfig()
 	if err != nil {

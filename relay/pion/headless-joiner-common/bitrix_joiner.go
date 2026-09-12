@@ -40,6 +40,7 @@ type BitrixHeadlessJoiner struct {
 	sessMu sync.Mutex
 	sig    *bitrix.Signal
 	ms     *bitrix.MediaSession
+	pull   *bitrix.PullClient
 
 	closeMu sync.Mutex
 	closed  bool
@@ -235,6 +236,8 @@ func (j *BitrixHeadlessJoiner) runOnce() error {
 		return nil
 	}
 
+	j.startKickWatch(c, sig, userAgent)
+
 	if err := ms.Start(); err != nil {
 		sig.Close()
 		return fmt.Errorf("media start: %w", err)
@@ -279,13 +282,47 @@ func (j *BitrixHeadlessJoiner) setSession(sig *bitrix.Signal, ms *bitrix.MediaSe
 	j.sessMu.Unlock()
 }
 
+func (j *BitrixHeadlessJoiner) startKickWatch(c *bitrix.Client, sig *bitrix.Signal, userAgent string) {
+	selfID := sig.LocalUserID()
+	if selfID == "" {
+		j.logFn("bitrix-joiner: self userId unknown, kick-detect disabled")
+		return
+	}
+	pc, err := c.PullConfig()
+	if err != nil {
+		j.logFn("bitrix-joiner: pull config failed, kick-detect disabled: %s", common.MaskError(err))
+		return
+	}
+	pull := bitrix.NewPullClient(pc, userAgent, j.portal, j.logFn)
+	pull.SetOnUserLeave(func(uid string) {
+		if uid != selfID {
+			return
+		}
+		j.logFn("bitrix-joiner: kicked from conference (userId=%s), shutting down", uid)
+		go j.Close()
+	})
+	j.sessMu.Lock()
+	j.pull = pull
+	j.sessMu.Unlock()
+	go func() {
+		if err := pull.Run(); err != nil {
+			j.logFn("bitrix-joiner: subws2 pull ended: %s", common.MaskError(err))
+		}
+	}()
+}
+
 func (j *BitrixHeadlessJoiner) resetSessionState() {
 	j.sessMu.Lock()
 	sig := j.sig
 	ms := j.ms
+	pull := j.pull
 	j.sig = nil
 	j.ms = nil
+	j.pull = nil
 	j.sessMu.Unlock()
+	if pull != nil {
+		pull.Close()
+	}
 	if ms != nil {
 		ms.Stop()
 	}

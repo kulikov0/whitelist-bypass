@@ -115,6 +115,8 @@ func (s *Signal) SetOnDataChannel(fn func(*webrtc.DataChannel)) {
 	}
 }
 
+func (s *Signal) LocalUserID() string { return s.lk.Join().LocalUserID }
+
 func (s *Signal) PubReliableDC() *webrtc.DataChannel {
 	s.mu.Lock()
 	defer s.mu.Unlock()

@@ -39,13 +39,16 @@ type Client struct {
 	HTTP  *http.Client
 	LogFn func(string, ...any)
 
-	portal     string
-	sessid     string
-	userAgent  string
-	instanceID string
-	email      string
-	password   string
-	credsPath  string
+	portal       string
+	sessid       string
+	userAgent    string
+	instanceID   string
+	email        string
+	password     string
+	credsPath    string
+	chatID       string
+	conferenceID string
+	selfUserID   string
 }
 
 type JoinResult struct {
@@ -67,6 +70,13 @@ type callInfo struct {
 	UserToken string
 	Alias     string
 	GuestLink string
+}
+
+type PullConfigResult struct {
+	WebSocket string
+	ChannelID string
+	Hostname  string
+	Revision  int
 }
 
 type slbRequest struct {
@@ -115,6 +125,8 @@ func (c *Client) JoinAsGuest(alias, displayName string) (JoinResult, error) {
 	if err != nil {
 		return res, err
 	}
+	c.chatID = conf.ChatID
+	c.conferenceID = conf.ConferenceID
 	userToken, err := c.registerGuest(conf, displayName)
 	if err != nil {
 		return res, err
@@ -134,6 +146,7 @@ func (c *Client) JoinAsHost(alias string) (JoinResult, error) {
 		return res, err
 	}
 	c.LogFn("[host] conference chatId=%s conferenceId=%s", conf.ChatID, conf.ConferenceID)
+	c.chatID = conf.ChatID
 	callToken, userToken, err := c.getCallToken(conf.ChatID)
 	if err != nil {
 		return res, err
@@ -154,6 +167,7 @@ func (c *Client) CreateAndJoin() (JoinResult, string, error) {
 	if err != nil {
 		return res, "", err
 	}
+	c.chatID = info.ChatID
 	guestLink := info.GuestLink
 	if guestLink == "" {
 		guestLink, err = c.getGuestLink(info.ChatID)
@@ -213,6 +227,15 @@ func (c *Client) do(method, endpoint, contentType string, body io.Reader) ([]byt
 
 func (c *Client) restForm(action string, form url.Values) ([]byte, int, error) {
 	endpoint := c.portal + "/rest/" + action + ".json"
+	return c.do("POST", endpoint, "application/x-www-form-urlencoded", strings.NewReader(form.Encode()))
+}
+
+func (c *Client) restFormAuthed(action string, form url.Values) ([]byte, int, error) {
+	endpoint := c.portal + "/rest/" + action + ".json"
+	if c.sessid != "" {
+		form.Set("sessid", c.sessid)
+		endpoint += "?sessid=" + url.QueryEscape(c.sessid)
+	}
 	return c.do("POST", endpoint, "application/x-www-form-urlencoded", strings.NewReader(form.Encode()))
 }
 
@@ -424,6 +447,125 @@ func (c *Client) createRoom() (callInfo, error) {
 	}
 	c.LogFn("[create] videoconf chatId=%s alias=%s", info.ChatID, info.Alias)
 	return info, nil
+}
+
+func (c *Client) KickUser(userID string) error {
+	if c.chatID == "" {
+		return fmt.Errorf("kick: no active chatId")
+	}
+	if userID == "" {
+		return fmt.Errorf("kick: empty userId")
+	}
+	form := url.Values{}
+	form.Set("chatId", c.chatID)
+	form.Set("userId", userID)
+	body, status, err := c.withRelogin(func() ([]byte, int, error) {
+		return c.ajaxAction("im.v2.Chat.deleteUser", form)
+	})
+	if err != nil {
+		return err
+	}
+	var out struct {
+		Status string `json:"status"`
+		Errors []struct {
+			Code    json.Number `json:"code"`
+			Message string      `json:"message"`
+		} `json:"errors"`
+	}
+	if err := json.Unmarshal(body, &out); err != nil {
+		return fmt.Errorf("kick: %w (status %d, body %s)", err, status, common.BodySnippet(body))
+	}
+	if len(out.Errors) > 0 {
+		return fmt.Errorf("kick: chatId=%s userId=%s rejected (status %d, %s %s)", c.chatID, userID, status, out.Errors[0].Code.String(), out.Errors[0].Message)
+	}
+	c.LogFn("[kick] removed userId=%s from chatId=%s", userID, c.chatID)
+	return nil
+}
+
+func (c *Client) SelfUserID() (string, error) {
+	if c.selfUserID != "" {
+		return c.selfUserID, nil
+	}
+	id, err := c.currentUserID()
+	if err != nil {
+		return "", err
+	}
+	c.selfUserID = id
+	return id, nil
+}
+
+func (c *Client) callHash() string {
+	if c.HTTP == nil || c.HTTP.Jar == nil {
+		return ""
+	}
+	u, err := url.Parse(c.portal)
+	if err != nil {
+		return ""
+	}
+	for _, ck := range c.HTTP.Jar.Cookies(u) {
+		if ck.Name == "BITRIX_CALL_HASH" {
+			return ck.Value
+		}
+	}
+	return ""
+}
+
+func (c *Client) PullConfig() (PullConfigResult, error) {
+	var pc PullConfigResult
+	form := url.Values{}
+	form.Set("CACHE", "N")
+	var body []byte
+	var status int
+	var err error
+	if hash := c.callHash(); hash != "" {
+		form.Set("call_auth_id", hash)
+		form.Set("videoconf_id", c.conferenceID)
+		form.Set("call_chat_id", c.chatID)
+		body, status, err = c.restForm("pull.config.get", form)
+	} else {
+		body, status, err = c.withRelogin(func() ([]byte, int, error) {
+			return c.restFormAuthed("pull.config.get", form)
+		})
+	}
+	if err != nil {
+		return pc, err
+	}
+	var out struct {
+		Result struct {
+			Server struct {
+				WebSocket string `json:"websocket"`
+			} `json:"server"`
+			API struct {
+				RevisionWeb int `json:"revision_web"`
+			} `json:"api"`
+			Channels struct {
+				Shared struct {
+					ID string `json:"id"`
+				} `json:"shared"`
+				Private struct {
+					ID string `json:"id"`
+				} `json:"private"`
+			} `json:"channels"`
+		} `json:"result"`
+		Error string `json:"error"`
+	}
+	if err := json.Unmarshal(body, &out); err != nil {
+		return pc, fmt.Errorf("pull config: %w (status %d, body %s)", err, status, common.BodySnippet(body))
+	}
+	if out.Result.Server.WebSocket == "" || out.Result.Channels.Private.ID == "" {
+		return pc, fmt.Errorf("pull config: missing websocket/channel (status %d, body %s)", status, common.BodySnippet(body))
+	}
+	pc.WebSocket = out.Result.Server.WebSocket
+	pc.ChannelID = out.Result.Channels.Private.ID
+	if out.Result.Channels.Shared.ID != "" {
+		pc.ChannelID += "/" + out.Result.Channels.Shared.ID
+	}
+	pc.Revision = out.Result.API.RevisionWeb
+	pc.Hostname = c.portal
+	if u, perr := url.Parse(c.portal); perr == nil && u.Host != "" {
+		pc.Hostname = u.Host
+	}
+	return pc, nil
 }
 
 func (c *Client) getGuestLink(chatID string) (string, error) {

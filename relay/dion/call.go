@@ -92,6 +92,7 @@ type Call struct {
 
 	OnConnected   func(tunnel.DataTunnel)
 	OnPeerRestart func()
+	OnKicked      func()
 	OnRemoteSDP   func(sdp string)
 
 	done      chan struct{}
@@ -185,6 +186,13 @@ func (c *Call) Start() error {
 		case sdpAnswerChan <- SDPAnswerParams{Answer: answerSDP, Transceivers: transceivers}:
 		default:
 		}
+	}
+	signaling.OnKicked = func() {
+		c.cfg.LogFn("[call] server kicked us, tearing down")
+		if c.OnKicked != nil {
+			c.OnKicked()
+		}
+		c.Close()
 	}
 	signaling.OnSpeakerJoined = c.handleSpeakerJoined
 	signaling.OnSpeakerDisconnected = c.handleSpeakerDisconnected

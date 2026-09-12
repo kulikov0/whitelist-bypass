@@ -160,6 +160,30 @@ func main() {
 	}
 	defer sig.Close()
 
+	selfID, sidErr := c.SelfUserID()
+	if sidErr != nil {
+		log.Printf("[bx] self user id unavailable, kick disabled: %v", sidErr)
+	}
+	if selfID != "" {
+		if pc, perr := c.PullConfig(); perr != nil {
+			log.Printf("[bx] pull config failed, kick disabled: %v", perr)
+		} else {
+			km := bitrix.NewKickManager(c.KickUser, selfID, log.Printf)
+			pull := bitrix.NewPullClient(pc, userAgent, portal, log.Printf)
+			pull.SetOnUsersAnswered(func(ids []string) {
+				for _, id := range ids {
+					km.OnUserJoined(id)
+				}
+			})
+			defer pull.Close()
+			go func() {
+				if err := pull.Run(); err != nil {
+					log.Printf("[bx] subws2 pull ended: %v", err)
+				}
+			}()
+		}
+	}
+
 	ms, err := bitrix.NewMediaSession(bitrix.MediaParams{
 		Signal:  sig,
 		Alias:   alias,

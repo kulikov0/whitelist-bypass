@@ -14,9 +14,9 @@ import (
 const (
 	defaultVP8FPS       = 24
 	defaultVP8Batch     = 30
-	keepaliveIdlePeriod = 5 * time.Second
-	keepaliveIdleMin    = 3 * time.Second
-	keepaliveIdleMax    = 8 * time.Second
+	keepaliveIdlePeriod = 100 * time.Millisecond
+	keepaliveIdleMin    = 60 * time.Millisecond
+	keepaliveIdleMax    = 200 * time.Millisecond
 	keepalivePadMax     = 176
 	sendQueueDepth      = 128
 

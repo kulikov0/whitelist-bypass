@@ -183,8 +183,9 @@ type jsonJoin struct {
 	PingInterval int32           `json:"pingInterval"`
 	ICEServers   []jsonICEServer `json:"iceServers"`
 	Local        struct {
-		SID  string `json:"sid"`
-		Name string `json:"name"`
+		SID    string `json:"sid"`
+		Name   string `json:"name"`
+		UserID string `json:"userId"`
 	} `json:"localParticipant"`
 }
 
@@ -231,6 +232,7 @@ func (JSONCodec) Decode(data []byte) (Event, error) {
 				RoomName:        ji.RoomID,
 				ParticipantSID:  ji.Local.SID,
 				ParticipantID:   ji.Local.Name,
+				LocalUserID:     ji.Local.UserID,
 				PingIntervalSec: ji.PingInterval,
 			}
 			for _, is := range ji.ICEServers {

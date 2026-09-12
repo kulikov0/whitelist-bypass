@@ -130,6 +130,10 @@ func (j *DionHeadlessJoiner) runOnce(httpClient *http.Client, slug, displayName 
 			j.OnConnected(tun)
 		}
 	}
+	call.OnKicked = func() {
+		j.logFn("dion-joiner: kicked from conference, shutting down")
+		go j.Close()
+	}
 
 	j.mu.Lock()
 	if j.closed {

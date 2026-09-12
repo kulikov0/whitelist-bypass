@@ -183,6 +183,7 @@ type joinResponse struct {
 	RoomName          string
 	ParticipantSID    string
 	ParticipantID     string
+	LocalUserID       string
 	ServerVersion     string
 	ServerRegion      string
 	ICEServers        []iceServer

@@ -6,3 +6,6 @@ prebuilts/
 cookies*.json
 relay/relay
 whitelist-experiments/
+
+headless/tests/stand/.context/
+headless/tests/.env

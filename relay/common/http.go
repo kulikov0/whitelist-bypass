@@ -39,6 +39,38 @@ func LoadCookies(path string) string {
 	return strings.Join(parts, "; ")
 }
 
+func UpdateCookieFile(path string, updates map[string]string) error {
+	if len(updates) == 0 {
+		return nil
+	}
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return err
+	}
+	var raw []map[string]any
+	if err := json.Unmarshal(data, &raw); err != nil {
+		return err
+	}
+	seen := make(map[string]bool, len(updates))
+	for _, c := range raw {
+		name, _ := c["name"].(string)
+		if v, ok := updates[name]; ok {
+			c["value"] = v
+			seen[name] = true
+		}
+	}
+	for name, v := range updates {
+		if !seen[name] {
+			raw = append(raw, map[string]any{"name": name, "value": v})
+		}
+	}
+	out, err := json.MarshalIndent(raw, "", "  ")
+	if err != nil {
+		return err
+	}
+	return os.WriteFile(path, out, 0o600)
+}
+
 func CookieValue(cookieHeader, name string) string {
 	for _, part := range strings.Split(cookieHeader, ";") {
 		part = strings.TrimSpace(part)

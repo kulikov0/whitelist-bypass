@@ -365,7 +365,7 @@ docker compose pull && docker compose up -d
 | `UPSTREAM_USER` | нет | - | `--upstream-user` |
 | `UPSTREAM_PASS` | нет | - | `--upstream-pass` |
 
-> `cookies-dion.json` и `cookies-bitrix.json` монтируются без `:ro`, в отличие от остальных трёх: DION выдаёт одноразовый refresh-токен, а Bitrix обновляет сессию по паролю, и creator перезаписывает файл при каждом обновлении. Контейнер работает под uid 999, поэтому оба файла на хосте должны принадлежать этому uid - иначе `/dion` или `/bitrix` упадёт с `save cookies failed: ... permission denied`. VK, Telemost и WB Stream куки только читают, их менять не нужно.
+> `cookies-dion.json`, `cookies-bitrix.json` и `cookies-wbstream.json` монтируются без `:ro` - creator перезаписывает их при обновлении токена, поэтому на хосте они должны принадлежать uid 999 (иначе `save cookies failed: permission denied`). VK и Telemost только читаются.
 
 > Если WebRTC-туннель не доходит через сетевой бридж Docker (UDP может отбрасываться), добавьте в `docker-compose.yml` строку `network_mode: host` под сервисом `bot`.
 

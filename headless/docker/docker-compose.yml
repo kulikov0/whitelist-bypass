@@ -14,7 +14,7 @@ services:
       # don't use, or remove the corresponding line.
       - ./cookies-vk.json:/data/cookies-vk.json:ro
       - ./cookies-yandex.json:/data/cookies-yandex.json:ro
-      - ./cookies-wbstream.json:/data/cookies-wbstream.json:ro
+      - ./cookies-wbstream.json:/data/cookies-wbstream.json
       - ./cookies-dion.json:/data/cookies-dion.json
       - ./cookies-bitrix.json:/data/cookies-bitrix.json
       # Per-session creator logs persist here.

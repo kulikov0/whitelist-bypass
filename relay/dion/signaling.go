@@ -229,6 +229,7 @@ type SignalingClient struct {
 	OnGetVideoFromUserResponse         func(resp GetVideoFromUserResponse, errCode int, errMessage string)
 	OnGetScreenSharingFromUserResponse func(resp GetScreenSharingFromUserResponse, errCode int, errMessage string)
 	OnHeartbeat                        func()
+	OnKicked                           func()
 	OnUnknown                          func(method string, params json.RawMessage)
 	OnDataChannelMessage               func(method string, params json.RawMessage)
 }
@@ -651,6 +652,11 @@ func (c *SignalingClient) dispatch(frame Frame) {
 	case MethodServerHeartbeat:
 		if c.OnHeartbeat != nil {
 			c.OnHeartbeat()
+		}
+	case MethodServerYouKicked:
+		c.logFn("dion: server:you_kicked")
+		if c.OnKicked != nil {
+			c.OnKicked()
 		}
 	case MethodServerGetVideoFromUser:
 		var resp GetVideoFromUserResponse
