@@ -11,7 +11,6 @@ import (
 	"strings"
 
 	"github.com/kulikov0/headless-client"
-	"whitelist-bypass/relay/common"
 )
 
 const (
@@ -72,7 +71,12 @@ type connectionDetailsResponse struct {
 }
 
 func httpDo(client *http.Client, req *http.Request) (*http.Response, error) {
-	req.Header.Set("User-Agent", common.UserAgent)
+	req.Header.Set("User-Agent", headless.ChromeWindows.UserAgent())
+	for name, values := range headless.ChromeWindows.Headers(headless.DestEmpty) {
+		if _, present := req.Header[name]; !present {
+			req.Header[name] = values
+		}
+	}
 	if client == nil {
 		client = headless.ChromeWindows.HTTPClient()
 	}
@@ -283,12 +287,8 @@ func RefreshAccessToken(client *http.Client, cookieHeader, deviceID string) (str
 	req.Header.Set("Origin", Origin)
 	req.Header.Set("Referer", Origin+"/")
 	req.Header.Set("Cookie", cookieHeader)
-	req.Header.Set("User-Agent", common.UserAgent)
 
-	if client == nil {
-		client = headless.ChromeWindows.HTTPClient()
-	}
-	resp, err := client.Do(req)
+	resp, err := httpDo(client, req)
 	if err != nil {
 		return "", err
 	}
@@ -361,8 +361,7 @@ func KickParticipant(client *http.Client, accessToken, roomID, participantID str
 	}
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("Authorization", "Bearer "+accessToken)
-	req.Header.Set("User-Agent", common.UserAgent)
-	resp, err := client.Do(req)
+	resp, err := httpDo(client, req)
 	if err != nil {
 		return err
 	}

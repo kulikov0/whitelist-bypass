@@ -16,6 +16,7 @@ import (
 	"sync"
 	"time"
 
+	headless "github.com/kulikov0/headless-client"
 	"github.com/kulikov0/headless-client/webrtc"
 	"whitelist-bypass/relay/common"
 	"whitelist-bypass/relay/tunnel"
@@ -104,13 +105,13 @@ func httpPost(endpoint string, form url.Values, extraHeaders map[string]string) 
 		return nil, err
 	}
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
-	req.Header.Set("User-Agent", common.UserAgent)
+	req.Header.Set("User-Agent", headless.ChromeWindows.UserAgent())
 	req.Header.Set("Origin", "https://vk.ru")
 	req.Header.Set("Referer", "https://vk.ru/")
 	for k, v := range extraHeaders {
 		req.Header.Set(k, v)
 	}
-	resp, err := http.DefaultClient.Do(req)
+	resp, err := headless.ChromeWindows.HTTPClient().Do(req)
 	if err != nil {
 		return nil, err
 	}

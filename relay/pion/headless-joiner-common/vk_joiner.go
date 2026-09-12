@@ -2,7 +2,6 @@ package joiner
 
 import (
 	"context"
-	"crypto/tls"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -297,13 +296,16 @@ func (h *VKHeadlessJoiner) joinCall() error {
 
 	client := &http.Client{
 		Timeout: 15 * time.Second,
-		Transport: &http.Transport{
-			TLSClientConfig: &tls.Config{InsecureSkipVerify: true, ServerName: parsed.Hostname()},
+		Transport: headless.ChromeWindows.Transport(headless.TLSOptions{
+			ServerName:         parsed.Hostname(),
+			InsecureSkipVerify: true,
 			DialContext: func(ctx context.Context, network, addr string) (net.Conn, error) {
 				_, port, _ := net.SplitHostPort(addr)
-				return (&net.Dialer{Timeout: 10 * time.Second}).DialContext(ctx, network, resolvedIP+":"+port)
+				dialer := headless.ChromeDialer()
+				dialer.Timeout = 10 * time.Second
+				return dialer.DialContext(ctx, network, resolvedIP+":"+port)
 			},
-		},
+		}),
 	}
 
 	req, err := http.NewRequest("POST", apiURL, strings.NewReader(body.Encode()))
@@ -311,7 +313,7 @@ func (h *VKHeadlessJoiner) joinCall() error {
 		return fmt.Errorf("new request: %w", err)
 	}
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
-	req.Header.Set("User-Agent", common.UserAgent)
+	req.Header.Set("User-Agent", headless.ChromeWindows.UserAgent())
 
 	h.logFn("vk-joiner: calling joinConversationByLink...")
 	resp, err := client.Do(req)

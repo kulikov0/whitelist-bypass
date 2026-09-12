@@ -133,6 +133,11 @@ func (s *Session) setBaseHeaders(req *http.Request, accessToken string) {
 	req.Header.Set("Referer", Origin+"/")
 	req.Header.Set("Accept", "*/*")
 	req.Header.Set("Accept-Language", "en")
+	for name, values := range headless.ChromeWindows.Headers(headless.DestEmpty) {
+		if strings.HasPrefix(name, "Sec-Fetch-") {
+			req.Header[name] = values
+		}
+	}
 	req.Header.Set("X-Request-Id", uuid.New().String())
 	for name, value := range deviceHeaders(s.Device) {
 		req.Header.Set(name, value)

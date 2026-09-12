@@ -261,7 +261,9 @@ func (j *BitrixHeadlessJoiner) makeDialContext() func(ctx context.Context, netwo
 		if err != nil {
 			return nil, err
 		}
-		return (&net.Dialer{Timeout: 10 * time.Second}).DialContext(ctx, network, resolvedIP+":"+port)
+		dialer := headless.ChromeDialer()
+		dialer.Timeout = 10 * time.Second
+		return dialer.DialContext(ctx, network, resolvedIP+":"+port)
 	}
 }
 

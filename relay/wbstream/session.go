@@ -108,7 +108,7 @@ func (s *Session) Start() error {
 		ServerURL:              s.cfg.ServerURL,
 		Token:                  s.cfg.RoomToken,
 		Origin:                 Origin,
-		UserAgent:              common.UserAgent,
+		UserAgent:              headless.ChromeWindows.UserAgent(),
 		Codec:                  livekit.ProtoCodec{},
 		LogFn:                  s.cfg.LogFn,
 		ConfigureSettingEngine: s.cfg.ConfigureSettingEngine,
