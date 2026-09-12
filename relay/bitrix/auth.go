@@ -192,7 +192,6 @@ func (c *Client) authDo(action string, form url.Values, sessid string) ([]byte, 
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded; charset=UTF-8")
 	req.Header.Set("Origin", authNetBase)
 	req.Header.Set("Referer", authNetBase+"/authorization/")
-	req.Header.Set("Sec-Fetch-Site", secFetchSiteFor(endpoint, authNetBase))
 	req.Header.Set("X-Requested-With", "XMLHttpRequest")
 	if sessid != "" {
 		req.Header.Set("X-Bitrix-Csrf-Token", sessid)
