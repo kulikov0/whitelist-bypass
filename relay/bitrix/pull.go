@@ -9,7 +9,8 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/gorilla/websocket"
+	headless "github.com/kulikov0/headless-client"
+	"github.com/kulikov0/headless-client/websocket"
 
 	"whitelist-bypass/relay/common"
 )
@@ -69,7 +70,8 @@ func (p *PullClient) connect() error {
 	if p.origin != "" {
 		headers.Set("Origin", p.origin)
 	}
-	conn, resp, err := websocket.DefaultDialer.Dial(p.dialURL(), headers)
+	dialer := headless.ChromeWindows.WebSocketDialer(headless.TLSOptions{})
+	conn, resp, err := dialer.Dial(p.dialURL(), headers)
 	if err != nil {
 		if resp != nil {
 			return fmt.Errorf("subws2 dial: %w, status %d", err, resp.StatusCode)

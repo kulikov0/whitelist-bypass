@@ -36,7 +36,7 @@ go -C "$ROOT/relay" build -trimpath -ldflags="-s -w" -o relay .
 echo "Building headless-vk-creator..."
 go -C "$ROOT/headless/vk" build -trimpath -ldflags="-s -w" -o headless-vk-creator .
 
-echo "Building headless-telemost-creator-creator..."
+echo "Building headless-telemost-creator..."
 go -C "$ROOT/headless/telemost" build -trimpath -ldflags="-s -w" -o headless-telemost-creator .
 
 echo "Building headless-wbstream-creator..."
@@ -45,5 +45,8 @@ go -C "$ROOT/headless/wbstream" build -trimpath -ldflags="-s -w" -o headless-wbs
 echo "Building headless-dion-creator..."
 go -C "$ROOT/headless/dion" build -trimpath -ldflags="-s -w" -o headless-dion-creator .
 
+echo "Building headless-bitrix-creator..."
+go -C "$ROOT/headless/bitrix" build -trimpath -ldflags="-s -w" -o headless-bitrix-creator .
+
 echo "Done."
-ls -lh "$ROOT/relay/relay" "$ROOT/headless/vk/headless-vk-creator" "$ROOT/headless/telemost/headless-telemost-creator" "$ROOT/headless/wbstream/headless-wbstream-creator" "$ROOT/headless/dion/headless-dion-creator"
+ls -lh "$ROOT/relay/relay" "$ROOT/headless/vk/headless-vk-creator" "$ROOT/headless/telemost/headless-telemost-creator" "$ROOT/headless/wbstream/headless-wbstream-creator" "$ROOT/headless/dion/headless-dion-creator" "$ROOT/headless/bitrix/headless-bitrix-creator"

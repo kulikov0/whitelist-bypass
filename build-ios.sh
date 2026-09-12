@@ -16,7 +16,7 @@ case "$VARIANT" in
         APP_DIR="$ROOT/ios-proxy-app"
         PROJECT="whitelist-bypass-proxy.xcodeproj"
         SCHEME="whitelist-bypass-proxy"
-        CONFIGURATION="Debug"
+        CONFIGURATION="Release"
         APP_NAME="whitelist-bypass-proxy.app"
         IPA_NAME="whitelist-bypass-proxy.ipa"
         ;;

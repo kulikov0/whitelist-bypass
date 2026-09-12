@@ -49,15 +49,13 @@ build_linux() {
     ls -lh "$JOINER_GO_DIR/desktop-joiner-linux-$OUT_TAG"
 }
 
-build_darwin_universal() {
+build_darwin() {
     echo ""
-    echo "=== Building desktop-joiner darwin (universal) ==="
+    echo "=== Building desktop-joiner darwin ==="
     cd "$JOINER_GO_DIR"
     GOOS=darwin GOARCH=amd64 go build -trimpath -ldflags="-s -w" -o desktop-joiner-darwin-amd64 .
     GOOS=darwin GOARCH=arm64 go build -trimpath -ldflags="-s -w" -o desktop-joiner-darwin-arm64 .
-    lipo -create -output desktop-joiner-darwin desktop-joiner-darwin-amd64 desktop-joiner-darwin-arm64
-    rm desktop-joiner-darwin-amd64 desktop-joiner-darwin-arm64
-    ls -lh "$JOINER_GO_DIR/desktop-joiner-darwin"
+    ls -lh "$JOINER_GO_DIR"/desktop-joiner-darwin-*
 }
 
 build_windows amd64 x64  amd64
@@ -65,7 +63,7 @@ build_windows 386   ia32 x86
 
 build_linux amd64 x64
 
-build_darwin_universal
+build_darwin
 
 rm -f "$JOINER_GO_DIR/wintun.zip"
 
