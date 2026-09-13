@@ -578,3 +578,4 @@ sudo tun2socks -device tun://wb0 -proxy socks5://127.0.0.1:1080
 
 - `0xd986b7576340d8d7b04f806dfd38a182b19edf50` - USDC (ERC20)
 - `TTEo4XXTB6CqhEiKpyoncfk3skEvoq3bCP` - USDT (TRC20)
+- `UQCZge2JzLmwNtI56p-ZxLuN2f7ZMCPGqO0XTt3wJ-cy8JaE` - USDT (TON)

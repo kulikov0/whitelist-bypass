@@ -240,3 +240,9 @@ Mutually exclusive with the call-creation flags (`--peer-id` for VK; the others 
 ## License
 
 [MIT](LICENSE)
+
+## Donate
+
+- `0xd986b7576340d8d7b04f806dfd38a182b19edf50` - USDC (ERC20)
+- `TTEo4XXTB6CqhEiKpyoncfk3skEvoq3bCP` - USDT (TRC20)
+- `UQCZge2JzLmwNtI56p-ZxLuN2f7ZMCPGqO0XTt3wJ-cy8JaE` - USDT (TON)
