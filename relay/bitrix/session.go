@@ -85,13 +85,23 @@ func (c *Client) saveSession() error {
 	if err != nil {
 		return err
 	}
-	tmp := c.credsPath + ".tmp"
-	if err := os.WriteFile(tmp, append(raw, '\n'), 0o600); err != nil {
-		return err
+	raw = append(raw, '\n')
+	if atomicErr := writeFileAtomic(c.credsPath, raw); atomicErr != nil {
+		if inPlaceErr := os.WriteFile(c.credsPath, raw, 0o600); inPlaceErr != nil {
+			return fmt.Errorf("write session: %v, in-place fallback: %w", atomicErr, inPlaceErr)
+		}
 	}
-	if err := os.Rename(tmp, c.credsPath); err != nil {
+	return nil
+}
+
+func writeFileAtomic(path string, raw []byte) error {
+	tmp := path + ".tmp"
+	if err := os.WriteFile(tmp, raw, 0o600); err != nil {
+		return fmt.Errorf("write session tmp: %w", err)
+	}
+	if err := os.Rename(tmp, path); err != nil {
 		os.Remove(tmp)
-		return err
+		return fmt.Errorf("rename session tmp: %w", err)
 	}
 	return nil
 }
