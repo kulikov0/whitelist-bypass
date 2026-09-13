@@ -111,10 +111,6 @@ body {
   color: #e0e0e0;
 }
 
-.tab-action-btn.settings {
-  font-size: 14px;
-}
-
 .tab-action-btn.bot {
   font-weight: 500;
 }
@@ -666,4 +662,123 @@ body {
   user-select: text;
   cursor: text;
   margin: 0;
+}
+
+.headless-save {
+  display: inline-block;
+  width: 16px;
+  height: 16px;
+  margin-left: 6px;
+  cursor: pointer;
+  vertical-align: middle;
+  background-color: #888;
+  -webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath d='M12 17.27L18.18 21l-1.64-7.03L22 9.24l-7.19-.61L12 2 9.19 8.63 2 9.24l5.46 4.73L5.82 21z'/%3E%3C/svg%3E") center / contain no-repeat;
+  mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath d='M12 17.27L18.18 21l-1.64-7.03L22 9.24l-7.19-.61L12 2 9.19 8.63 2 9.24l5.46 4.73L5.82 21z'/%3E%3C/svg%3E") center / contain no-repeat;
+}
+
+.headless-save:hover {
+  background-color: #e0e0e0;
+}
+
+.headless-save.saved {
+  background-color: #4fc3f7;
+}
+
+.saved-calls {
+  display: none;
+  padding: 24px;
+  color: #e0e0e0;
+  font-family: monospace;
+  font-size: 14px;
+  overflow-y: auto;
+  height: 100%;
+  box-sizing: border-box;
+}
+
+.saved-calls-title {
+  font-size: 18px;
+  font-weight: bold;
+  margin-bottom: 16px;
+}
+
+.saved-calls-empty {
+  color: #888;
+  font-size: 12px;
+}
+
+.saved-calls-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.saved-call {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  border: 1px solid #333;
+  border-radius: 8px;
+  background: #1e1e1e;
+  padding: 12px 16px;
+}
+
+.saved-call-platform {
+  color: #888;
+  font-size: 12px;
+  width: 80px;
+  flex-shrink: 0;
+}
+
+.saved-call-body {
+  flex: 1;
+  min-width: 0;
+}
+
+.saved-call-name {
+  font-size: 14px;
+  color: #e0e0e0;
+}
+
+.saved-call-link {
+  font-size: 11px;
+  color: #4fc3f7;
+  word-break: break-all;
+}
+
+.saved-call-join {
+  padding: 6px 14px;
+  border: 1px solid #444;
+  border-radius: 6px;
+  background: #2a2a2a;
+  color: #e0e0e0;
+  font-family: inherit;
+  font-size: 12px;
+  cursor: pointer;
+  flex-shrink: 0;
+}
+
+.saved-call-join:hover {
+  background: #333;
+}
+
+.saved-call-remove {
+  color: #888;
+  cursor: pointer;
+  flex-shrink: 0;
+}
+
+.saved-call-remove:hover {
+  color: #dc3545;
+}
+
+body.saved-calls-open #savedCallsPanel {
+  display: block;
+}
+
+body.saved-calls-open #welcome,
+body.saved-calls-open #toolbar,
+body.saved-calls-open #headlessInfo,
+body.saved-calls-open #logsPanel,
+body.saved-calls-open webview {
+  display: none !important;
 }

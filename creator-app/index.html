@@ -9,8 +9,9 @@
     <div class="tab-add" data-action="add-tab" title="New tab">+</div>
   </div>
   <div class="tab-bar-actions">
+    <div class="tab-action-btn" id="btnSavedCalls" title="Saved calls from earlier sessions">Saved</div>
     <div class="tab-action-btn" id="btnExportCookies" title="Export all cookies to cookies.zip for headless mode">Export Cookies</div>
-    <div class="tab-action-btn settings" id="btnSettings" title="Settings">Settings</div>
+    <div class="tab-action-btn" id="btnSettings" title="Settings">Settings</div>
     <div class="tab-action-btn bot" id="tabBot">Bot: Off</div>
   </div>
 </div>
@@ -34,6 +35,11 @@
   <div class="welcome" id="welcome">
     <h1>Whitelist Bypass - Creator</h1>
     <p>Click + to add a tab</p>
+  </div>
+  <div class="saved-calls" id="savedCallsPanel">
+    <div class="saved-calls-title">Saved calls</div>
+    <div class="saved-calls-empty" id="savedCallsEmpty">No saved calls yet. Start a call and click the star next to its join link.</div>
+    <div class="saved-calls-list" id="savedCallsList"></div>
   </div>
   <div class="headless-info" id="headlessInfo">
     <div class="headless-title" id="headlessTitle">Headless</div>
@@ -63,22 +69,22 @@
     </div>
     <div class="headless-status" id="headlessStatus">Starting...</div>
     <div class="headless-call-info" id="headlessCallInfo">
-      <div class="headless-row"><span class="headless-label">Join link:</span> <a id="headlessJoinLink" href="#" class="headless-link"></a><img class="headless-copy" src="resources/icons8-copy-50.png" data-copy="headlessJoinLink" title="Copy"></div>
+      <div class="headless-row"><span class="headless-label">Join link:</span> <a id="headlessJoinLink" href="#" class="headless-link"></a><img class="headless-copy" src="resources/icons8-copy-50.png" data-copy="headlessJoinLink" title="Copy"><span class="headless-save" data-action="save-call" title="Save this call"></span></div>
       <div class="headless-row"><span class="headless-label">TURN:</span> <span id="headlessTurn"></span></div>
       <div class="headless-row"><span class="headless-label">Protocol:</span> <span id="headlessProtocol"></span></div>
     </div>
     <div class="headless-call-info" id="headlessCallInfoTM">
-      <div class="headless-row"><span class="headless-label">Join link:</span> <a id="headlessTMJoinLink" href="#" class="headless-link"></a><img class="headless-copy" src="resources/icons8-copy-50.png" data-copy="headlessTMJoinLink" title="Copy"></div>
+      <div class="headless-row"><span class="headless-label">Join link:</span> <a id="headlessTMJoinLink" href="#" class="headless-link"></a><img class="headless-copy" src="resources/icons8-copy-50.png" data-copy="headlessTMJoinLink" title="Copy"><span class="headless-save" data-action="save-call" title="Save this call"></span></div>
       <div class="headless-row"><span class="headless-label">Protocol:</span> <span id="headlessTMProtocol"></span></div>
     </div>
     <div class="headless-call-info" id="headlessCallInfoWB">
-      <div class="headless-row"><span class="headless-label">Join link:</span> <a id="headlessWBJoinLink" href="#" class="headless-link"></a><img class="headless-copy" src="resources/icons8-copy-50.png" data-copy="headlessWBJoinLink" title="Copy"></div>
+      <div class="headless-row"><span class="headless-label">Join link:</span> <a id="headlessWBJoinLink" href="#" class="headless-link"></a><img class="headless-copy" src="resources/icons8-copy-50.png" data-copy="headlessWBJoinLink" title="Copy"><span class="headless-save" data-action="save-call" title="Save this call"></span></div>
     </div>
     <div class="headless-call-info" id="headlessCallInfoDion">
-      <div class="headless-row"><span class="headless-label">Join link:</span> <a id="headlessDionJoinLink" href="#" class="headless-link"></a><img class="headless-copy" src="resources/icons8-copy-50.png" data-copy="headlessDionJoinLink" title="Copy"></div>
+      <div class="headless-row"><span class="headless-label">Join link:</span> <a id="headlessDionJoinLink" href="#" class="headless-link"></a><img class="headless-copy" src="resources/icons8-copy-50.png" data-copy="headlessDionJoinLink" title="Copy"><span class="headless-save" data-action="save-call" title="Save this call"></span></div>
     </div>
     <div class="headless-call-info" id="headlessCallInfoBitrix">
-      <div class="headless-row"><span class="headless-label">Join link:</span> <a id="headlessBitrixJoinLink" href="#" class="headless-link"></a><img class="headless-copy" src="resources/icons8-copy-50.png" data-copy="headlessBitrixJoinLink" title="Copy"></div>
+      <div class="headless-row"><span class="headless-label">Join link:</span> <a id="headlessBitrixJoinLink" href="#" class="headless-link"></a><img class="headless-copy" src="resources/icons8-copy-50.png" data-copy="headlessBitrixJoinLink" title="Copy"><span class="headless-save" data-action="save-call" title="Save this call"></span></div>
     </div>
     <div class="headless-qr" id="headlessQrWrap" style="display:none">
       <img id="headlessQr" alt="Join link QR code">

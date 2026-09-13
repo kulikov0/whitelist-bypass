@@ -15,8 +15,9 @@ import {
   attachLoginWebview,
   detachLoginWebview,
 } from './dom';
+import { SavedCallsView } from './saved-calls';
 import { VK_IM_URL, TELEMOST_URL } from '../constants';
-import { Platform, Bridge, BotTabData, LogPanel, TunnelMode, HeadlessMode } from '../types';
+import { Platform, Bridge, BotTabData, LogPanel, TunnelMode, HeadlessMode, SavedCall } from '../types';
 
 declare const window: Window & { bridge: Bridge };
 
@@ -24,7 +25,10 @@ const tm = new RendererTabManager(() => {
   renderTabs(tm);
   renderContent(tm);
   renderBotButton(tm);
+  renderSaveStars();
 });
+
+const savedCalls = new SavedCallsView((call: SavedCall) => tm.startSavedCall(call));
 
 function bindTabBarEvents(): void {
   document.getElementById('tabBar')!.addEventListener('click', (event) => {
@@ -34,6 +38,7 @@ function bindTabBarEvents(): void {
     const tabId = tabEl?.dataset.tabId;
 
     if (action === 'add-tab') {
+      savedCalls.hide();
       tm.createTab();
       return;
     }
@@ -48,6 +53,7 @@ function bindTabBarEvents(): void {
       return;
     }
     if (tabId) {
+      savedCalls.hide();
       tm.selectTab(tabId);
     }
   });
@@ -178,6 +184,7 @@ function bindHeadlessEvents(): void {
       const sourceEl = document.getElementById(copyTarget);
       if (sourceEl) copyToClipboard(sourceEl.textContent || '');
     }
+    if (target.dataset.action === 'save-call') toggleActiveCallSaved();
   });
   document.getElementById('btnHeadlessCreate')!.addEventListener('click', () => {
     clearHeadlessJoinError();
@@ -198,6 +205,28 @@ function bindHeadlessEvents(): void {
     const tab = tm.getActiveTab();
     if (tab) tab.headlessStartTarget = (event.target as HTMLInputElement).value;
     clearHeadlessJoinError();
+  });
+}
+
+function toggleActiveCallSaved(): void {
+  const tab = tm.getActiveTab();
+  const joinLink = tab?.callInfo?.joinLink;
+  if (!tab || !tab.platform || !joinLink) return;
+  if (savedCalls.has(tab.platform, joinLink)) {
+    savedCalls.remove(joinLink);
+  } else {
+    savedCalls.add(tab.platform, joinLink, tm.getTabLabel(tab));
+  }
+  renderSaveStars();
+}
+
+function renderSaveStars(): void {
+  const tab = tm.getActiveTab();
+  const joinLink = tab?.callInfo?.joinLink;
+  const saved = !!tab?.platform && !!joinLink && savedCalls.has(tab.platform, joinLink);
+  document.querySelectorAll('.headless-save').forEach((star) => {
+    star.classList.toggle('saved', saved);
+    star.setAttribute('title', saved ? 'Saved, click to forget' : 'Save this call');
   });
 }
 
@@ -253,6 +282,7 @@ function init(): void {
   bindErrorPopup();
   bindLogEvents();
   bindHeadlessEvents();
+  savedCalls.bindEvents();
 
   window.bridge.setUpstreamProxy(tm.upstreamProxy);
 

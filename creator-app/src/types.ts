@@ -117,6 +117,13 @@ export interface CallInfo {
   protocol?: string;
 }
 
+export interface SavedCall {
+  platform: Platform;
+  target: string;
+  name: string;
+  savedAt: number;
+}
+
 export enum HeadlessMode {
   Create = 'create',
   Join = 'join',

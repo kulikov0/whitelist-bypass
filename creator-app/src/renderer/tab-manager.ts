@@ -8,6 +8,7 @@ import {
   Bridge,
   HeadlessMode,
   HeadlessStartArgs,
+  SavedCall,
 } from '../types';
 import { HeadlessLogMarker } from '../constants';
 import { appendLogText, appendLogElement, trimLogText } from './log-buffer';
@@ -255,6 +256,17 @@ export class RendererTabManager {
   saveDebugLogging(): void {
     localStorage.setItem('debugLogging', String(this.debugLogging));
     window.bridge.setDebugLogging(this.debugLogging);
+  }
+
+  startSavedCall(call: SavedCall): void {
+    this.createTab();
+    this.switchToHeadless(call.platform);
+    const tab = this.getActiveTab();
+    if (!tab) return;
+    tab.name = call.name;
+    tab.headlessStartTarget = call.target;
+    tab.joinedByLink = true;
+    this.startHeadlessCall({ mode: HeadlessMode.Join, target: call.target });
   }
 
   toggleBot(): void {

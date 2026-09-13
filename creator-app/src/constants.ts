@@ -8,6 +8,8 @@ export const CALL_CREATOR_INJECT_DELAY_MS = 1000;
 export const BOT_POLL_RETRY_DELAY_MS = 1000;
 export const BOT_POLL_WAIT_SECONDS = 25;
 
+export const MAX_SAVED_CALLS = 50;
+
 export const MAX_LOG_CHARS = 400000;
 export const LOG_TRIM_KEEP_CHARS = 200000;
 export const HOOK_LOG_BUFFER_LIMIT = 500;
