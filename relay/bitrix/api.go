@@ -80,6 +80,11 @@ type PullConfigResult struct {
 	Revision  int
 }
 
+type extraHeader struct {
+	Name  string
+	Value string
+}
+
 type slbRequest struct {
 	UserToken      string `json:"userToken"`
 	IsOneToOne     bool   `json:"isOneToOne"`
@@ -218,7 +223,7 @@ func secFetchSiteFor(endpoint, origin string) string {
 	return "cross-site"
 }
 
-func (c *Client) do(method, endpoint, contentType string, body io.Reader) ([]byte, int, error) {
+func (c *Client) do(method, endpoint, contentType string, body io.Reader, extraHeaders ...extraHeader) ([]byte, int, error) {
 	req, err := http.NewRequest(method, endpoint, body)
 	if err != nil {
 		return nil, 0, err
@@ -236,6 +241,9 @@ func (c *Client) do(method, endpoint, contentType string, body io.Reader) ([]byt
 	if contentType != "" {
 		req.Header.Set("Content-Type", contentType)
 	}
+	for _, h := range extraHeaders {
+		req.Header.Set(h.Name, h.Value)
+	}
 	resp, err := c.HTTP.Do(req)
 	if err != nil {
 		return nil, 0, err
@@ -252,20 +260,24 @@ func (c *Client) restForm(action string, form url.Values) ([]byte, int, error) {
 
 func (c *Client) restFormAuthed(action string, form url.Values) ([]byte, int, error) {
 	endpoint := c.portal + "/rest/" + action + ".json"
+	var extraHeaders []extraHeader
 	if c.sessid != "" {
 		form.Set("sessid", c.sessid)
 		endpoint += "?sessid=" + url.QueryEscape(c.sessid)
+		extraHeaders = append(extraHeaders, extraHeader{Name: "X-Bitrix-Csrf-Token", Value: c.sessid})
 	}
-	return c.do("POST", endpoint, "application/x-www-form-urlencoded", strings.NewReader(form.Encode()))
+	return c.do("POST", endpoint, "application/x-www-form-urlencoded", strings.NewReader(form.Encode()), extraHeaders...)
 }
 
 func (c *Client) ajaxAction(action string, form url.Values) ([]byte, int, error) {
 	endpoint := c.portal + "/bitrix/services/main/ajax.php?action=" + action
+	var extraHeaders []extraHeader
 	if c.sessid != "" {
 		endpoint += "&sessid=" + url.QueryEscape(c.sessid)
 		form.Set("sessid", c.sessid)
+		extraHeaders = append(extraHeaders, extraHeader{Name: "X-Bitrix-Csrf-Token", Value: c.sessid})
 	}
-	return c.do("POST", endpoint, "application/x-www-form-urlencoded", strings.NewReader(form.Encode()))
+	return c.do("POST", endpoint, "application/x-www-form-urlencoded", strings.NewReader(form.Encode()), extraHeaders...)
 }
 
 func (c *Client) fetchConference(alias string) (conferenceParams, error) {
@@ -342,32 +354,36 @@ func (c *Client) tryJoinCall(chatID string) (callInfo, error) {
 		return info, err
 	}
 	var out struct {
-		Status string `json:"status"`
-		Data   struct {
-			Success bool `json:"success"`
-			Call    struct {
-				UUID   string      `json:"UUID"`
-				ChatID json.Number `json:"CHAT_ID"`
-			} `json:"call"`
-			CallToken string `json:"callToken"`
-		} `json:"data"`
+		Status string          `json:"status"`
+		Data   json.RawMessage `json:"data"`
 		Errors []struct {
 			Message string `json:"message"`
-			Code    string `json:"code"`
+			Code    any    `json:"code"`
 		} `json:"errors"`
 	}
 	if err := json.Unmarshal(body, &out); err != nil {
 		return info, fmt.Errorf("tryJoinCall: %w (status %d, body %s)", err, status, common.BodySnippet(body))
 	}
-	if out.Status == "success" && !out.Data.Success {
+	var data struct {
+		Success bool `json:"success"`
+		Call    struct {
+			UUID   string      `json:"UUID"`
+			ChatID json.Number `json:"CHAT_ID"`
+		} `json:"call"`
+		CallToken string `json:"callToken"`
+	}
+	if err := json.Unmarshal(out.Data, &data); err != nil && out.Status == "success" {
+		return info, fmt.Errorf("tryJoinCall: %w (status %d, body %s)", err, status, common.BodySnippet(body))
+	}
+	if out.Status == "success" && !data.Success {
 		return info, fmt.Errorf("tryJoinCall: no active call at chat%s, organizer not in the room", chatID)
 	}
-	if out.Status != "success" || out.Data.Call.UUID == "" {
+	if out.Status != "success" || data.Call.UUID == "" {
 		return info, fmt.Errorf("tryJoinCall failed (status %d, %s, errors %+v, body %s)", status, out.Status, out.Errors, common.BodySnippet(body))
 	}
-	info.UUID = out.Data.Call.UUID
-	info.ChatID = out.Data.Call.ChatID.String()
-	info.CallToken = out.Data.CallToken
+	info.UUID = data.Call.UUID
+	info.ChatID = data.Call.ChatID.String()
+	info.CallToken = data.CallToken
 	return info, nil
 }
 
@@ -393,14 +409,14 @@ func (c *Client) slbJoin(info callInfo, mustCreate bool) (JoinResult, error) {
 		return res, err
 	}
 	var out struct {
-		Result JoinResult `json:"result"`
-		Error  string     `json:"error"`
+		Result JoinResult      `json:"result"`
+		Error  json.RawMessage `json:"error"`
 	}
 	if err := json.Unmarshal(body, &out); err != nil {
 		return res, fmt.Errorf("slb join: %w (status %d, body %s)", err, status, common.BodySnippet(body))
 	}
 	if out.Result.MediaServerURL == "" || out.Result.RoomData == "" {
-		return res, fmt.Errorf("slb join: missing roomData/mediaServerUrl (status %d, err %s)", status, out.Error)
+		return res, fmt.Errorf("slb join: missing roomData/mediaServerUrl (status %d, err %s)", status, string(out.Error))
 	}
 	return out.Result, nil
 }
@@ -441,27 +457,30 @@ func (c *Client) createRoom() (callInfo, error) {
 		return info, err
 	}
 	var out struct {
-		Status string `json:"status"`
-		Data   struct {
-			ChatID json.Number `json:"chatId"`
-			Alias  string      `json:"alias"`
-			Link   string      `json:"link"`
-		} `json:"data"`
+		Status string          `json:"status"`
+		Data   json.RawMessage `json:"data"`
 		Errors []struct {
-			Code    json.Number `json:"code"`
-			Message string      `json:"message"`
+			Code    any    `json:"code"`
+			Message string `json:"message"`
 		} `json:"errors"`
 	}
 	if err := json.Unmarshal(body, &out); err != nil {
 		return info, fmt.Errorf("createRoom: %w (status %d, body %s)", err, status, common.BodySnippet(body))
 	}
-	info.ChatID = out.Data.ChatID.String()
-	info.Alias = out.Data.Alias
-	info.GuestLink = out.Data.Link
+	var data struct {
+		ChatID json.Number `json:"chatId"`
+		Alias  string      `json:"alias"`
+		Link   string      `json:"link"`
+	}
+	if err := json.Unmarshal(out.Data, &data); err == nil {
+		info.ChatID = data.ChatID.String()
+		info.Alias = data.Alias
+		info.GuestLink = data.Link
+	}
 	if info.ChatID == "" {
 		errMsg := ""
 		if len(out.Errors) > 0 {
-			errMsg = out.Errors[0].Code.String() + " " + out.Errors[0].Message
+			errMsg = fmt.Sprintf("%v %s", out.Errors[0].Code, out.Errors[0].Message)
 		}
 		return info, fmt.Errorf("createRoom: no chatId (status %d, status=%q err=%q, body %s)", status, out.Status, errMsg, common.BodySnippet(body))
 	}
@@ -488,15 +507,15 @@ func (c *Client) KickUser(userID string) error {
 	var out struct {
 		Status string `json:"status"`
 		Errors []struct {
-			Code    json.Number `json:"code"`
-			Message string      `json:"message"`
+			Code    any    `json:"code"`
+			Message string `json:"message"`
 		} `json:"errors"`
 	}
 	if err := json.Unmarshal(body, &out); err != nil {
 		return fmt.Errorf("kick: %w (status %d, body %s)", err, status, common.BodySnippet(body))
 	}
 	if len(out.Errors) > 0 {
-		return fmt.Errorf("kick: chatId=%s userId=%s rejected (status %d, %s %s)", c.chatID, userID, status, out.Errors[0].Code.String(), out.Errors[0].Message)
+		return fmt.Errorf("kick: chatId=%s userId=%s rejected (status %d, %v %s)", c.chatID, userID, status, out.Errors[0].Code, out.Errors[0].Message)
 	}
 	c.LogFn("[kick] removed userId=%s from chatId=%s", userID, c.chatID)
 	return nil
@@ -598,18 +617,19 @@ func (c *Client) getGuestLink(chatID string) (string, error) {
 		return "", err
 	}
 	var out struct {
-		Status string `json:"status"`
-		Data   struct {
-			GuestLink string `json:"guestLink"`
-		} `json:"data"`
+		Status string          `json:"status"`
+		Data   json.RawMessage `json:"data"`
 	}
 	if err := json.Unmarshal(body, &out); err != nil {
 		return "", fmt.Errorf("getGuestLink: %w (status %d, body %s)", err, status, common.BodySnippet(body))
 	}
-	if out.Data.GuestLink == "" {
-		return "", fmt.Errorf("getGuestLink: empty (status %d)", status)
+	var data struct {
+		GuestLink string `json:"guestLink"`
 	}
-	return out.Data.GuestLink, nil
+	if err := json.Unmarshal(out.Data, &data); err != nil || data.GuestLink == "" {
+		return "", fmt.Errorf("getGuestLink: empty (status %d, body %s)", status, common.BodySnippet(body))
+	}
+	return data.GuestLink, nil
 }
 
 func (c *Client) getCallToken(chatID string) (callToken, userToken string, err error) {
@@ -622,17 +642,18 @@ func (c *Client) getCallToken(chatID string) (callToken, userToken string, err e
 		return "", "", err
 	}
 	var out struct {
-		Status string `json:"status"`
-		Data   struct {
-			CallToken string `json:"callToken"`
-			UserToken string `json:"userToken"`
-		} `json:"data"`
+		Status string          `json:"status"`
+		Data   json.RawMessage `json:"data"`
 	}
 	if err := json.Unmarshal(body, &out); err != nil {
 		return "", "", fmt.Errorf("getCallToken: %w (status %d, body %s)", err, status, common.BodySnippet(body))
 	}
-	if out.Data.CallToken == "" {
+	var data struct {
+		CallToken string `json:"callToken"`
+		UserToken string `json:"userToken"`
+	}
+	if err := json.Unmarshal(out.Data, &data); err != nil || data.CallToken == "" {
 		return "", "", fmt.Errorf("getCallToken: empty (status %d, body %s)", status, common.BodySnippet(body))
 	}
-	return out.Data.CallToken, out.Data.UserToken, nil
+	return data.CallToken, data.UserToken, nil
 }

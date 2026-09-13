@@ -132,7 +132,18 @@ func (c *Client) cookieHosts() []string {
 
 func (c *Client) withRelogin(do func() ([]byte, int, error)) ([]byte, int, error) {
 	body, status, err := do()
-	if err != nil || !looksUnauth(body, status) {
+	if err != nil {
+		return body, status, err
+	}
+	if token := csrfTokenFromBody(body); token != "" && token != c.sessid {
+		c.LogFn("[auth] stale csrf token, retrying with the one from the response")
+		c.sessid = token
+		body, status, err = do()
+		if err != nil {
+			return body, status, err
+		}
+	}
+	if !looksUnauth(body, status) {
 		return body, status, err
 	}
 	if c.email == "" || c.password == "" {
@@ -143,6 +154,31 @@ func (c *Client) withRelogin(do func() ([]byte, int, error)) ([]byte, int, error
 		return body, status, fmt.Errorf("relogin: %w", lerr)
 	}
 	return do()
+}
+
+func csrfTokenFromBody(body []byte) string {
+	var out struct {
+		Errors []struct {
+			Code       any             `json:"code"`
+			CustomData json.RawMessage `json:"customData"`
+		} `json:"errors"`
+	}
+	if err := json.Unmarshal(body, &out); err != nil {
+		return ""
+	}
+	for _, e := range out.Errors {
+		if e.Code != "invalid_csrf" {
+			continue
+		}
+		var customData struct {
+			CSRF string `json:"csrf"`
+		}
+		if err := json.Unmarshal(e.CustomData, &customData); err != nil {
+			continue
+		}
+		return customData.CSRF
+	}
+	return ""
 }
 
 func looksUnauth(body []byte, status int) bool {

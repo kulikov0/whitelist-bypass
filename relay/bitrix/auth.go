@@ -243,13 +243,19 @@ func (c *Client) completeOAuth() error {
 			}
 		}
 		target = c.portal + "/"
-		body, _, err = c.getPage(target)
+		body, final, err = c.getPage(target)
 		if err != nil {
 			return err
 		}
+		if !strings.HasPrefix(final, c.portal) {
+			return fmt.Errorf("oauth handoff landed outside the portal, final=%s", final)
+		}
 		if m := reSessid.FindStringSubmatch(body); m != nil {
 			c.sessid = m[1]
+			return nil
 		}
+		c.sessid = ""
+		c.LogFn("[auth] no csrf token on the portal page, it will be taken from the first response")
 		return nil
 	}
 	return fmt.Errorf("oauth handoff did not converge")
