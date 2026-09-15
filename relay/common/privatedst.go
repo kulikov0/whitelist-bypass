@@ -3,22 +3,50 @@ package common
 import (
 	"errors"
 	"net"
+	"sync"
 	"syscall"
 	"time"
 )
+
+const blockedDstLogInterval = 10 * time.Second
 
 var AllowPrivateDst bool
 
 var ErrPrivateDst = errors.New("destination not allowed")
 
+var (
+	blockedDstMu         sync.Mutex
+	blockedDstLastLog    time.Time
+	blockedDstSuppressed int
+)
+
+func ClaimBlockedDstLog() (int, bool) {
+	blockedDstMu.Lock()
+	defer blockedDstMu.Unlock()
+	now := time.Now()
+	if !blockedDstLastLog.IsZero() && now.Sub(blockedDstLastLog) < blockedDstLogInterval {
+		blockedDstSuppressed++
+		return 0, false
+	}
+	suppressed := blockedDstSuppressed
+	blockedDstSuppressed = 0
+	blockedDstLastLog = now
+	return suppressed, true
+}
+
 // cgnat is caught by neither IsGlobalUnicast nor IsPrivate
 var _, cgnat, _ = net.ParseCIDR("100.64.0.0/10")
 
-func IsPrivateDst(addr string) bool {
+func hostFromAddr(addr string) string {
 	host, _, err := net.SplitHostPort(addr)
 	if err != nil {
-		host = addr
+		return addr
 	}
+	return host
+}
+
+func IsPrivateDst(addr string) bool {
+	host := hostFromAddr(addr)
 	if host == "" {
 		// ":80" dials the local machine
 		return true
@@ -30,7 +58,29 @@ func IsPrivateDst(addr string) bool {
 	return isPrivateIP(ip)
 }
 
-func DstBlocked(addr string) bool { return !AllowPrivateDst && IsPrivateDst(addr) }
+func DstBlocked(addr string) bool {
+	host := hostFromAddr(addr)
+	if host == "" {
+		return true
+	}
+	ip := net.ParseIP(host)
+	if ip == nil {
+		return false
+	}
+	return ipBlocked(ip)
+}
+
+func ipBlocked(ip net.IP) bool {
+	if isNeverAllowedIP(ip) {
+		return true
+	}
+	return !AllowPrivateDst && isPrivateIP(ip)
+}
+
+// AllowPrivateDst unlocks rfc1918 and cgnat only, the metadata ip and the creator's own loopback stay closed
+func isNeverAllowedIP(ip net.IP) bool {
+	return ip.IsLoopback() || ip.IsUnspecified() || ip.IsLinkLocalUnicast() || ip.IsMulticast()
+}
 
 func isPrivateIP(ip net.IP) bool {
 	return !ip.IsGlobalUnicast() || ip.IsPrivate() || cgnat.Contains(ip)
@@ -61,7 +111,7 @@ func DialUDP(addr string) (*net.UDPConn, error) {
 	if err != nil {
 		return nil, err
 	}
-	if !AllowPrivateDst && isPrivateIP(udpAddr.IP) {
+	if ipBlocked(udpAddr.IP) {
 		return nil, ErrPrivateDst
 	}
 	return net.DialUDP("udp", nil, udpAddr)

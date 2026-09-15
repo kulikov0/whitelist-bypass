@@ -388,8 +388,8 @@ func (rb *RelayBridge) handleUDP(connID uint32, payload []byte) {
 
 	// per datagram, an already open session carries a fresh dst every time
 	if common.DstBlocked(addr) {
-		if common.Debug {
-			rb.logFn("relay[creator]: UDP %d blocked %s", connID, common.MaskAddr(addr))
+		if suppressed, ok := common.ClaimBlockedDstLog(); ok {
+			rb.logFn("relay[creator]: UDP %d blocked %s, private destinations need --allow-private-dst, suppressed=%d", connID, common.MaskAddr(addr), suppressed)
 		}
 		return
 	}
@@ -471,7 +471,7 @@ func (rb *RelayBridge) dialCreatorUDP(addr string) (*creatorUDP, error) {
 func (rb *RelayBridge) connectTCP(connID uint32, addr string) {
 	rb.logFn("relay: CONNECT %d -> %s", connID, common.MaskAddr(addr))
 	if common.DstBlocked(addr) {
-		rb.logFn("relay: CONNECT %d blocked %s", connID, common.MaskAddr(addr))
+		rb.logFn("relay: CONNECT %d blocked %s, private destinations need --allow-private-dst", connID, common.MaskAddr(addr))
 		rb.send(connID, MsgConnectErr, []byte(common.ErrPrivateDst.Error()))
 		return
 	}

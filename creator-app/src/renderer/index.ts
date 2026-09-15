@@ -98,6 +98,8 @@ function bindSettingsEvents(): void {
     tm.saveUpstreamProxy();
     tm.debugLogging = (document.getElementById('debugLogging') as HTMLInputElement).checked;
     tm.saveDebugLogging();
+    tm.allowPrivateDst = (document.getElementById('allowPrivateDst') as HTMLInputElement).checked;
+    tm.saveAllowPrivateDst();
     closeSettings();
   });
   document.querySelectorAll('.btn-clear-cookies').forEach((btn) => {
@@ -253,6 +255,7 @@ function openSettings(): void {
   (document.getElementById('upstreamUser') as HTMLInputElement).value = tm.upstreamProxy.user;
   (document.getElementById('upstreamPass') as HTMLInputElement).value = tm.upstreamProxy.pass;
   (document.getElementById('debugLogging') as HTMLInputElement).checked = tm.debugLogging;
+  (document.getElementById('allowPrivateDst') as HTMLInputElement).checked = tm.allowPrivateDst;
   document.getElementById('clearCookiesStatus')!.textContent = '';
 }
 
@@ -285,6 +288,7 @@ function init(): void {
   savedCalls.bindEvents();
 
   window.bridge.setUpstreamProxy(tm.upstreamProxy);
+  window.bridge.setAllowPrivateDst(tm.allowPrivateDst);
 
   window.bridge.onRelayLog((tabId: string, msg: string) => {
     tm.appendRelayLog(tabId, msg);

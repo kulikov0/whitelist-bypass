@@ -40,6 +40,7 @@ export class HeadlessLauncher {
   private binaryPaths = new Map<Platform, string>();
   private upstreamProxy: UpstreamProxy = { socks: '', user: '', pass: '' };
   private debugLogging = false;
+  private allowPrivateDst = false;
 
   constructor(
     private host: LauncherHost,
@@ -76,6 +77,10 @@ export class HeadlessLauncher {
     this.debugLogging = enabled;
   }
 
+  setAllowPrivateDst(enabled: boolean): void {
+    this.allowPrivateDst = enabled;
+  }
+
   sendLog(tabId: string, msg: string): void {
     const win = this.host.mainWindow;
     if (win && !win.isDestroyed()) {
@@ -101,7 +106,7 @@ export class HeadlessLauncher {
         : RelayMode.VKVideoCreator;
     }
     const relayArgs = ['--mode', relayMode, '--ws-port', String(port)];
-    this.appendUpstreamArgs(relayArgs);
+    this.appendEgressArgs(relayArgs);
     if (this.debugLogging) relayArgs.push('--debug');
     const proc = spawn(this.relayPath, relayArgs, {
       stdio: ['ignore', 'pipe', 'pipe'],
@@ -174,7 +179,7 @@ export class HeadlessLauncher {
     if (joinTarget && config.joinFlag) {
       spawnArgs.push(config.joinFlag, joinTarget);
     }
-    this.appendUpstreamArgs(spawnArgs);
+    this.appendEgressArgs(spawnArgs);
     if (this.debugLogging) spawnArgs.push('--debug');
     const proc = spawn(this.binaryPaths.get(platform)!, spawnArgs, {
       stdio: ['ignore', 'pipe', 'pipe'],
@@ -252,7 +257,7 @@ export class HeadlessLauncher {
     if (joinTarget) {
       spawnArgs.push('--room', joinTarget);
     }
-    this.appendUpstreamArgs(spawnArgs);
+    this.appendEgressArgs(spawnArgs);
     if (this.debugLogging) spawnArgs.push('--debug');
     const proc = spawn(this.bitrixPath, spawnArgs, {
       stdio: ['ignore', 'pipe', 'pipe'],
@@ -276,7 +281,8 @@ export class HeadlessLauncher {
     });
   }
 
-  private appendUpstreamArgs(args: string[]): void {
+  private appendEgressArgs(args: string[]): void {
+    if (this.allowPrivateDst) args.push('--allow-private-dst');
     if (!this.upstreamProxy.socks) return;
     args.push('--upstream-socks', this.upstreamProxy.socks);
     if (this.upstreamProxy.user) args.push('--upstream-user', this.upstreamProxy.user);

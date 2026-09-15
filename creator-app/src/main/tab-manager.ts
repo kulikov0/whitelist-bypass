@@ -157,6 +157,10 @@ export class TabManager {
     this.launcher.setDebugLogging(enabled);
   }
 
+  setAllowPrivateDst(enabled: boolean): void {
+    this.launcher.setAllowPrivateDst(enabled);
+  }
+
   startRelay(tabId: string, tab: TabState): void {
     this.launcher.startRelay(tabId, tab);
   }

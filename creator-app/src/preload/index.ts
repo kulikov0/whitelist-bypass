@@ -29,6 +29,9 @@ import { IPC } from '../constants';
   setDebugLogging(enabled: boolean) {
     return ipcRenderer.invoke(IPC.SET_DEBUG_LOGGING, enabled);
   },
+  setAllowPrivateDst(enabled: boolean) {
+    return ipcRenderer.invoke(IPC.SET_ALLOW_PRIVATE_DST, enabled);
+  },
   clearCookies(platform: string) {
     return ipcRenderer.invoke(IPC.CLEAR_COOKIES, platform);
   },

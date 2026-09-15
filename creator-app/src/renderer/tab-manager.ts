@@ -23,6 +23,7 @@ export class RendererTabManager {
   botSettings: BotSettings;
   upstreamProxy: UpstreamProxy;
   debugLogging: boolean;
+  allowPrivateDst: boolean;
   private onRender: () => void;
 
   constructor(onRender: () => void) {
@@ -36,6 +37,7 @@ export class RendererTabManager {
       ? JSON.parse(savedProxy)
       : { socks: '', user: '', pass: '' };
     this.debugLogging = localStorage.getItem('debugLogging') === 'true';
+    this.allowPrivateDst = localStorage.getItem('allowPrivateDst') === 'true';
   }
 
   createTab(): string {
@@ -256,6 +258,11 @@ export class RendererTabManager {
   saveDebugLogging(): void {
     localStorage.setItem('debugLogging', String(this.debugLogging));
     window.bridge.setDebugLogging(this.debugLogging);
+  }
+
+  saveAllowPrivateDst(): void {
+    localStorage.setItem('allowPrivateDst', String(this.allowPrivateDst));
+    window.bridge.setAllowPrivateDst(this.allowPrivateDst);
   }
 
   startSavedCall(call: SavedCall): void {

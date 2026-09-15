@@ -2,6 +2,7 @@ package main
 
 import (
 	"encoding/binary"
+	"errors"
 	"fmt"
 	"io"
 	"log"
@@ -171,7 +172,11 @@ func (c *dcCreatorRelay) handleUDP(connID uint32, payload []byte) {
 
 	conn, err := common.DialUDP(addr)
 	if err != nil {
-		if common.Debug {
+		if errors.Is(err, common.ErrPrivateDst) {
+			if suppressed, ok := common.ClaimBlockedDstLog(); ok {
+				log.Printf("dc-creator: UDP %d blocked %s, private destinations need --allow-private-dst, suppressed=%d", connID, common.MaskAddr(addr), suppressed)
+			}
+		} else if common.Debug {
 			log.Printf("dc-creator: UDP dial %s failed: %s", common.MaskAddr(addr), common.MaskError(err))
 		}
 		return

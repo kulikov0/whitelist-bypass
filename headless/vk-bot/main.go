@@ -75,6 +75,8 @@ type bot struct {
 	upstreamUser  string
 	upstreamPass  string
 
+	allowPrivateDst bool
+
 	server, key, ts string
 
 	mu           sync.Mutex
@@ -379,6 +381,9 @@ func (b *bot) spawn(platform, joinTarget string) (*session, error) {
 			args = append(args, "--upstream-pass", b.upstreamPass)
 		}
 	}
+	if b.allowPrivateDst {
+		args = append(args, "--allow-private-dst")
+	}
 	cmd := exec.Command(bin, args...)
 	if logF != nil {
 		cmd.Stdout = logF
@@ -505,6 +510,7 @@ func main() {
 	upstreamSocks := flag.String("upstream-socks", "", "forward to spawned creators: route tunneled egress through this SOCKS5 proxy (host:port), e.g. a local VPN client")
 	upstreamUser := flag.String("upstream-user", "", "upstream SOCKS5 username forwarded to spawned creators")
 	upstreamPass := flag.String("upstream-pass", "", "upstream SOCKS5 password forwarded to spawned creators")
+	allowPrivateDst := flag.Bool("allow-private-dst", false, "forward to spawned creators: let the joiner reach private/internal addresses through them")
 	flag.Parse()
 
 	if *token == "" {
@@ -533,22 +539,23 @@ func main() {
 	}
 
 	b := &bot{
-		token:         *token,
-		groupID:       *groupID,
-		userIDs:       allowedUsers,
-		binsDir:       *binsDir,
-		vkCookies:     *vkCookies,
-		tmCookies:     *tmCookies,
-		wbCookies:     *wbCookies,
-		dionCookies:   *dionCookies,
-		bitrixCookies: *bitrixCookies,
-		sessionsDir:   *sessionsDir,
-		resources:     *resources,
-		upstreamSocks: *upstreamSocks,
-		upstreamUser:  *upstreamUser,
-		upstreamPass:  *upstreamPass,
-		sessions:      map[string]*session{},
-		awaitingJoin:  map[int64]bool{},
+		token:           *token,
+		groupID:         *groupID,
+		userIDs:         allowedUsers,
+		binsDir:         *binsDir,
+		vkCookies:       *vkCookies,
+		tmCookies:       *tmCookies,
+		wbCookies:       *wbCookies,
+		dionCookies:     *dionCookies,
+		bitrixCookies:   *bitrixCookies,
+		sessionsDir:     *sessionsDir,
+		resources:       *resources,
+		upstreamSocks:   *upstreamSocks,
+		upstreamUser:    *upstreamUser,
+		upstreamPass:    *upstreamPass,
+		allowPrivateDst: *allowPrivateDst,
+		sessions:        map[string]*session{},
+		awaitingJoin:    map[int64]bool{},
 	}
 
 	sig := make(chan os.Signal, 1)

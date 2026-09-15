@@ -333,7 +333,7 @@ func (u *TunnelRelay) sendDCFrame(connID uint32, mt byte, payload []byte) {
 func (u *TunnelRelay) connectTCP(connID uint32, addr string) {
 	log.Printf("[dc] CONNECT %d -> %s", connID, common.MaskAddr(addr))
 	if common.DstBlocked(addr) {
-		log.Printf("[dc] CONNECT %d blocked %s", connID, common.MaskAddr(addr))
+		log.Printf("[dc] CONNECT %d blocked %s, private destinations need --allow-private-dst", connID, common.MaskAddr(addr))
 		u.sendDCFrame(connID, tunnel.MsgConnectErr, []byte(common.ErrPrivateDst.Error()))
 		return
 	}
@@ -408,8 +408,8 @@ func (u *TunnelRelay) handleUDP(connID uint32, payload []byte) {
 	resp := make([]byte, common.UDPBufSize)
 
 	if common.DstBlocked(addr) {
-		if common.Debug {
-			log.Printf("[dc] UDP %d blocked %s", connID, common.MaskAddr(addr))
+		if suppressed, ok := common.ClaimBlockedDstLog(); ok {
+			log.Printf("[dc] UDP %d blocked %s, private destinations need --allow-private-dst, suppressed=%d", connID, common.MaskAddr(addr), suppressed)
 		}
 		return
 	}

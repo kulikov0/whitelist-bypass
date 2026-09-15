@@ -108,6 +108,10 @@ export function registerIpcHandlers(tabManager: TabManager): void {
     tabManager.setDebugLogging(enabled);
   });
 
+  ipcMain.handle(IPC.SET_ALLOW_PRIVATE_DST, (_e, enabled: boolean) => {
+    tabManager.setAllowPrivateDst(enabled);
+  });
+
   ipcMain.handle(IPC.CLEAR_COOKIES, (_e, platform: string) => {
     return tabManager.clearPlatformCookies(platform as Platform);
   });

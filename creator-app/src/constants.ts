@@ -70,6 +70,7 @@ export enum IPC {
   STOP_BOT = 'stop-bot',
   SET_UPSTREAM_PROXY = 'set-upstream-proxy',
   SET_DEBUG_LOGGING = 'set-debug-logging',
+  SET_ALLOW_PRIVATE_DST = 'set-allow-private-dst',
   CLEAR_COOKIES = 'clear-cookies',
   GET_DION_CREDENTIALS = 'get-dion-credentials',
   SET_DION_CREDENTIALS = 'set-dion-credentials',
