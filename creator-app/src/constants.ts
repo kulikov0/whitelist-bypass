@@ -38,7 +38,7 @@ export const WINDOW_HEIGHT = 800;
 
 export const USER_AGENT =
   'Mozilla/5.0 (Windows NT 10.0; Win64; x64) ' +
-  'AppleWebKit/537.36 (KHTML, like Gecko) Chrome/148.0.0.0 Safari/537.36';
+  'AppleWebKit/537.36 (KHTML, like Gecko) Chrome/151.0.0.0 Safari/537.36';
 
 export const VK_COOKIE_DOMAINS = ['vk.ru'];
 export const YANDEX_COOKIE_DOMAINS = ['yandex.ru', 'yandex.net', 'ya.ru'];

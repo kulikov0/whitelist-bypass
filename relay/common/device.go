@@ -5,6 +5,9 @@ package common
 import (
 	"fmt"
 	"math/rand/v2"
+	"strings"
+
+	"github.com/kulikov0/headless-client"
 )
 
 type DeviceProfile struct {
@@ -34,6 +37,8 @@ type browserTemplate struct {
 	versionPool []string
 	userAgentFn func(osVersion, browserVersion string) string
 }
+
+var windowsDeviceBrands = []string{"Dell", "Lenovo", "HP", "Asus", "Acer", "MSI"}
 
 var commonScreens = [][2]int{
 	{1280, 720}, {1366, 768}, {1440, 900}, {1536, 864},
@@ -166,6 +171,33 @@ func RandomDeviceProfile() DeviceProfile {
 		DeviceType:     "pc",
 		OS:             tmpl.os,
 		OSVersion:      osVersion,
+		ScreenWidth:    screen[0],
+		ScreenHeight:   screen[1],
+	}
+}
+
+func chromeVersionFromUserAgent(userAgent string) string {
+	_, rest, found := strings.Cut(userAgent, "Chrome/")
+	if !found {
+		return ""
+	}
+	version, _, _ := strings.Cut(rest, " ")
+	return version
+}
+
+func ChromeWindowsDeviceProfile() DeviceProfile {
+	userAgent := headless.ChromeWindows.UserAgent()
+	screen := commonScreens[rand.IntN(len(commonScreens))]
+	return DeviceProfile{
+		UserAgent:      userAgent,
+		Platform:       "web",
+		BrowserType:    "Chrome",
+		BrowserVersion: chromeVersionFromUserAgent(userAgent),
+		DeviceBrand:    windowsDeviceBrands[rand.IntN(len(windowsDeviceBrands))],
+		DeviceModel:    "PC",
+		DeviceType:     "pc",
+		OS:             "Windows",
+		OSVersion:      "10",
 		ScreenWidth:    screen[0],
 		ScreenHeight:   screen[1],
 	}

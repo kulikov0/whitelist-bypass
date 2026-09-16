@@ -6,7 +6,7 @@ struct CaptchaWebView: UIViewRepresentable {
 
     func makeUIView(context: Context) -> WKWebView {
         let webView = WKWebView()
-        webView.customUserAgent = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+        webView.customUserAgent = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/151.0.0.0 Safari/537.36"
         webView.load(URLRequest(url: url))
         return webView
     }
