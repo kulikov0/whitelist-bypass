@@ -65,31 +65,58 @@ func main() {
 	}
 	rawCookies := common.LoadCookies(*cookiesPath)
 	deviceID := common.CookieValue(rawCookies, "__wb_device_id")
-	if deviceID == "" {
-		log.Fatalf("[auth] cookies file is missing __wb_device_id; re-export via creator-app's 'Export Cookies' button")
-	}
 	cookieHeader := common.FilterCookies(rawCookies, wbstream.WBStreamCookieAllowlist)
-	persistCookies := func(rotated map[string]string) {
-		if len(rotated) == 0 {
+	persistEntries := func(updates map[string]string) {
+		if len(updates) == 0 {
 			return
 		}
-		if werr := common.UpdateCookieFile(*cookiesPath, rotated); werr != nil {
-			log.Printf("[auth] warn: persist rotated cookies: %v", werr)
+		if werr := common.UpdateCookieFile(*cookiesPath, updates); werr != nil {
+			log.Printf("[auth] warn: persist cookie file entries: %v", werr)
 			return
 		}
 		rawCookies = common.LoadCookies(*cookiesPath)
 		cookieHeader = common.FilterCookies(rawCookies, wbstream.WBStreamCookieAllowlist)
-		log.Printf("[auth] persisted %d rotated cookie(s)", len(rotated))
+		log.Printf("[auth] persisted %d cookie file entries", len(updates))
 	}
-	bearer, rotated, err := wbstream.RefreshAccessToken(nil, cookieHeader, deviceID)
-	if err != nil {
-		common.EmitAuthErrorFor(err)
-		log.Fatalf("[auth] slide-v3 refresh: %v", err)
+	refreshBearer := func() (string, error) {
+		if deviceID == "" {
+			return "", fmt.Errorf("cookies file is missing __wb_device_id, re-export via creator-app")
+		}
+		token, rotated, refreshErr := wbstream.RefreshAccessToken(nil, cookieHeader, deviceID)
+		if refreshErr != nil {
+			return "", refreshErr
+		}
+		updates := make(map[string]string, len(rotated)+1)
+		for name, value := range rotated {
+			updates[name] = value
+		}
+		updates[wbstream.AccessTokenEntry] = token
+		persistEntries(updates)
+		return token, nil
 	}
-	persistCookies(rotated)
-	log.Printf("[auth] bearer refreshed (len=%d)", len(bearer))
+	bearer := common.CookieValue(rawCookies, wbstream.AccessTokenEntry)
+	if bearer == "" {
+		var refreshErr error
+		bearer, refreshErr = refreshBearer()
+		if refreshErr != nil {
+			common.EmitAuthErrorFor(refreshErr)
+			log.Fatalf("[auth] slide-v3 refresh: %v", refreshErr)
+		}
+		log.Printf("[auth] bearer minted via slide-v3 len=%d", len(bearer))
+	} else {
+		log.Printf("[auth] bearer loaded from cookies file len=%d", len(bearer))
+	}
 	requestedRoom := wbstream.ParseRoomID(*roomFlag)
 	roomID, roomToken, accessToken, serverURL, err := wbstream.AuthAsLoggedIn(nil, cookieHeader, bearer, requestedRoom, *displayName)
+	if err != nil {
+		log.Printf("[auth] stored bearer rejected: %v, refreshing", err)
+		bearer, err = refreshBearer()
+		if err != nil {
+			common.EmitAuthErrorFor(err)
+			log.Fatalf("[auth] slide-v3 refresh: %v", err)
+		}
+		roomID, roomToken, accessToken, serverURL, err = wbstream.AuthAsLoggedIn(nil, cookieHeader, bearer, requestedRoom, *displayName)
+	}
 	if err != nil {
 		common.EmitAuthErrorFor(err)
 		log.Fatalf("[auth] %v", err)
@@ -176,23 +203,21 @@ func main() {
 		}
 		time.Sleep(3 * time.Second)
 
-		newBearer, rotated, refreshErr := wbstream.RefreshAccessToken(nil, cookieHeader, deviceID)
-		if refreshErr != nil {
-			log.Printf("[rejoin] slide-v3 refresh failed: %v, retrying in 5s", refreshErr)
-			time.Sleep(5 * time.Second)
-			continue
-		}
-		bearer = newBearer
-		persistCookies(rotated)
 		_, newRoomToken, newAccessToken, newServerURL, err := wbstream.AuthAsLoggedIn(nil, cookieHeader, bearer, roomID, *displayName)
 		if err != nil {
-			log.Printf("[rejoin] auth failed: %v, retrying in 5s", err)
+			log.Printf("[rejoin] auth failed: %v, refreshing bearer", err)
+			newBearer, refreshErr := refreshBearer()
+			if refreshErr != nil {
+				log.Printf("[rejoin] slide-v3 refresh failed: %v, retrying in 5s", refreshErr)
+			} else {
+				bearer = newBearer
+			}
 			time.Sleep(5 * time.Second)
 			continue
 		}
 		roomToken = newRoomToken
 		accessToken = newAccessToken
 		serverURL = newServerURL
-		log.Printf("[rejoin] refreshed token for room=%s server=%s", roomID, serverURL)
+		log.Printf("[rejoin] rejoined room=%s server=%s", roomID, serverURL)
 	}
 }

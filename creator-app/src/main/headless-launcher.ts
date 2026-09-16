@@ -34,6 +34,17 @@ function parseAuthError(msg: string): AuthErrorKind | null {
   return null;
 }
 
+async function cookieFileHasCookie(filePath: string, name: string | undefined): Promise<boolean> {
+  if (!name) return false;
+  try {
+    const raw = await fs.readFile(filePath, 'utf8');
+    const entries = JSON.parse(raw) as Array<{ name?: string; value?: string }>;
+    return Array.isArray(entries) && entries.some((entry) => entry.name === name && !!entry.value);
+  } catch {
+    return false;
+  }
+}
+
 export class HeadlessLauncher {
   private relayPath: string;
   private bitrixPath: string;
@@ -139,7 +150,10 @@ export class HeadlessLauncher {
     tab.tunnelMode = config.tunnelMode;
     const cookiesPath = this.cookies.cookieFilePath(platform);
     const dionCookieFile = platform === Platform.Dion ? new DionCookieFile(cookiesPath) : null;
-    const fileHasSession = dionCookieFile != null && await dionCookieFile.hasSession();
+    const fileHasSession =
+      platform === Platform.WBStream
+        ? await cookieFileHasCookie(cookiesPath, config.refreshCookie)
+        : dionCookieFile != null && (await dionCookieFile.hasSession());
     let cookies = await this.cookies.getCookiesForDomains(config.cookieDomains);
     const needsLogin = !fileHasSession && !cookies.some((c) => c.name === config.refreshCookie);
     if (needsLogin) {
@@ -198,7 +212,9 @@ export class HeadlessLauncher {
       }
       if (authError === 'expired') {
         if (dionCookieFile) await dionCookieFile.clearTokens();
+        if (platform === Platform.WBStream) await fs.unlink(cookiesPath).catch(() => {});
         await this.cookies.clearAuthCookies(config.cookieDomains, config.authCookie);
+        await this.cookies.clearAuthCookies(config.cookieDomains, config.refreshCookie);
         if (this.host.getTab(tabId) === tab) this.startHeadless(tabId, platform, args);
       }
     });
