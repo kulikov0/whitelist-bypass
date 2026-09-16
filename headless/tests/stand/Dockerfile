@@ -7,6 +7,7 @@ RUN apt-get update \
 
 COPY work /work
 RUN chmod +x /work/headless/*/headless-* \
+             /work/relay/relay \
              /work/headless/tests/*.sh \
              /work/headless/tests/stand/*.sh
 

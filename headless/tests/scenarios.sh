@@ -103,11 +103,32 @@ start_joiner() {
     alloc_port
     JOINER_PORT="$ALLOC_PORT"
     JOINER_LOG=$(mktemp -t e2e-joiner.XXXXXX)
+    if [ -n "$PF_JOINER_MODE" ]; then
+        start_stdin_joiner "$_variant"
+        return
+    fi
     _flags=$(pf_variant_flags "$_variant")
     $JOINER_WRAP "$PF_JOINER" "$PF_LINK_FLAG" "$JOIN_LINK" --socks-host "$JOINER_SOCKS_HOST" --socks-port "$JOINER_PORT" $_flags >"$JOINER_LOG" 2>&1 &
     JOINER_PID=$!
     track_pid "$JOINER_PID"
     track_joiner "$JOINER_PID"
+}
+
+start_stdin_joiner() {
+    _tunnel_mode=video
+    [ "$1" = "dc" ] && _tunnel_mode=dc
+    JOINER_FIFO=$(mktemp -u -t e2e-joiner-fifo.XXXXXX)
+    mkfifo "$JOINER_FIFO"
+    $JOINER_WRAP "$PF_JOINER" --mode "$PF_JOINER_MODE" --socks-host "$JOINER_SOCKS_HOST" --socks-port "$JOINER_PORT" <"$JOINER_FIFO" >"$JOINER_LOG" 2>&1 &
+    JOINER_PID=$!
+    track_pid "$JOINER_PID"
+    track_joiner "$JOINER_PID"
+    exec 3>"$JOINER_FIFO"
+    answer_resolves "$JOINER_LOG" &
+    RESOLVER_PID=$!
+    track_pid "$RESOLVER_PID"
+    printf 'AUTH:{"joinLink":"%s","displayName":"e2e","tunnelMode":"%s"}\n' "$JOIN_LINK" "$_tunnel_mode" >&3
+    open_captcha "$JOINER_LOG"
 }
 
 joiner_up() {

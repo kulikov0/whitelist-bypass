@@ -23,30 +23,12 @@ usage() {
     cat >&2 <<EOF
 Usage: $0 [platform...] [scenario...]
 
-Live end-to-end harness: brings up a headless creator, connects one or more
-headless joiners, and proves each tunnel by echoing a nonce through the joiner's
-SOCKS5 to a local sink (no external network, no rate limits).
-
-Platforms: $ALL_PLATFORMS
+Platforms: $ALL_PLATFORMS vk
 Scenarios: $ALL_SCENARIOS
-  connect  one joiner, default video tunnel
-  dc       one joiner, --tunnel-mode dc
-  kcp      one joiner, --reliable (KCP)
-  dual     one joiner, --dual-track
-  kick     two joiners on one room, expect the first to be kicked
 
-No args runs every applicable scenario on every platform. Unsupported
-platform/scenario pairs are skipped.
+No args runs every applicable scenario on every platform, except vk.
 
-Cookies: COOKIES_DIR (default repo root) holds cookies-<platform>.json, or set
-COOKIES_<PLATFORM> to a explicit path. Missing cookies skip that platform.
-
-Env: CREATE_TIMEOUT CONNECT_TIMEOUT PROBE_TIMEOUT KICK_TIMEOUT PORT_BASE
-
-Examples:
-  $0
-  $0 bitrix
-  $0 wbstream dc kick
+See headless/tests/README.md.
 EOF
 }
 
@@ -59,7 +41,7 @@ for _arg in "$@"; do
             usage
             exit 0
             ;;
-        telemost | wbstream | dion | bitrix)
+        vk | telemost | wbstream | dion | bitrix)
             RUN_PLATFORMS="$RUN_PLATFORMS $_arg"
             ;;
         connect | dc | kcp | dual | kick)

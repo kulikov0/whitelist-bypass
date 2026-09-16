@@ -12,9 +12,11 @@ No external network is used.
 
 ## Platforms and scenarios
 
-Platforms: telemost, wbstream, dion, bitrix. VK is not supported because it has no
-headless SOCKS joiner. A platform skips the scenarios it does not support. For
-example, dion supports only connect and kick.
+Platforms: telemost, wbstream, dion, bitrix, vk. A platform skips the scenarios it
+does not support: dion supports only connect and kick, vk only connect and dc.
+
+`vk` runs only when named, needs `relay/relay` from `./build-go.sh`, and opens the VK
+captcha in your browser.
 
 | Scenario | Joiner |
 |----------|--------|

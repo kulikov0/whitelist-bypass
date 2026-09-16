@@ -25,7 +25,7 @@ RUN_PLATFORMS=""
 RUN_SCENARIOS=""
 for _arg in "$@"; do
     case "$_arg" in
-        telemost | wbstream | dion | bitrix) RUN_PLATFORMS="$RUN_PLATFORMS $_arg" ;;
+        vk | telemost | wbstream | dion | bitrix) RUN_PLATFORMS="$RUN_PLATFORMS $_arg" ;;
         connect | dc | kcp | dual | kick) RUN_SCENARIOS="$RUN_SCENARIOS $_arg" ;;
         *)
             log "unknown argument: $_arg"

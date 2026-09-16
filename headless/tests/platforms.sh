@@ -3,6 +3,7 @@ set -u
 cookies_path() {
     _p="$1"
     case "$_p" in
+        vk) _f="cookies-vk.json" ;;
         telemost) _f="cookies-yandex.json" ;;
         wbstream) _f="cookies-wbstream.json" ;;
         dion) _f="cookies-dion.json" ;;
@@ -26,7 +27,16 @@ room_value() {
 
 pf_select() {
     PF_NAME="$1"
+    PF_JOINER_MODE=""
     case "$1" in
+        vk)
+            PF_CREATOR="$HEADLESS/vk/headless-vk-creator"
+            PF_JOINER="$E2E_ROOT/relay/relay"
+            PF_JOINER_MODE="vk-headless-joiner"
+            PF_CREATOR_ROOM_FLAG="--vk-link"
+            PF_READY_RE="\[vk-ws\] Connected"
+            PF_CAPS="connect dc"
+            ;;
         telemost)
             PF_CREATOR="$HEADLESS/telemost/headless-telemost-creator"
             PF_JOINER="$HEADLESS/telemost-joiner/headless-telemost-joiner"

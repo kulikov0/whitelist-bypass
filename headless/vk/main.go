@@ -398,8 +398,9 @@ func (b *Bridge) handleVKMessage(raw []byte) {
 			log.Printf("[vk-ws]    Topology changed to %s", topo)
 			b.topology = topo
 			if topo != TopologyDirect {
-				b.bounceForServerTopology("SERVER topology")
-				return
+				// b.bounceForServerTopology("SERVER topology")
+				// return
+				b.failForServerTopology("SERVER topology")
 			}
 
 		case "participant-joined", "participant-added":
@@ -407,8 +408,9 @@ func (b *Bridge) handleVKMessage(raw []byte) {
 				b.peers[int64(pid)] = struct{}{}
 				log.Printf("[vk-ws]    Participant %d joined (total: %d)", int64(pid), len(b.peers))
 				if b.topology != TopologyDirect {
-					b.bounceForServerTopology("participant joined under SERVER")
-					return
+					// b.bounceForServerTopology("participant joined under SERVER")
+					// return
+					b.failForServerTopology("participant joined under SERVER")
 				}
 			}
 
@@ -505,6 +507,11 @@ func (b *Bridge) initRelay() {
 	b.p2p.Init()
 }
 
+func (b *Bridge) failForServerTopology(reason string) {
+	log.Fatalf("[vk-ws]    %s -> VK moved this call to server topology, it cannot be tunneled, create a new call and connect again", reason)
+}
+
+// unused, reconnecting no longer recovers DIRECT
 func (b *Bridge) bounceForServerTopology(reason string) {
 	b.mu.Lock()
 	if b.bouncing {
@@ -520,6 +527,10 @@ func (b *Bridge) bounceForServerTopology(reason string) {
 	suppress := b.suppressScreenshare
 	sfu := b.sfu
 	b.mu.Unlock()
+
+	// if alreadySuppressed {
+	// 	log.Fatalf("[vk-ws]    %s -> still SERVER after %d reconnects and screenshare suppression, this call runs through the VK server and cannot be tunneled, create a new call", reason, count)
+	// }
 
 	if suppress {
 		log.Printf("[vk-ws]    %s -> reconnect #%d, suppressing screenshare to settle single-track DIRECT", reason, count)
