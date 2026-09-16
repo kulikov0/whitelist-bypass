@@ -182,7 +182,7 @@ func NewSession(httpClient *http.Client) (*Session, error) {
 		}
 		httpClient.Jar = jar
 	}
-	return &Session{HTTPClient: httpClient, Device: common.ChromeWindowsDeviceProfile()}, nil
+	return &Session{HTTPClient: httpClient, Device: common.ChromeWindowsDeviceProfile(headless.ChromeWindows.UserAgent())}, nil
 }
 
 func (s *Session) RegisterGuest() (*GuestAuthResponse, error) {

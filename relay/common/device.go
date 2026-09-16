@@ -6,8 +6,6 @@ import (
 	"fmt"
 	"math/rand/v2"
 	"strings"
-
-	"github.com/kulikov0/headless-client"
 )
 
 type DeviceProfile struct {
@@ -185,8 +183,7 @@ func chromeVersionFromUserAgent(userAgent string) string {
 	return version
 }
 
-func ChromeWindowsDeviceProfile() DeviceProfile {
-	userAgent := headless.ChromeWindows.UserAgent()
+func ChromeWindowsDeviceProfile(userAgent string) DeviceProfile {
 	screen := commonScreens[rand.IntN(len(commonScreens))]
 	return DeviceProfile{
 		UserAgent:      userAgent,
