@@ -27,27 +27,41 @@ struct ContentView: View {
                         }
 
                         Button(action: {
-                            if proxyManager.isRunning {
+                            if proxyManager.isArmed {
                                 proxyManager.resetAll()
                             } else {
                                 proxyManager.connect()
                             }
                         }) {
-                            Text(proxyManager.isRunning ? NSLocalizedString("btn_stop", comment: "") : NSLocalizedString("btn_go", comment: ""))
+                            Text(proxyManager.isArmed ? NSLocalizedString("btn_stop", comment: "") : NSLocalizedString("btn_go", comment: ""))
                                 .fontWeight(.bold)
                                 .frame(width: 60)
                         }
                         .buttonStyle(.borderedProminent)
-                        .tint(proxyManager.isRunning ? .red : .green)
+                        .tint(proxyManager.isArmed ? .red : .green)
                     }
                     .padding(.horizontal)
+
+                    if proxyManager.portDrifted {
+                        Label(NSLocalizedString("warn_port_drifted", comment: ""), systemImage: "exclamationmark.triangle.fill")
+                            .font(.caption)
+                            .foregroundColor(.orange)
+                            .padding(.horizontal)
+                    }
+
+                    if proxyManager.needsHappToggle {
+                        Label(NSLocalizedString("warn_happ_holding", comment: ""), systemImage: "bolt.horizontal.circle.fill")
+                            .font(.caption)
+                            .foregroundColor(.orange)
+                            .padding(.horizontal)
+                    }
 
                     if let captchaURL = proxyManager.captchaURL, let url = URL(string: captchaURL) {
                         CaptchaWebView(url: url)
                             .frame(maxWidth: .infinity, maxHeight: .infinity)
                     }
 
-                    if proxyManager.status == .tunnelConnected {
+                    if proxyManager.isArmed && proxyManager.captchaURL == nil {
                         ProxyInfoView(proxyUrl: proxyManager.socksUrl, onCopy: proxyManager.copyProxyUrl)
 
                         Button(action: { proxyManager.openHappProxy() }) {
@@ -78,7 +92,7 @@ struct ContentView: View {
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .navigationBarLeading) {
-                    StatusIndicator(status: proxyManager.status, errorMessage: proxyManager.errorMessage, statusText: proxyManager.statusText, tunnelMode: proxyManager.tunnelMode)
+                    StatusIndicator(status: proxyManager.status, errorMessage: proxyManager.errorMessage, statusText: proxyManager.statusText, tunnelMode: proxyManager.tunnelMode, restartCount: proxyManager.restartCount)
                 }
                 ToolbarItem(placement: .navigationBarTrailing) {
                     Button(action: { showSettings = true }) {
@@ -116,6 +130,7 @@ struct StatusIndicator: View {
     let errorMessage: String
     let statusText: String?
     let tunnelMode: TunnelMode
+    let restartCount: Int
 
     var statusColor: Color {
         if statusText != nil { return .yellow }
@@ -135,6 +150,9 @@ struct StatusIndicator: View {
         if let text = statusText { statusLabel = text }
         else if !errorMessage.isEmpty { statusLabel = errorMessage }
         else { statusLabel = status.displayLabel }
+        if status != .tunnelConnected && restartCount > 0 {
+            return "\(tunnelMode.label) | \(statusLabel) · \(restartCount)"
+        }
         return "\(tunnelMode.label) | \(statusLabel)"
     }
 
@@ -230,6 +248,17 @@ struct SettingsView: View {
                         TextField(NSLocalizedString("hint_password", comment: ""), text: $proxyManager.manualSocksPass)
                             .autocapitalization(.none)
                             .disableAutocorrection(true)
+                    }
+                }
+
+                Section(NSLocalizedString("settings_reliability", comment: "")) {
+                    Button(action: { proxyManager.openHappRouting() }) {
+                        VStack(alignment: .leading, spacing: 2) {
+                            Label(NSLocalizedString("btn_happ_routing", comment: ""), systemImage: "arrow.triangle.branch")
+                            Text(NSLocalizedString("settings_happ_routing_sub", comment: ""))
+                                .font(.caption)
+                                .foregroundColor(.secondary)
+                        }
                     }
                 }
 
