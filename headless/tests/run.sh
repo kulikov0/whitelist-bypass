@@ -82,7 +82,7 @@ require_cmd ncat
 trap cleanup EXIT INT TERM
 
 start_sink
-log "sink on 127.0.0.1:$SINK_PORT"
+log "sink on $SINK_BIND:$SINK_PORT"
 
 for _pf in $RUN_PLATFORMS; do
     run_platform "$_pf"

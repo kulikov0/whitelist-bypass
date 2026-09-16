@@ -12,8 +12,8 @@ SINK_PID=""
 SINK_PORT=""
 SINK_FILE=""
 SINK_WRAP="${SINK_WRAP:-}"
-SINK_BIND="${SINK_BIND:-127.0.0.1}"
-SINK_TARGET="${SINK_TARGET:-127.0.0.1}"
+SINK_BIND="${SINK_BIND:-}"
+SINK_TARGET="${SINK_TARGET:-}"
 PROBE_HOST="${PROBE_HOST:-127.0.0.1}"
 PORT_CURSOR="${PORT_BASE:-21080}"
 
@@ -55,7 +55,19 @@ alloc_port() {
     PORT_CURSOR=$((PORT_CURSOR + 1))
 }
 
+host_ip() {
+    if command -v ip >/dev/null 2>&1; then
+        ip -4 route get 1.1.1.1 2>/dev/null | sed -n 's/.* src \([0-9.]*\).*/\1/p' | head -1
+    elif command -v ipconfig >/dev/null 2>&1; then
+        _iface=$(route -n get default 2>/dev/null | sed -n 's/.*interface: *//p' | head -1)
+        [ -n "$_iface" ] && ipconfig getifaddr "$_iface" 2>/dev/null
+    fi
+}
+
 start_sink() {
+    [ -n "$SINK_BIND" ] || SINK_BIND=$(host_ip)
+    [ -n "$SINK_BIND" ] || die "cannot detect a non-loopback address for the sink, set SINK_BIND and SINK_TARGET"
+    [ -n "$SINK_TARGET" ] || SINK_TARGET="$SINK_BIND"
     alloc_port
     SINK_PORT="$ALLOC_PORT"
     SINK_FILE=$(mktemp -t e2e-sink.XXXXXX)

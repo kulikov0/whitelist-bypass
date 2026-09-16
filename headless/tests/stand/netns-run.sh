@@ -46,8 +46,8 @@ JOINER_WRAP="ip netns exec joiner"
 JOINER_SOCKS_HOST="0.0.0.0"
 PROBE_HOST="10.201.2.2"
 SINK_WRAP="ip netns exec creator"
-SINK_BIND="127.0.0.1"
-SINK_TARGET="127.0.0.1"
+SINK_BIND="10.201.1.2"
+SINK_TARGET="10.201.1.2"
 
 cleanup_all() {
     cleanup

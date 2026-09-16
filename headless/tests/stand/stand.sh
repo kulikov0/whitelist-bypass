@@ -33,8 +33,8 @@ loopback - no external network, no rate limits.
 Platforms: telemost wbstream dion bitrix   (VK has no headless SOCKS joiner)
 Scenarios: connect dc kcp dual kick
 
-Cookies are taken from cookies-<platform>.json at the repo root at build time.
-Rebuild after refreshing cookies. Examples:
+Cookies are mounted from cookies-<platform>.json at the repo root on run.
+Examples:
   stand.sh build
   stand.sh run
   stand.sh run bitrix dc kick
@@ -43,7 +43,8 @@ EOF
 }
 
 build_context() {
-    arch=$(docker version --format '{{.Server.Arch}}' 2>/dev/null || echo arm64)
+    arch=$(docker version --format '{{.Server.Arch}}' 2>/dev/null | tr -d '[:space:]')
+    [ -n "$arch" ] || arch=arm64
     rm -rf "$CTX"
     mkdir -p "$CTX/work/headless/tests/stand"
     for spec in $COMPONENTS; do
