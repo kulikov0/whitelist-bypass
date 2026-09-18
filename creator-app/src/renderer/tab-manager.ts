@@ -24,6 +24,7 @@ export class RendererTabManager {
   upstreamProxy: UpstreamProxy;
   debugLogging: boolean;
   allowPrivateDst: boolean;
+  allowLoopbackDst: boolean;
   private onRender: () => void;
 
   constructor(onRender: () => void) {
@@ -38,6 +39,7 @@ export class RendererTabManager {
       : { socks: '', user: '', pass: '' };
     this.debugLogging = localStorage.getItem('debugLogging') === 'true';
     this.allowPrivateDst = localStorage.getItem('allowPrivateDst') === 'true';
+    this.allowLoopbackDst = localStorage.getItem('allowLoopbackDst') === 'true';
   }
 
   createTab(): string {
@@ -263,6 +265,11 @@ export class RendererTabManager {
   saveAllowPrivateDst(): void {
     localStorage.setItem('allowPrivateDst', String(this.allowPrivateDst));
     window.bridge.setAllowPrivateDst(this.allowPrivateDst);
+  }
+
+  saveAllowLoopbackDst(): void {
+    localStorage.setItem('allowLoopbackDst', String(this.allowLoopbackDst));
+    window.bridge.setAllowLoopbackDst(this.allowLoopbackDst);
   }
 
   startSavedCall(call: SavedCall): void {

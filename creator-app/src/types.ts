@@ -185,6 +185,7 @@ export interface Bridge {
   setUpstreamProxy(proxy: UpstreamProxy): Promise<void>;
   setDebugLogging(enabled: boolean): Promise<void>;
   setAllowPrivateDst(enabled: boolean): Promise<void>;
+  setAllowLoopbackDst(enabled: boolean): Promise<void>;
   clearCookies(platform: string): Promise<number>;
   getDionCredentials(): Promise<DionCredentials>;
   setDionCredentials(email: string, password: string): Promise<void>;

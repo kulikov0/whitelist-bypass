@@ -646,9 +646,11 @@ func main() {
 	upstreamPass := flag.String("upstream-pass", "", "upstream SOCKS5 password")
 	debugFlag := flag.Bool("debug", false, "verbose debug logging")
 	allowPrivate := flag.Bool("allow-private-dst", false, "let the joiner reach private/internal addresses through this creator")
+	allowLoopback := flag.Bool("allow-loopback", false, "let the joiner reach the creator's own loopback through this creator")
 	flag.Parse()
 	common.Debug = *debugFlag
 	common.AllowPrivateDst = *allowPrivate
+	common.AllowLoopbackDst = *allowLoopback
 
 	var readBuf int
 	var maxDCBuf uint64

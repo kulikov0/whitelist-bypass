@@ -52,6 +52,7 @@ export class HeadlessLauncher {
   private upstreamProxy: UpstreamProxy = { socks: '', user: '', pass: '' };
   private debugLogging = false;
   private allowPrivateDst = false;
+  private allowLoopbackDst = false;
 
   constructor(
     private host: LauncherHost,
@@ -90,6 +91,10 @@ export class HeadlessLauncher {
 
   setAllowPrivateDst(enabled: boolean): void {
     this.allowPrivateDst = enabled;
+  }
+
+  setAllowLoopbackDst(enabled: boolean): void {
+    this.allowLoopbackDst = enabled;
   }
 
   sendLog(tabId: string, msg: string): void {
@@ -299,6 +304,7 @@ export class HeadlessLauncher {
 
   private appendEgressArgs(args: string[]): void {
     if (this.allowPrivateDst) args.push('--allow-private-dst');
+    if (this.allowLoopbackDst) args.push('--allow-loopback');
     if (!this.upstreamProxy.socks) return;
     args.push('--upstream-socks', this.upstreamProxy.socks);
     if (this.upstreamProxy.user) args.push('--upstream-user', this.upstreamProxy.user);

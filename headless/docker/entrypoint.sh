@@ -43,5 +43,6 @@ set -- \
 [ -n "${UPSTREAM_USER:-}" ] && set -- "$@" --upstream-user "$UPSTREAM_USER"
 [ -n "${UPSTREAM_PASS:-}" ] && set -- "$@" --upstream-pass "$UPSTREAM_PASS"
 [ "${ALLOW_PRIVATE_DST:-0}" = "1" ] && set -- "$@" --allow-private-dst
+[ "${ALLOW_LOOPBACK_DST:-0}" = "1" ] && set -- "$@" --allow-loopback
 
 exec /usr/local/bin/headless-vk-bot "$@"

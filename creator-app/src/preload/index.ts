@@ -32,6 +32,9 @@ import { IPC } from '../constants';
   setAllowPrivateDst(enabled: boolean) {
     return ipcRenderer.invoke(IPC.SET_ALLOW_PRIVATE_DST, enabled);
   },
+  setAllowLoopbackDst(enabled: boolean) {
+    return ipcRenderer.invoke(IPC.SET_ALLOW_LOOPBACK_DST, enabled);
+  },
   clearCookies(platform: string) {
     return ipcRenderer.invoke(IPC.CLEAR_COOKIES, platform);
   },

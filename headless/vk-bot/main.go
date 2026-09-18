@@ -75,7 +75,8 @@ type bot struct {
 	upstreamUser  string
 	upstreamPass  string
 
-	allowPrivateDst bool
+	allowPrivateDst  bool
+	allowLoopbackDst bool
 
 	server, key, ts string
 
@@ -384,6 +385,9 @@ func (b *bot) spawn(platform, joinTarget string) (*session, error) {
 	if b.allowPrivateDst {
 		args = append(args, "--allow-private-dst")
 	}
+	if b.allowLoopbackDst {
+		args = append(args, "--allow-loopback")
+	}
 	cmd := exec.Command(bin, args...)
 	if logF != nil {
 		cmd.Stdout = logF
@@ -511,6 +515,7 @@ func main() {
 	upstreamUser := flag.String("upstream-user", "", "upstream SOCKS5 username forwarded to spawned creators")
 	upstreamPass := flag.String("upstream-pass", "", "upstream SOCKS5 password forwarded to spawned creators")
 	allowPrivateDst := flag.Bool("allow-private-dst", false, "forward to spawned creators: let the joiner reach private/internal addresses through them")
+	allowLoopbackDst := flag.Bool("allow-loopback", false, "forward to spawned creators: let the joiner reach their own loopback through them")
 	flag.Parse()
 
 	if *token == "" {
@@ -539,23 +544,24 @@ func main() {
 	}
 
 	b := &bot{
-		token:           *token,
-		groupID:         *groupID,
-		userIDs:         allowedUsers,
-		binsDir:         *binsDir,
-		vkCookies:       *vkCookies,
-		tmCookies:       *tmCookies,
-		wbCookies:       *wbCookies,
-		dionCookies:     *dionCookies,
-		bitrixCookies:   *bitrixCookies,
-		sessionsDir:     *sessionsDir,
-		resources:       *resources,
-		upstreamSocks:   *upstreamSocks,
-		upstreamUser:    *upstreamUser,
-		upstreamPass:    *upstreamPass,
-		allowPrivateDst: *allowPrivateDst,
-		sessions:        map[string]*session{},
-		awaitingJoin:    map[int64]bool{},
+		token:            *token,
+		groupID:          *groupID,
+		userIDs:          allowedUsers,
+		binsDir:          *binsDir,
+		vkCookies:        *vkCookies,
+		tmCookies:        *tmCookies,
+		wbCookies:        *wbCookies,
+		dionCookies:      *dionCookies,
+		bitrixCookies:    *bitrixCookies,
+		sessionsDir:      *sessionsDir,
+		resources:        *resources,
+		upstreamSocks:    *upstreamSocks,
+		upstreamUser:     *upstreamUser,
+		upstreamPass:     *upstreamPass,
+		allowPrivateDst:  *allowPrivateDst,
+		allowLoopbackDst: *allowLoopbackDst,
+		sessions:         map[string]*session{},
+		awaitingJoin:     map[int64]bool{},
 	}
 
 	sig := make(chan os.Signal, 1)

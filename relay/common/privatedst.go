@@ -12,6 +12,8 @@ const blockedDstLogInterval = 10 * time.Second
 
 var AllowPrivateDst bool
 
+var AllowLoopbackDst bool
+
 var ErrPrivateDst = errors.New("destination not allowed")
 
 var (
@@ -71,15 +73,18 @@ func DstBlocked(addr string) bool {
 }
 
 func ipBlocked(ip net.IP) bool {
+	if ip.IsLoopback() {
+		return !AllowLoopbackDst
+	}
 	if isNeverAllowedIP(ip) {
 		return true
 	}
 	return !AllowPrivateDst && isPrivateIP(ip)
 }
 
-// AllowPrivateDst unlocks rfc1918 and cgnat only, the metadata ip and the creator's own loopback stay closed
+// AllowPrivateDst unlocks rfc1918 and cgnat, AllowLoopbackDst unlocks the creator's own loopback, neither flag unlocks the metadata ip
 func isNeverAllowedIP(ip net.IP) bool {
-	return ip.IsLoopback() || ip.IsUnspecified() || ip.IsLinkLocalUnicast() || ip.IsMulticast()
+	return ip.IsUnspecified() || ip.IsLinkLocalUnicast() || ip.IsMulticast()
 }
 
 func isPrivateIP(ip net.IP) bool {

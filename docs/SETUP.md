@@ -152,7 +152,8 @@
 | `--upstream-socks <host:port>` | да | да | да | да | да | Гнать трафик joiner-а через локальный SOCKS5 прокси, например VPN-клиент |
 | `--upstream-user <user>` | да | да | да | да | да | Логин для upstream SOCKS5 |
 | `--upstream-pass <pass>` | да | да | да | да | да | Пароль для upstream SOCKS5 |
-| `--allow-private-dst` | да | да | да | да | да | Разрешить joiner-у ходить в локальную сеть creator-а, по умолчанию такие адреса блокируются. Loopback и link-local, включая metadata ip `169.254.169.254`, остаются закрыты и с этим флагом |
+| `--allow-private-dst` | да | да | да | да | да | Разрешить joiner-у ходить в локальную сеть creator-а, по умолчанию такие адреса блокируются. Loopback этим флагом не открывается, для него есть `--allow-loopback` |
+| `--allow-loopback` | да | да | да | да | да | Разрешить joiner-у ходить на `127.0.0.1` самого creator-а, например в локальный инбаунд xray. По умолчанию выключено, от `--allow-private-dst` не зависит. Открывает доступ ко всем сервисам, слушающим loopback на этой машине |
 | `--debug` | да | да | да | да | да | Подробные логи |
 | `--version` | да | да | да | да | да | Вывести версию и выйти |
 
@@ -305,6 +306,7 @@ Standalone Go-бинарник `headless-vk-bot` - то же самое, что 
 | `--sessions-dir <dir>` | Папка для логов запущенных creators. Опционально - без флага логи не пишутся, stdout/stderr creators отбрасываются |
 | `--resources <mode>` | Режим ресурсов, передаётся каждому запускаемому creator: `default` / `moderate` / `unlimited`. По умолчанию `default`. `custom` не поддерживается, так как у каждого бинарника свой набор флагов настройки |
 | `--allow-private-dst` | Передаётся каждому запускаемому creator: разрешить joiner-у ходить в локальную сеть creator-а. По умолчанию выключено |
+| `--allow-loopback` | Передаётся каждому запускаемому creator: разрешить joiner-у ходить на его `127.0.0.1`. По умолчанию выключено |
 | `--version` | Вывести версию и выйти |
 
 При получении команды бот запускает соответствующий creator с `--write-file <tmp>`, ждёт появления линка в файле (до 60 секунд) и присылает его в чат. `--user-id` принимает список через запятую; если указан, команды от пользователей не из списка игнорируются.
@@ -389,6 +391,7 @@ docker compose pull && docker compose up -d
 | `UPSTREAM_USER` | нет | - | `--upstream-user` |
 | `UPSTREAM_PASS` | нет | - | `--upstream-pass` |
 | `ALLOW_PRIVATE_DST` | нет | `0` | `--allow-private-dst`, включается значением `1` |
+| `ALLOW_LOOPBACK_DST` | нет | `0` | `--allow-loopback`, включается значением `1`. В контейнере это loopback самого контейнера, если не задан `network_mode: host` |
 
 > `cookies-dion.json`, `cookies-bitrix.json` и `cookies-wbstream.json` монтируются без `:ro` - creator перезаписывает их при обновлении токена, поэтому на хосте они должны принадлежать uid 999 (иначе `save cookies failed: permission denied`). VK и Telemost только читаются.
 

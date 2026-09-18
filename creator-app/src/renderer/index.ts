@@ -100,6 +100,8 @@ function bindSettingsEvents(): void {
     tm.saveDebugLogging();
     tm.allowPrivateDst = (document.getElementById('allowPrivateDst') as HTMLInputElement).checked;
     tm.saveAllowPrivateDst();
+    tm.allowLoopbackDst = (document.getElementById('allowLoopbackDst') as HTMLInputElement).checked;
+    tm.saveAllowLoopbackDst();
     closeSettings();
   });
   document.querySelectorAll('.btn-clear-cookies').forEach((btn) => {
@@ -256,6 +258,7 @@ function openSettings(): void {
   (document.getElementById('upstreamPass') as HTMLInputElement).value = tm.upstreamProxy.pass;
   (document.getElementById('debugLogging') as HTMLInputElement).checked = tm.debugLogging;
   (document.getElementById('allowPrivateDst') as HTMLInputElement).checked = tm.allowPrivateDst;
+  (document.getElementById('allowLoopbackDst') as HTMLInputElement).checked = tm.allowLoopbackDst;
   document.getElementById('clearCookiesStatus')!.textContent = '';
 }
 
@@ -289,6 +292,7 @@ function init(): void {
 
   window.bridge.setUpstreamProxy(tm.upstreamProxy);
   window.bridge.setAllowPrivateDst(tm.allowPrivateDst);
+  window.bridge.setAllowLoopbackDst(tm.allowLoopbackDst);
 
   window.bridge.onRelayLog((tabId: string, msg: string) => {
     tm.appendRelayLog(tabId, msg);

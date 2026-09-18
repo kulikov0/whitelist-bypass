@@ -161,6 +161,10 @@ export class TabManager {
     this.launcher.setAllowPrivateDst(enabled);
   }
 
+  setAllowLoopbackDst(enabled: boolean): void {
+    this.launcher.setAllowLoopbackDst(enabled);
+  }
+
   startRelay(tabId: string, tab: TabState): void {
     this.launcher.startRelay(tabId, tab);
   }
