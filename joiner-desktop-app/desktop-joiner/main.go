@@ -30,6 +30,7 @@ import (
 	"whitelist-bypass/relay/pion"
 	joinerCommon "whitelist-bypass/relay/pion/headless-joiner-common"
 	"whitelist-bypass/relay/tunnel"
+	"whitelist-bypass/relay/tunnel/rtc"
 	"whitelist-bypass/relay/wbstream"
 )
 
@@ -284,7 +285,7 @@ func main() {
 	)
 	onConnected := func(t tunnel.DataTunnel) {
 		readBuf := common.VP8BufSize
-		if _, ok := t.(*tunnel.DCTunnel); ok {
+		if _, ok := t.(*rtc.DCTunnel); ok {
 			readBuf = common.DCBufSize
 		}
 		bridgeMu.Lock()

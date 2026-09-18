@@ -1,4 +1,4 @@
-package tunnel
+package rtc
 
 import (
 	"sync"
@@ -9,6 +9,7 @@ import (
 	"github.com/kulikov0/headless-client/webrtc/pkg/media"
 
 	"whitelist-bypass/relay/common"
+	"whitelist-bypass/relay/tunnel"
 )
 
 const (
@@ -30,7 +31,7 @@ const (
 type VP8DataTunnel struct {
 	track     *webrtc.TrackLocalStaticSample
 	logFn     func(string, ...any)
-	obf       *TunnelObfuscator
+	obf       *tunnel.TunnelObfuscator
 	stopCh    chan struct{}
 	sendQueue chan []byte
 	cfgChan   chan struct{}
@@ -60,11 +61,11 @@ func (t *VP8DataTunnel) SetOnData(fn func([]byte))  { t.OnData = fn }
 func (t *VP8DataTunnel) SetOnClose(fn func())       { t.OnClose = fn }
 func (t *VP8DataTunnel) SetOnPeerRestart(fn func()) { t.OnPeerRestart = fn }
 
-func NewVP8DataTunnel(track *webrtc.TrackLocalStaticSample, obf *TunnelObfuscator, logFn func(string, ...any)) *VP8DataTunnel {
+func NewVP8DataTunnel(track *webrtc.TrackLocalStaticSample, obf *tunnel.TunnelObfuscator, logFn func(string, ...any)) *VP8DataTunnel {
 	return NewVP8DataTunnelWithQueue(track, obf, logFn, sendQueueDepth)
 }
 
-func NewVP8DataTunnelWithQueue(track *webrtc.TrackLocalStaticSample, obf *TunnelObfuscator, logFn func(string, ...any), queueDepth int) *VP8DataTunnel {
+func NewVP8DataTunnelWithQueue(track *webrtc.TrackLocalStaticSample, obf *tunnel.TunnelObfuscator, logFn func(string, ...any), queueDepth int) *VP8DataTunnel {
 	if queueDepth < sendQueueDepth {
 		queueDepth = sendQueueDepth
 	}

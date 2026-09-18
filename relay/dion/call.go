@@ -17,6 +17,7 @@ import (
 	"whitelist-bypass/relay/common"
 	"whitelist-bypass/relay/headlessapi"
 	"whitelist-bypass/relay/tunnel"
+	"whitelist-bypass/relay/tunnel/rtc"
 )
 
 const (
@@ -66,7 +67,7 @@ type Call struct {
 	signaling   *SignalingClient
 	peer        *PionPeer
 	sendTrack   *webrtc.TrackLocalStaticSample
-	vp8tun      *tunnel.VP8DataTunnel
+	vp8tun      *rtc.VP8DataTunnel
 	mySessionID string
 
 	peersMu     sync.Mutex
@@ -237,14 +238,14 @@ func (c *Call) Start() error {
 	if err := sender.ReplaceTrack(track); err != nil {
 		return fmt.Errorf("ReplaceTrack: %w", err)
 	}
-	go tunnel.DrainSenderRTCP(sender)
+	go rtc.DrainSenderRTCP(sender)
 	c.cfg.LogFn("[call] role=%s attached send track to mid=%d", c.cfg.Role, sendMidIndex)
 
 	peer.PC.OnTrack(func(remoteTrack *webrtc.TrackRemote, _ *webrtc.RTPReceiver) {
 		c.cfg.LogFn("[call] OnTrack id=%q kind=%s codec=%s ssrc=%d",
 			remoteTrack.ID(), remoteTrack.Kind().String(), remoteTrack.Codec().MimeType, remoteTrack.SSRC())
 		if remoteTrack.Codec().MimeType != webrtc.MimeTypeVP8 {
-			go tunnel.DrainTrack(remoteTrack)
+			go rtc.DrainTrack(remoteTrack)
 			return
 		}
 		go c.readVP8Track(remoteTrack)
@@ -367,7 +368,7 @@ func (c *Call) Start() error {
 	if c.cfg.Role == RoleCreator {
 		fps, batch = creatorVP8FPS, creatorVP8Batch
 	}
-	c.vp8tun = tunnel.NewVP8DataTunnel(c.sendTrack, c.cfg.Obfuscator, c.cfg.LogFn)
+	c.vp8tun = rtc.NewVP8DataTunnel(c.sendTrack, c.cfg.Obfuscator, c.cfg.LogFn)
 	c.vp8tun.Start(fps, batch)
 	c.fireOnConnected(c.vp8tun)
 

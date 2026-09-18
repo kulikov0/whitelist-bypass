@@ -1,4 +1,4 @@
-package tunnel
+package rtc
 
 import (
 	"encoding/binary"
@@ -13,6 +13,7 @@ import (
 	"github.com/pion/datachannel"
 
 	"whitelist-bypass/relay/common"
+	"whitelist-bypass/relay/tunnel"
 )
 
 // Telemost chunk size
@@ -31,7 +32,7 @@ type DCTunnel struct {
 	logFn    func(string, ...any)
 	onData   func([]byte)
 	onClose  func()
-	obf      *TunnelObfuscator
+	obf      *tunnel.TunnelObfuscator
 	chunked  bool
 	readBuf  int
 
@@ -44,7 +45,7 @@ type DCTunnel struct {
 	sendMsgs  atomic.Uint64
 }
 
-func NewDCTunnel(dc *webrtc.DataChannel, obf *TunnelObfuscator, readBuf int, logFn func(string, ...any)) *DCTunnel {
+func NewDCTunnel(dc *webrtc.DataChannel, obf *tunnel.TunnelObfuscator, readBuf int, logFn func(string, ...any)) *DCTunnel {
 	t := &DCTunnel{dc: dc, obf: obf, readBuf: readBuf, logFn: logFn}
 
 	raw, err := dc.Detach()
@@ -68,13 +69,13 @@ func NewDCTunnel(dc *webrtc.DataChannel, obf *TunnelObfuscator, readBuf int, log
 	return t
 }
 
-func NewDCTunnelFromRaw(dc *webrtc.DataChannel, raw datachannel.ReadWriteCloser, obf *TunnelObfuscator, readBuf int, logFn func(string, ...any)) *DCTunnel {
+func NewDCTunnelFromRaw(dc *webrtc.DataChannel, raw datachannel.ReadWriteCloser, obf *tunnel.TunnelObfuscator, readBuf int, logFn func(string, ...any)) *DCTunnel {
 	t := &DCTunnel{dc: dc, raw: raw, obf: obf, readBuf: readBuf, logFn: logFn}
 	go t.readLoop()
 	return t
 }
 
-func NewChunkedDCTunnel(readRaw datachannel.ReadWriteCloser, writeDC *webrtc.DataChannel, obf *TunnelObfuscator, readBuf int, logFn func(string, ...any)) *DCTunnel {
+func NewChunkedDCTunnel(readRaw datachannel.ReadWriteCloser, writeDC *webrtc.DataChannel, obf *tunnel.TunnelObfuscator, readBuf int, logFn func(string, ...any)) *DCTunnel {
 	writeRaw, err := writeDC.Detach()
 	if err != nil {
 		logFn("dctunnel: write DC detach failed: %v", err)
@@ -85,7 +86,7 @@ func NewChunkedDCTunnel(readRaw datachannel.ReadWriteCloser, writeDC *webrtc.Dat
 	return t
 }
 
-func NewChunkedDCTunnelFromRaw(readRaw, writeRaw datachannel.ReadWriteCloser, obf *TunnelObfuscator, readBuf int, logFn func(string, ...any)) *DCTunnel {
+func NewChunkedDCTunnelFromRaw(readRaw, writeRaw datachannel.ReadWriteCloser, obf *tunnel.TunnelObfuscator, readBuf int, logFn func(string, ...any)) *DCTunnel {
 	t := &DCTunnel{raw: readRaw, writeRaw: writeRaw, obf: obf, readBuf: readBuf, logFn: logFn, chunked: true}
 	go t.readLoop()
 	return t
@@ -229,11 +230,11 @@ func (t *DCTunnel) sendRaw(data []byte) {
 }
 
 func (t *DCTunnel) SendData(data []byte) {
-	DecodeFrames(data, func(connID uint32, msgType byte, payload []byte) {
-		buf := make([]byte, 5+len(payload))
+	tunnel.DecodeFrames(data, func(connID uint32, msgType byte, payload []byte) {
+		buf := make([]byte, tunnel.WireHeaderLen+len(payload))
 		binary.BigEndian.PutUint32(buf[0:4], connID)
 		buf[4] = msgType
-		copy(buf[5:], payload)
+		copy(buf[tunnel.WireHeaderLen:], payload)
 		wire := buf
 		if t.obf != nil {
 			wire = t.obf.EncryptPayload(buf)

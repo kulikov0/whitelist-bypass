@@ -7,9 +7,11 @@ import (
 	"sync"
 	"time"
 
-	"github.com/kulikov0/headless-client/webrtc"
 	"whitelist-bypass/relay/common"
 	"whitelist-bypass/relay/tunnel"
+	"whitelist-bypass/relay/tunnel/rtc"
+
+	"github.com/kulikov0/headless-client/webrtc"
 )
 
 type tmPCState struct {
@@ -23,7 +25,7 @@ type TelemostClient struct {
 	pcs         map[string]*tmPCState
 	pcMu        sync.Mutex
 	sampleTrack *webrtc.TrackLocalStaticSample
-	vp8tunnel   *tunnel.VP8LegacyTunnel
+	vp8tunnel   *rtc.VP8LegacyTunnel
 	logFn       func(string, ...any)
 	LocalIP     string
 	ipReady     chan struct{}
@@ -170,7 +172,7 @@ func (c *TelemostClient) handleICEServers(data json.RawMessage, role string) {
 			c.logFn("telemost: === CONNECTED - starting VP8 tunnel ===")
 			c.logFn("telemost: sampleTrack id=%s kind=%s", c.sampleTrack.ID(), c.sampleTrack.Kind().String())
 			c.logFn("telemost: pub senders=%d receivers=%d", len(pc.GetSenders()), len(pc.GetReceivers()))
-			c.vp8tunnel = tunnel.NewVP8LegacyTunnel(c.sampleTrack, c.logFn)
+			c.vp8tunnel = rtc.NewVP8LegacyTunnel(c.sampleTrack, c.logFn)
 			c.vp8tunnel.Start(0, 0)
 			if c.OnConnected != nil {
 				c.OnConnected(c.vp8tunnel)

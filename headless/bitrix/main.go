@@ -12,10 +12,12 @@ import (
 	"sync"
 	"syscall"
 
-	headless "github.com/kulikov0/headless-client"
 	"whitelist-bypass/relay/bitrix"
 	"whitelist-bypass/relay/common"
 	"whitelist-bypass/relay/tunnel"
+	"whitelist-bypass/relay/tunnel/rtc"
+
+	headless "github.com/kulikov0/headless-client"
 )
 
 func main() {
@@ -204,7 +206,7 @@ func main() {
 		}
 		bridgeReadBuf := common.VP8BufSize
 		switch tun.(type) {
-		case *tunnel.DCTunnel, *tunnel.MultiTrackKCPTunnel:
+		case *rtc.DCTunnel, *rtc.MultiTrackKCPTunnel:
 			bridgeReadBuf = readBuf
 		}
 		activeBridge = tunnel.NewRelayBridge(tun, "creator", bridgeReadBuf, log.Printf)

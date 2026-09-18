@@ -16,11 +16,13 @@ import (
 	"sync"
 	"time"
 
-	headless "github.com/kulikov0/headless-client"
-	"github.com/kulikov0/headless-client/webrtc"
 	"whitelist-bypass/relay/common"
 	"whitelist-bypass/relay/tunnel"
+	"whitelist-bypass/relay/tunnel/rtc"
 	"whitelist-bypass/relay/wtsignal"
+
+	headless "github.com/kulikov0/headless-client"
+	"github.com/kulikov0/headless-client/webrtc"
 )
 
 const TopologyDirect = "DIRECT"
@@ -748,7 +750,7 @@ func main() {
 		ur.OnConnected = func(tun tunnel.DataTunnel) {
 			rb := tunnel.NewRelayBridge(tun, "creator", common.VP8BufSize, log.Printf)
 			rb.SetUpstreamSocks(*upstreamSocks, *upstreamUser, *upstreamPass)
-			if st, ok := tun.(*tunnel.SymmetricScreenTunnel); ok {
+			if st, ok := tun.(*rtc.SymmetricScreenTunnel); ok {
 				rb.SetOnPeerConfig(func(fps, batch, trackCount int) {
 					st.SetTrackCount(trackCount)
 					bridge.setScreenSharing(trackCount > 1)

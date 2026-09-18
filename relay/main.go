@@ -13,6 +13,7 @@ import (
 	"whitelist-bypass/relay/pion"
 	"whitelist-bypass/relay/pion/android"
 	"whitelist-bypass/relay/tunnel"
+	"whitelist-bypass/relay/tunnel/rtc"
 )
 
 type stdLogger struct{}
@@ -78,7 +79,7 @@ func main() {
 		return func(tun tunnel.DataTunnel) {
 			readBuf := common.VP8BufSize
 			switch tun.(type) {
-			case *tunnel.DCTunnel, *tunnel.MultiTrackKCPTunnel:
+			case *rtc.DCTunnel, *rtc.MultiTrackKCPTunnel:
 				readBuf = common.DCBufSize
 			}
 			bridgeMu.Lock()

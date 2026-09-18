@@ -8,13 +8,15 @@ import (
 	"sync"
 	"time"
 
+	"whitelist-bypass/relay/common"
+	"whitelist-bypass/relay/headlessapi"
+	"whitelist-bypass/relay/tunnel"
+	"whitelist-bypass/relay/tunnel/rtc"
+
 	"github.com/kulikov0/headless-client"
 	"github.com/kulikov0/headless-client/webrtc"
 	"github.com/pion/rtp"
 	"github.com/pion/rtp/codecs"
-	"whitelist-bypass/relay/common"
-	"whitelist-bypass/relay/headlessapi"
-	"whitelist-bypass/relay/tunnel"
 )
 
 type dcConn struct {
@@ -34,13 +36,13 @@ type TunnelRelay struct {
 	conns sync.Map
 
 	sampleTrack *webrtc.TrackLocalStaticSample
-	tun         *tunnel.VP8DataTunnel
+	tun         *rtc.VP8DataTunnel
 	obf         *tunnel.TunnelObfuscator
 	OnConnected func(tunnel.DataTunnel)
 
 	screenDC       *webrtc.DataChannel
 	producerScreen *webrtc.DataChannel
-	sym            *tunnel.SymmetricScreenTunnel
+	sym            *rtc.SymmetricScreenTunnel
 
 	readBufSize int
 	maxDCBuf    uint64
@@ -109,7 +111,7 @@ func (u *TunnelRelay) Init(iceServers []webrtc.ICEServer) error {
 	)
 	pc.AddTrack(audioTrack)
 	videoSender, _ := pc.AddTrack(sampleTrack)
-	go tunnel.DrainSenderRTCP(videoSender)
+	go rtc.DrainSenderRTCP(videoSender)
 
 	ordered := true
 	dcNotif, err := pc.CreateDataChannel("producerNotification", &webrtc.DataChannelInit{Ordered: &ordered})
@@ -167,14 +169,14 @@ func (u *TunnelRelay) Init(iceServers []webrtc.ICEServer) error {
 		u.modeOnce.Do(func() {
 			u.mode = "video"
 			log.Println("[relay] === MODE: VIDEO ===")
-			u.tun = tunnel.NewVP8DataTunnel(sampleTrack, u.obf, log.Printf)
+			u.tun = rtc.NewVP8DataTunnel(sampleTrack, u.obf, log.Printf)
 			u.tun.Start(0, 0)
 			var downlink tunnel.DataTunnel = u.tun
 			if u.screenDC != nil {
-				writer := tunnel.NewScreenWriter(u.obf, "screen-down", log.Printf)
+				writer := rtc.NewScreenWriter(u.obf, "screen-down", log.Printf)
 				dc := u.screenDC
 				writer.SetSend(dc.Send)
-				u.sym = tunnel.NewSymmetricScreenTunnel(u.tun, writer, u.obf, func() bool {
+				u.sym = rtc.NewSymmetricScreenTunnel(u.tun, writer, u.obf, func() bool {
 					return dc.ReadyState() == webrtc.DataChannelStateOpen
 				}, log.Printf)
 				downlink = u.sym

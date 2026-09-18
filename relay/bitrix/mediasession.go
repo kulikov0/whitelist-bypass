@@ -5,11 +5,13 @@ import (
 	"sync"
 	"time"
 
-	"github.com/kulikov0/headless-client/webrtc"
-	"github.com/pion/rtp/codecs"
 	"whitelist-bypass/relay/common"
 	"whitelist-bypass/relay/livekit"
 	"whitelist-bypass/relay/tunnel"
+	"whitelist-bypass/relay/tunnel/rtc"
+
+	"github.com/kulikov0/headless-client/webrtc"
+	"github.com/pion/rtp/codecs"
 )
 
 const (
@@ -37,9 +39,9 @@ type MediaSession struct {
 	mu           sync.Mutex
 	sendTracks   []*webrtc.TrackLocalStaticSample
 	transceivers []*webrtc.RTPTransceiver
-	vp8tun       *tunnel.MultiTrackTunnel
-	kcptun       *tunnel.MultiTrackKCPTunnel
-	dctun        *tunnel.DCTunnel
+	vp8tun       *rtc.MultiTrackTunnel
+	kcptun       *rtc.MultiTrackKCPTunnel
+	dctun        *rtc.DCTunnel
 
 	subReliableDC *webrtc.DataChannel
 	pubDCHooked   bool
@@ -74,17 +76,17 @@ func NewMediaSession(p MediaParams) (*MediaSession, error) {
 		count = 2
 	}
 	tracks := make([]*webrtc.TrackLocalStaticSample, 0, count)
-	subs := make([]*tunnel.VP8DataTunnel, 0, count)
+	subs := make([]*rtc.VP8DataTunnel, 0, count)
 	for i := 0; i < count; i++ {
 		track, err := s.newVP8Track()
 		if err != nil {
 			return nil, err
 		}
 		tracks = append(tracks, track)
-		subs = append(subs, tunnel.NewVP8DataTunnelWithQueue(track, obf, p.LogFn, tunnel.KCPCarrierQueueDepth))
+		subs = append(subs, rtc.NewVP8DataTunnelWithQueue(track, obf, p.LogFn, rtc.KCPCarrierQueueDepth))
 	}
 	s.sendTracks = tracks
-	s.vp8tun = tunnel.NewMultiTrackTunnel(subs)
+	s.vp8tun = rtc.NewMultiTrackTunnel(subs)
 	s.vp8tun.SetOnPeerRestart(func() {
 		s.p.LogFn("[bx] peer epoch changed, re-arming auto-detect")
 		s.rearmAutoDetect()
@@ -97,7 +99,7 @@ func NewMediaSession(p MediaParams) (*MediaSession, error) {
 		if remote.Codec().MimeType == webrtc.MimeTypeVP8 {
 			go s.readVP8Track(remote)
 		} else {
-			go tunnel.DrainTrack(remote)
+			go rtc.DrainTrack(remote)
 		}
 	})
 	p.Signal.SetOnDataChannel(func(dc *webrtc.DataChannel) {
@@ -161,7 +163,7 @@ func (s *MediaSession) Start() error {
 			return err
 		}
 		transceivers = append(transceivers, trx)
-		go tunnel.DrainSenderRTCP(trx.Sender())
+		go rtc.DrainSenderRTCP(trx.Sender())
 	}
 	if err := s.p.Signal.Renegotiate(); err != nil {
 		return err
@@ -251,7 +253,7 @@ func (s *MediaSession) maybeStartDCTunnel() {
 	if readBuf == 0 {
 		readBuf = common.DCBufSize
 	}
-	dctun := tunnel.NewChunkedDCTunnelFromRaw(readWrapped, writeWrapped, s.obf, readBuf, s.p.LogFn)
+	dctun := rtc.NewChunkedDCTunnelFromRaw(readWrapped, writeWrapped, s.obf, readBuf, s.p.LogFn)
 	s.mu.Lock()
 	s.dctun = dctun
 	s.mu.Unlock()
@@ -306,7 +308,7 @@ func (s *MediaSession) activate(tun tunnel.DataTunnel, payload []byte) {
 
 	var delivered tunnel.DataTunnel = tun
 	useKCP := false
-	if _, ok := tun.(*tunnel.MultiTrackTunnel); ok && !tunnel.LooksLikeRelayFrame(payload) {
+	if _, ok := tun.(*rtc.MultiTrackTunnel); ok && !tunnel.LooksLikeRelayFrame(payload) {
 		delivered = s.wrapReliable(tun)
 		useKCP = true
 	}
@@ -315,13 +317,13 @@ func (s *MediaSession) activate(tun tunnel.DataTunnel, payload []byte) {
 		s.OnConnected(delivered)
 	}
 	switch v := tun.(type) {
-	case *tunnel.DCTunnel:
+	case *rtc.DCTunnel:
 		if fwd := v.OnData(); fwd != nil {
 			fwd(payload)
 		}
-	case *tunnel.MultiTrackTunnel:
+	case *rtc.MultiTrackTunnel:
 		if useKCP {
-			if k, ok := delivered.(*tunnel.MultiTrackKCPTunnel); ok {
+			if k, ok := delivered.(*rtc.MultiTrackKCPTunnel); ok {
 				k.InjectSegment(payload)
 			}
 		} else {
@@ -331,11 +333,11 @@ func (s *MediaSession) activate(tun tunnel.DataTunnel, payload []byte) {
 }
 
 func (s *MediaSession) wrapReliable(tun tunnel.DataTunnel) tunnel.DataTunnel {
-	mt, ok := tun.(*tunnel.MultiTrackTunnel)
+	mt, ok := tun.(*rtc.MultiTrackTunnel)
 	if !ok {
 		return tun
 	}
-	wrapped := tunnel.NewMultiTrackKCPTunnel(mt, s.p.LogFn)
+	wrapped := rtc.NewMultiTrackKCPTunnel(mt, s.p.LogFn)
 	s.mu.Lock()
 	s.kcptun = wrapped
 	s.mu.Unlock()
@@ -343,7 +345,7 @@ func (s *MediaSession) wrapReliable(tun tunnel.DataTunnel) tunnel.DataTunnel {
 	return wrapped
 }
 
-func (s *MediaSession) currentVP8Tun() *tunnel.MultiTrackTunnel {
+func (s *MediaSession) currentVP8Tun() *rtc.MultiTrackTunnel {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	return s.vp8tun
@@ -419,7 +421,7 @@ func (s *MediaSession) addPublisherTrack(slot int) bool {
 		s.p.LogFn("[bx] adapt-track-count: add track slot=%d: %v", slot, err)
 		return false
 	}
-	go tunnel.DrainSenderRTCP(trx.Sender())
+	go rtc.DrainSenderRTCP(trx.Sender())
 	s.mu.Lock()
 	s.sendTracks = append(s.sendTracks, track)
 	s.transceivers = append(s.transceivers, trx)
@@ -427,7 +429,7 @@ func (s *MediaSession) addPublisherTrack(slot int) bool {
 	kcptun := s.kcptun
 	s.mu.Unlock()
 	if vp8 != nil {
-		newSub := tunnel.NewVP8DataTunnelWithQueue(track, s.obf, s.p.LogFn, tunnel.KCPCarrierQueueDepth)
+		newSub := rtc.NewVP8DataTunnelWithQueue(track, s.obf, s.p.LogFn, rtc.KCPCarrierQueueDepth)
 		vp8.AddSubTunnel(newSub)
 		if kcptun != nil {
 			kcptun.AddSession(newSub)

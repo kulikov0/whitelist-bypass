@@ -9,6 +9,7 @@ import (
 	"whitelist-bypass/relay/pion"
 	joiner "whitelist-bypass/relay/pion/headless-joiner-common"
 	"whitelist-bypass/relay/tunnel"
+	"whitelist-bypass/relay/tunnel/rtc"
 )
 
 type HeadlessCallback interface {
@@ -68,7 +69,7 @@ func makeOnConnected(socksPort int, socksUser, socksPass string, logFn func(stri
 
 		readBuf := common.VP8BufSize
 		switch tun.(type) {
-		case *tunnel.DCTunnel, *tunnel.MultiTrackKCPTunnel:
+		case *rtc.DCTunnel, *rtc.MultiTrackKCPTunnel:
 			readBuf = common.DCBufSize
 		}
 		bridge := tunnel.NewRelayBridgeWithAuth(tun, "joiner", readBuf, logFn, socksUser, socksPass)

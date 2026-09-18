@@ -12,6 +12,8 @@ const (
 	MsgUDPReply   byte = 0x07
 	MsgConfig     byte = 0x08
 	MsgConfigAck  byte = 0x09
+
+	WireHeaderLen = 4 + 1
 )
 
 const ControlConnID uint32 = 0

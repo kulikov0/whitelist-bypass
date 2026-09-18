@@ -12,13 +12,15 @@ import (
 	"sync/atomic"
 	"time"
 
+	"whitelist-bypass/relay/common"
+	tmapi "whitelist-bypass/relay/telemost"
+	"whitelist-bypass/relay/tunnel"
+	"whitelist-bypass/relay/tunnel/rtc"
+
 	"github.com/google/uuid"
 	"github.com/kulikov0/headless-client"
 	"github.com/kulikov0/headless-client/webrtc"
 	"github.com/kulikov0/headless-client/websocket"
-	"whitelist-bypass/relay/common"
-	tmapi "whitelist-bypass/relay/telemost"
-	"whitelist-bypass/relay/tunnel"
 )
 
 const (
@@ -59,7 +61,7 @@ type TelemostHeadlessJoiner struct {
 	pubPending   []webrtc.ICECandidateInit
 
 	sampleTrack *webrtc.TrackLocalStaticSample
-	vp8tunnel   *tunnel.VP8DataTunnel
+	vp8tunnel   *rtc.VP8DataTunnel
 	obf         *tunnel.TunnelObfuscator
 	vp8FPS      int
 	vp8Batch    int
@@ -500,13 +502,13 @@ func (j *TelemostHeadlessJoiner) initPC() {
 			j.reconnectAttempt.Store(0)
 			j.logFn("telemost-joiner: === VP8 TUNNEL CONNECTED ===")
 			j.Status.EmitStatus(common.StatusTunnelConnected)
-			j.vp8tunnel = tunnel.NewVP8DataTunnel(j.sampleTrack, j.obf, j.logFn)
+			j.vp8tunnel = rtc.NewVP8DataTunnel(j.sampleTrack, j.obf, j.logFn)
 			vp8tun := j.vp8tunnel
 			vp8tun.Start(j.vp8FPS, j.vp8Batch)
 			var active tunnel.DataTunnel = vp8tun
 			if j.reliable {
-				mt := tunnel.NewMultiTrackTunnel([]*tunnel.VP8DataTunnel{vp8tun})
-				active = tunnel.NewMultiTrackKCPTunnel(mt, j.logFn)
+				mt := rtc.NewMultiTrackTunnel([]*rtc.VP8DataTunnel{vp8tun})
+				active = rtc.NewMultiTrackKCPTunnel(mt, j.logFn)
 				j.logFn("telemost-joiner: per-track kcp reliability active over video tunnel")
 			}
 			if !j.configAck.acknowledged() {

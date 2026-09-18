@@ -29,7 +29,7 @@ const (
 	vp8InterframeLen = 17
 	epochFieldLen    = 4
 	keepaliveHdrLen  = vp8KeepaliveLen + epochFieldLen
-	interframeHdrLen = vp8InterframeLen + epochFieldLen
+	InterframeHdrLen = vp8InterframeLen + epochFieldLen
 )
 
 var ErrEmptySecret = errors.New("tunnel: obfuscator requires a non-empty secret")
@@ -105,7 +105,7 @@ func (o *TunnelObfuscator) keepaliveHeader() []byte {
 }
 
 func (o *TunnelObfuscator) dataHeader() []byte {
-	hdr := make([]byte, interframeHdrLen)
+	hdr := make([]byte, InterframeHdrLen)
 	copy(hdr, vp8Interframe)
 	binary.BigEndian.PutUint32(hdr[vp8InterframeLen:], o.localEpoch)
 	return hdr
@@ -179,7 +179,7 @@ func (o *TunnelObfuscator) Decode(frame []byte) DecodeResult {
 		epochOff = vp8KeepaliveLen
 		isKeepaliveFrame = true
 	case vp8Interframe[0]:
-		hdrLen = interframeHdrLen
+		hdrLen = InterframeHdrLen
 		epochOff = vp8InterframeLen
 	default:
 		return DecodeResult{}

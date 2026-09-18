@@ -1,4 +1,4 @@
-package tunnel
+package rtc
 
 import (
 	"encoding/binary"
@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"whitelist-bypass/relay/common"
+	"whitelist-bypass/relay/tunnel"
 )
 
 const (
@@ -18,7 +19,7 @@ const (
 )
 
 type ScreenWriter struct {
-	obf   *TunnelObfuscator
+	obf   *tunnel.TunnelObfuscator
 	logFn func(string, ...any)
 	label string
 
@@ -37,7 +38,7 @@ type ScreenWriter struct {
 	sent  atomic.Uint64
 }
 
-func NewScreenWriter(obf *TunnelObfuscator, label string, logFn func(string, ...any)) *ScreenWriter {
+func NewScreenWriter(obf *tunnel.TunnelObfuscator, label string, logFn func(string, ...any)) *ScreenWriter {
 	return &ScreenWriter{
 		obf:       obf,
 		logFn:     logFn,
@@ -183,7 +184,7 @@ func (w *ScreenWriter) writerLoop() {
 type SymmetricScreenTunnel struct {
 	cam         *VP8DataTunnel
 	screen      *ScreenWriter
-	obf         *TunnelObfuscator
+	obf         *tunnel.TunnelObfuscator
 	logFn       func(string, ...any)
 	screenReady func() bool
 
@@ -209,7 +210,7 @@ func (s *SymmetricScreenTunnel) SetTrackCount(n int) {
 	}
 }
 
-func NewSymmetricScreenTunnel(cam *VP8DataTunnel, screen *ScreenWriter, obf *TunnelObfuscator, screenReady func() bool, logFn func(string, ...any)) *SymmetricScreenTunnel {
+func NewSymmetricScreenTunnel(cam *VP8DataTunnel, screen *ScreenWriter, obf *tunnel.TunnelObfuscator, screenReady func() bool, logFn func(string, ...any)) *SymmetricScreenTunnel {
 	return &SymmetricScreenTunnel{cam: cam, screen: screen, obf: obf, screenReady: screenReady, logFn: logFn}
 }
 
@@ -225,7 +226,7 @@ func (s *SymmetricScreenTunnel) SendData(data []byte) {
 	if len(data) >= 8 {
 		connID = binary.BigEndian.Uint32(data[4:8])
 	}
-	if connID == ControlConnID {
+	if connID == tunnel.ControlConnID {
 		s.cam.SendData(data)
 		return
 	}

@@ -10,6 +10,7 @@ import (
 
 	"whitelist-bypass/relay/common"
 	"whitelist-bypass/relay/tunnel"
+	"whitelist-bypass/relay/tunnel/rtc"
 	"whitelist-bypass/relay/wbstream"
 )
 
@@ -158,10 +159,10 @@ func main() {
 			bridgeReadBuf := common.VP8BufSize
 			mode := "video"
 			switch tun.(type) {
-			case *tunnel.DCTunnel:
+			case *rtc.DCTunnel:
 				bridgeReadBuf = readBuf
 				mode = "dc"
-			case *tunnel.MultiTrackKCPTunnel:
+			case *rtc.MultiTrackKCPTunnel:
 				bridgeReadBuf = readBuf
 				mode = "video+kcp"
 			}

@@ -5,18 +5,20 @@ import (
 	"log"
 	"net/http"
 
-	headless "github.com/kulikov0/headless-client"
-	"github.com/kulikov0/headless-client/webrtc"
 	"whitelist-bypass/relay/common"
 	"whitelist-bypass/relay/headlessapi"
 	"whitelist-bypass/relay/tunnel"
+	"whitelist-bypass/relay/tunnel/rtc"
+
+	headless "github.com/kulikov0/headless-client"
+	"github.com/kulikov0/headless-client/webrtc"
 )
 
 type VKClient struct {
 	WSHelper
 	pc              *webrtc.PeerConnection
 	sampleTrack     *webrtc.TrackLocalStaticSample
-	vp8tunnel       *tunnel.VP8LegacyTunnel
+	vp8tunnel       *rtc.VP8LegacyTunnel
 	logFn           func(string, ...any)
 	remoteSet       bool
 	pending         []webrtc.ICECandidateInit
@@ -157,7 +159,7 @@ func (c *VKClient) createPC(config webrtc.Configuration) error {
 			c.logFn("vk: === CONNECTED - starting VP8 tunnel ===")
 			c.logFn("vk: sampleTrack id=%s kind=%s", sampleTrack.ID(), sampleTrack.Kind().String())
 			c.logFn("vk: PC senders=%d receivers=%d signalingState=%s", len(pc.GetSenders()), len(pc.GetReceivers()), pc.SignalingState().String())
-			c.vp8tunnel = tunnel.NewVP8LegacyTunnel(sampleTrack, c.logFn)
+			c.vp8tunnel = rtc.NewVP8LegacyTunnel(sampleTrack, c.logFn)
 			c.vp8tunnel.Start(0, 0)
 			if c.OnConnected != nil {
 				c.OnConnected(c.vp8tunnel)

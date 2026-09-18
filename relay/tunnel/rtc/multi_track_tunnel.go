@@ -1,4 +1,4 @@
-package tunnel
+package rtc
 
 import (
 	"encoding/binary"

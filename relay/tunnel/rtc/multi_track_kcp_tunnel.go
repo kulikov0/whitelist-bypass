@@ -1,4 +1,4 @@
-package tunnel
+package rtc
 
 import (
 	"encoding/binary"
@@ -9,6 +9,7 @@ import (
 	kcp "github.com/xtaci/kcp-go/v5"
 
 	"whitelist-bypass/relay/common"
+	"whitelist-bypass/relay/tunnel"
 )
 
 const (
@@ -20,7 +21,7 @@ const (
 	// loses only its own frame, not a two-packet frame that readVP8Track
 	// would discard whole. 1200 RTP budget - 1 VP8 descriptor - interframe
 	// header - 24 XChaCha20 nonce - 16 Poly1305 tag - 1 channel tag.
-	kcpSegmentMTU     = 1200 - 1 - interframeHdrLen - 24 - 16 - 1
+	kcpSegmentMTU     = 1200 - 1 - tunnel.InterframeHdrLen - 24 - 16 - 1
 	kcpReceiveBufSize = 128 * 1024
 	kcpStatsEvery     = 500
 
@@ -198,7 +199,7 @@ func (t *MultiTrackKCPTunnel) SendData(frame []byte) {
 	connID := binary.BigEndian.Uint32(frame[4:8])
 	msgType := frame[8]
 
-	if msgType == MsgUDP || msgType == MsgUDPReply {
+	if msgType == tunnel.MsgUDP || msgType == tunnel.MsgUDPReply {
 		t.sendRaw(connID, frame)
 		return
 	}
@@ -217,7 +218,7 @@ func (t *MultiTrackKCPTunnel) SendData(frame []byte) {
 	session := t.sessions[index]
 	t.mu.Unlock()
 
-	if msgType == MsgData {
+	if msgType == tunnel.MsgData {
 		sndCap := int(t.currentWindow.Load()) * kcpWaitSndFactor
 		for session.waitSnd() >= sndCap {
 			select {
@@ -231,7 +232,7 @@ func (t *MultiTrackKCPTunnel) SendData(frame []byte) {
 	t.sentMessages.Add(1)
 	session.send(frame)
 
-	if msgType == MsgClose {
+	if msgType == tunnel.MsgClose {
 		t.mu.Lock()
 		delete(t.connPin, connID)
 		t.mu.Unlock()

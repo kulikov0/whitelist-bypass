@@ -17,6 +17,7 @@ import (
 	"whitelist-bypass/relay/common"
 	joiner "whitelist-bypass/relay/pion/headless-joiner-common"
 	"whitelist-bypass/relay/tunnel"
+	"whitelist-bypass/relay/tunnel/rtc"
 )
 
 type cliStatusEmitter struct{}
@@ -80,7 +81,7 @@ func main() {
 	inner.OnConnected = func(tun tunnel.DataTunnel) {
 		readBuf := common.VP8BufSize
 		switch tun.(type) {
-		case *tunnel.DCTunnel, *tunnel.MultiTrackKCPTunnel:
+		case *rtc.DCTunnel, *rtc.MultiTrackKCPTunnel:
 			readBuf = common.DCBufSize
 		}
 		bridge := tunnel.NewRelayBridgeWithAuth(tun, "joiner", readBuf, log.Printf, *socksUser, *socksPass)

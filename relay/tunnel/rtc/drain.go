@@ -1,8 +1,9 @@
-package tunnel
+package rtc
 
 import (
-	"github.com/kulikov0/headless-client/webrtc"
 	"whitelist-bypass/relay/common"
+
+	"github.com/kulikov0/headless-client/webrtc"
 )
 
 func DrainSenderRTCP(sender *webrtc.RTPSender) {

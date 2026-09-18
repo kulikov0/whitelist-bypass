@@ -11,6 +11,7 @@ import (
 
 	"whitelist-bypass/relay/common"
 	"whitelist-bypass/relay/tunnel"
+	"whitelist-bypass/relay/tunnel/rtc"
 	"whitelist-bypass/relay/wbstream"
 )
 
@@ -80,7 +81,7 @@ func main() {
 	sess.OnConnected = func(tun tunnel.DataTunnel) {
 		readBuf := common.VP8BufSize
 		switch tun.(type) {
-		case *tunnel.DCTunnel, *tunnel.MultiTrackKCPTunnel:
+		case *rtc.DCTunnel, *rtc.MultiTrackKCPTunnel:
 			readBuf = common.DCBufSize
 		}
 		bridge := tunnel.NewRelayBridgeWithAuth(tun, "joiner", readBuf, log.Printf, *socksUser, *socksPass)
