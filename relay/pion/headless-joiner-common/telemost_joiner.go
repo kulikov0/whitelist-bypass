@@ -7,7 +7,6 @@ import (
 	"net"
 	"net/http"
 	"net/url"
-	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -517,7 +516,7 @@ func (j *TelemostHeadlessJoiner) initPC() {
 					trackCount = 2
 				}
 				acked, cancel := j.configAck.arm()
-				go sendVP8ConfigUntilAcked(acked, cancel, j.stopCh, active,
+				go tunnel.SendVP8ConfigUntilAcked(acked, cancel, j.stopCh, active,
 					vp8tun.FPS(), vp8tun.Batch(), trackCount, j.logFn, "telemost-joiner")
 				j.logFn("telemost-joiner: pushed vp8 config to creator fps=%d batch=%d", vp8tun.FPS(), vp8tun.Batch())
 			}
@@ -920,37 +919,16 @@ func (j *TelemostHeadlessJoiner) parseICEServersFromHello(sh map[string]interfac
 		if u, ok := sm["urls"].([]interface{}); ok {
 			for _, v := range u {
 				if vs, ok := v.(string); ok {
-					urls = append(urls, common.FixICEURL(vs))
+					urls = append(urls, vs)
 				}
 			}
 		}
-		ice := webrtc.ICEServer{URLs: urls}
+		ice := webrtc.ICEServer{URLs: common.ResolveICEHosts(urls, j.ResolveFn, j.logFn, "telemost-joiner")}
 		if u, ok := sm["username"].(string); ok && u != "" {
 			ice.Username = u
 			ice.Credential, _ = sm["credential"].(string)
 		}
 		iceServers = append(iceServers, ice)
-	}
-	resolved := make(map[string]string)
-	for i, s := range iceServers {
-		for k, u := range s.URLs {
-			host := common.ExtractICEHost(u)
-			if host == "" || net.ParseIP(host) != nil {
-				continue
-			}
-			ip, ok := resolved[host]
-			if !ok {
-				var err error
-				ip, err = j.ResolveFn(host)
-				if err != nil {
-					j.logFn("telemost-joiner: resolve ICE host %s failed: %s", common.MaskAddr(host), common.MaskError(err))
-					continue
-				}
-				resolved[host] = ip
-				j.logFn("telemost-joiner: resolved ICE host %s -> %s", host, ip)
-			}
-			iceServers[i].URLs[k] = strings.Replace(u, host, ip, 1)
-		}
 	}
 	j.iceServers = iceServers
 	for i, s := range iceServers {

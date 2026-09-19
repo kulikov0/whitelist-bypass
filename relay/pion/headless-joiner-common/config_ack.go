@@ -2,12 +2,7 @@ package joiner
 
 import (
 	"sync"
-	"time"
-
-	"whitelist-bypass/relay/tunnel"
 )
-
-const configResendPeriod = 3 * time.Second
 
 type configAckTracker struct {
 	mu        sync.Mutex
@@ -44,25 +39,5 @@ func (t *configAckTracker) mark() {
 	case <-t.acked:
 	default:
 		close(t.acked)
-	}
-}
-
-func sendVP8ConfigUntilAcked(acked, cancel <-chan struct{}, stopCh <-chan struct{}, tun tunnel.DataTunnel, fps, batch, trackCount int, logFn func(string, ...any), logPrefix string) {
-	tun.SendData(tunnel.EncodeVP8Config(fps, batch, trackCount))
-	ticker := time.NewTicker(configResendPeriod)
-	defer ticker.Stop()
-	for {
-		select {
-		case <-acked:
-			return
-		case <-cancel:
-			return
-		case <-stopCh:
-			return
-		case <-ticker.C:
-			logFn("%s: resending vp8 config fps=%d batch=%d trackCount=%d, no ack yet",
-				logPrefix, fps, batch, trackCount)
-			tun.SendData(tunnel.EncodeVP8Config(fps, batch, trackCount))
-		}
 	}
 }

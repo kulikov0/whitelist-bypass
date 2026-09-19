@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"net"
-	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -220,30 +219,8 @@ func (c *Client) Close() {
 
 func (c *Client) iceServersAsWebRTC() []webrtc.ICEServer {
 	out := make([]webrtc.ICEServer, 0, len(c.join.ICEServers))
-	resolved := make(map[string]string)
 	for _, s := range c.join.ICEServers {
-		urls := make([]string, len(s.URLs))
-		copy(urls, s.URLs)
-		if c.resolveICEHost != nil {
-			for k, u := range urls {
-				host := common.ExtractICEHost(u)
-				if host == "" || net.ParseIP(host) != nil {
-					continue
-				}
-				ip, ok := resolved[host]
-				if !ok {
-					var err error
-					ip, err = c.resolveICEHost(host)
-					if err != nil {
-						c.logFn("[lk] resolve ICE host %s failed: %v", host, err)
-						continue
-					}
-					resolved[host] = ip
-					c.logFn("[lk] resolved ICE host %s -> %s", host, ip)
-				}
-				urls[k] = strings.Replace(u, host, ip, 1)
-			}
-		}
+		urls := common.ResolveICEHosts(s.URLs, c.resolveICEHost, c.logFn, "[lk]")
 		ice := webrtc.ICEServer{URLs: urls}
 		if s.Username != "" {
 			ice.Username = s.Username

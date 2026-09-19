@@ -296,21 +296,8 @@ func (s *Session) startTunnel() {
 }
 
 func (s *Session) configPingPong(tun tunnel.DataTunnel, trackCount int) {
-	frame := tunnel.EncodeVP8Config(s.cfg.VP8FPS, s.cfg.VP8Batch, trackCount)
-	tun.SendData(frame)
-	ticker := time.NewTicker(3 * time.Second)
-	defer ticker.Stop()
-	for {
-		select {
-		case <-s.configAcked:
-			return
-		case <-s.done:
-			return
-		case <-ticker.C:
-			s.cfg.LogFn("[lk] resending vp8 config (no ack yet)")
-			tun.SendData(tunnel.EncodeVP8Config(s.cfg.VP8FPS, s.cfg.VP8Batch, trackCount))
-		}
-	}
+	tunnel.SendVP8ConfigUntilAcked(s.configAcked, nil, s.done, tun,
+		s.cfg.VP8FPS, s.cfg.VP8Batch, trackCount, s.cfg.LogFn, "[lk]")
 }
 
 func (s *Session) maybeStartDCTunnel() {

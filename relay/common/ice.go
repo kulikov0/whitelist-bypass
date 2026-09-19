@@ -56,3 +56,38 @@ func ExtractICEHost(iceURL string) string {
 	}
 	return host
 }
+
+func ResolveICEHosts(urls []string, resolveFn func(host string) (string, error), logFn func(string, ...any), logPrefix string) []string {
+	out := make([]string, len(urls))
+	copy(out, urls)
+	if resolveFn == nil {
+		return out
+	}
+	resolved := make(map[string]string)
+	for i, iceURL := range out {
+		fixed := FixICEURL(iceURL)
+		host := ExtractICEHost(fixed)
+		if host == "" || net.ParseIP(host) != nil {
+			out[i] = fixed
+			continue
+		}
+		ip, ok := resolved[host]
+		if !ok {
+			resolvedIP, err := resolveFn(host)
+			if err != nil {
+				if logFn != nil {
+					logFn("%s: resolve ICE host %s failed: %s", logPrefix, MaskAddr(host), MaskError(err))
+				}
+				out[i] = fixed
+				continue
+			}
+			ip = resolvedIP
+			resolved[host] = ip
+			if logFn != nil {
+				logFn("%s: resolved ICE host %s -> %s", logPrefix, host, ip)
+			}
+		}
+		out[i] = strings.Replace(fixed, host, ip, 1)
+	}
+	return out
+}

@@ -268,20 +268,8 @@ func (s *MediaSession) maybeStartDCTunnel() {
 }
 
 func (s *MediaSession) configPingPong(tun tunnel.DataTunnel, trackCount int) {
-	tun.SendData(tunnel.EncodeVP8Config(s.p.FPS, s.p.Batch, trackCount))
-	ticker := time.NewTicker(3 * time.Second)
-	defer ticker.Stop()
-	for {
-		select {
-		case <-s.configAcked:
-			return
-		case <-s.stopCh:
-			return
-		case <-ticker.C:
-			s.p.LogFn("[bx] resending vp8 config no ack yet")
-			tun.SendData(tunnel.EncodeVP8Config(s.p.FPS, s.p.Batch, trackCount))
-		}
-	}
+	tunnel.SendVP8ConfigUntilAcked(s.configAcked, nil, s.stopCh, tun,
+		s.p.FPS, s.p.Batch, trackCount, s.p.LogFn, "[bx]")
 }
 
 func (s *MediaSession) fireOnConnected(tun tunnel.DataTunnel) {

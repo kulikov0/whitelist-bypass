@@ -1,6 +1,9 @@
 package tunnel
 
-import "encoding/binary"
+import (
+	"encoding/binary"
+	"time"
+)
 
 const (
 	MsgConnect    byte = 0x01
@@ -14,6 +17,8 @@ const (
 	MsgConfigAck  byte = 0x09
 
 	WireHeaderLen = 4 + 1
+
+	configResendPeriod = 3 * time.Second
 )
 
 const ControlConnID uint32 = 0
@@ -62,6 +67,26 @@ func DecodeVP8Config(payload []byte) (fps, batch, trackCount int, ok bool) {
 		trackCount = int(binary.BigEndian.Uint16(payload[4:6]))
 	}
 	return fps, batch, trackCount, true
+}
+
+func SendVP8ConfigUntilAcked(acked, cancel, stopCh <-chan struct{}, tun DataTunnel, fps, batch, trackCount int, logFn func(string, ...any), logPrefix string) {
+	tun.SendData(EncodeVP8Config(fps, batch, trackCount))
+	ticker := time.NewTicker(configResendPeriod)
+	defer ticker.Stop()
+	for {
+		select {
+		case <-acked:
+			return
+		case <-cancel:
+			return
+		case <-stopCh:
+			return
+		case <-ticker.C:
+			logFn("%s: resending vp8 config fps=%d batch=%d trackCount=%d, no ack yet",
+				logPrefix, fps, batch, trackCount)
+			tun.SendData(EncodeVP8Config(fps, batch, trackCount))
+		}
+	}
 }
 
 func EncodeFrame(connID uint32, msgType byte, payload []byte) []byte {

@@ -557,11 +557,13 @@ func (h *VKHeadlessJoiner) handleConnection(msg map[string]interface{}) {
 func (h *VKHeadlessJoiner) initPC() {
 	var iceServers []webrtc.ICEServer
 	if len(h.joinResp.StunServer.URLs) > 0 {
-		iceServers = append(iceServers, webrtc.ICEServer{URLs: h.joinResp.StunServer.URLs})
+		iceServers = append(iceServers, webrtc.ICEServer{
+			URLs: common.ResolveICEHosts(h.joinResp.StunServer.URLs, h.ResolveFn, h.logFn, "vk-joiner"),
+		})
 	}
 	if len(h.joinResp.TurnServer.URLs) > 0 {
 		iceServers = append(iceServers, webrtc.ICEServer{
-			URLs:       h.joinResp.TurnServer.URLs,
+			URLs:       common.ResolveICEHosts(h.joinResp.TurnServer.URLs, h.ResolveFn, h.logFn, "vk-joiner"),
 			Username:   h.joinResp.TurnServer.Username,
 			Credential: h.joinResp.TurnServer.Credential,
 		})
@@ -658,7 +660,7 @@ func (h *VKHeadlessJoiner) initPC() {
 			vp8tun := h.vp8tunnel
 			if !h.configAck.acknowledged() {
 				acked, cancel := h.configAck.arm()
-				go sendVP8ConfigUntilAcked(acked, cancel, h.stopCh, vp8tun,
+				go tunnel.SendVP8ConfigUntilAcked(acked, cancel, h.stopCh, vp8tun,
 					vp8tun.FPS(), vp8tun.Batch(), trackCount, h.logFn, "vk-joiner")
 				h.logFn("vk-joiner: pushed vp8 config to creator fps=%d batch=%d trackCount=%d", vp8tun.FPS(), vp8tun.Batch(), trackCount)
 			}

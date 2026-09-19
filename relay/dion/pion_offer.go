@@ -2,10 +2,10 @@ package dion
 
 import (
 	"fmt"
-	"net"
-	"strings"
 
 	"github.com/kulikov0/headless-client/webrtc"
+
+	"whitelist-bypass/relay/common"
 )
 
 type TransceiverPlan struct {
@@ -60,61 +60,15 @@ type PionPeer struct {
 }
 
 func ResolveICEServerHosts(entries []ICEServerEntry, resolveFn func(host string) (string, error), logFn func(string, ...any)) []ICEServerEntry {
-	if resolveFn == nil {
-		return entries
-	}
-	resolved := make(map[string]string)
 	out := make([]ICEServerEntry, 0, len(entries))
 	for _, entry := range entries {
-		urls := make([]string, len(entry.URLs))
-		copy(urls, entry.URLs)
-		for k, raw := range urls {
-			host := extractICEHost(raw)
-			if host == "" {
-				continue
-			}
-			ip, ok := resolved[host]
-			if !ok {
-				resolvedIP, err := resolveFn(host)
-				if err != nil {
-					if logFn != nil {
-						logFn("[dion] resolve ICE host %s failed: %v", host, err)
-					}
-					continue
-				}
-				ip = resolvedIP
-				resolved[host] = ip
-				if logFn != nil {
-					logFn("[dion] resolved ICE host %s -> %s", host, ip)
-				}
-			}
-			urls[k] = strings.Replace(raw, host, ip, 1)
-		}
-		out = append(out, ICEServerEntry{URLs: urls, Username: entry.Username, Credential: entry.Credential})
+		out = append(out, ICEServerEntry{
+			URLs:       common.ResolveICEHosts(entry.URLs, resolveFn, logFn, "[dion]"),
+			Username:   entry.Username,
+			Credential: entry.Credential,
+		})
 	}
 	return out
-}
-
-// extractICEHost pulls the hostname out of a stun:/turn:/turns: URL. Returns
-// "" if the URL has no host or the host is already an IP literal.
-func extractICEHost(raw string) string {
-	value := raw
-	for _, prefix := range []string{"stun:", "turn:", "turns:"} {
-		value = strings.TrimPrefix(value, prefix)
-	}
-	if idx := strings.Index(value, "?"); idx >= 0 {
-		value = value[:idx]
-	}
-	if idx := strings.LastIndex(value, ":"); idx >= 0 {
-		value = value[:idx]
-	}
-	if value == "" {
-		return ""
-	}
-	if net.ParseIP(value) != nil {
-		return ""
-	}
-	return value
 }
 
 func IceServerEntriesToWebRTC(entries []ICEServerEntry) []webrtc.ICEServer {

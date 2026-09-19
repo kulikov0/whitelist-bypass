@@ -93,9 +93,9 @@ dump_logs() {
 
 dump_kick_logs() {
     log "  --- creator kick events ---"
-    grep -nE '\[kick\]|kicked previous|active call guest|kick failed|usersAnswered|kicked stale peer|kick_one' "$CREATOR_LOG" 2>/dev/null | tail -20 >&2
+    grep -nE '\[kick\]|kicked previous|active call guest|kick failed|usersAnswered|kicked stale peer|kick_one|Kicking|kick confirmed|Ghost participant|waiting_room_update|Participant joined|Participant left' "$CREATOR_LOG" 2>/dev/null | tail -30 >&2
     log "  --- joiner A kick-watch ---"
-    grep -nE 'subws2|pull config|kick-detect|kicked from|shutting down|chatUserLeave|you_kicked|server kicked' "$_log_a" 2>/dev/null | tail -20 >&2
+    grep -nE 'subws2|pull config|kick-detect|kicked from|shutting down|chatUserLeave|you_kicked|server kicked|close 4004|reconnect attempt|before reconnect|TUNNEL CONNECTED' "$_log_a" 2>/dev/null | tail -30 >&2
 }
 
 start_joiner() {
