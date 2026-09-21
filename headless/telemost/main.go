@@ -995,12 +995,10 @@ func main() {
 	}
 
 	log.Println("[config] Fetching live config from Telemost bundle...")
-	cfg, err := fetchConfig()
-	if err != nil {
-		log.Fatalf("[config] %v", err)
-	}
+	cfg := fetchConfig()
 
 	var connInfo *ConnInfo
+	var err error
 	if *tmLink != "" {
 		connInfo, err = joinExistingConference(cookieStr, *tmLink, cfg)
 		if err != nil {

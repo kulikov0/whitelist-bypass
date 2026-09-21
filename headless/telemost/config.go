@@ -1,14 +1,33 @@
 package main
 
 import (
+	"bytes"
 	"encoding/json"
-	"fmt"
 	"io"
 	"log"
 	"net/http"
 	"regexp"
+	"strings"
 
 	"github.com/kulikov0/headless-client"
+)
+
+const (
+	fallbackAppVersion = "211.2.0"
+	fallbackSDKVersion = "5.28.0"
+)
+
+var (
+	globalParamsRe = regexp.MustCompile(`var globalParams\s*=\s*`)
+	appBundleRe    = regexp.MustCompile(`src="([^"]+app\.js)"`)
+
+	sdkVersionPatterns = []*regexp.Regexp{
+		regexp.MustCompile(`buildInfo\s*=\s*\{version:"(\d+\.\d+\.\d+)"`),
+		regexp.MustCompile(`goloom-sdk@(\d+\.\d+\.\d+)`),
+		regexp.MustCompile(`goloom_sdk_version:"(\d+\.\d+\.\d+)"`),
+		regexp.MustCompile(`"@yandex-video-platform/goloom-sdk":"(\d+\.\d+\.\d+)"`),
+		regexp.MustCompile(`goloom-sdk\.(\d+\.\d+\.\d+)\.js`),
+	}
 )
 
 type TMConfig struct {
@@ -16,66 +35,84 @@ type TMConfig struct {
 	SDKVersion string
 }
 
-func fetchConfig() (TMConfig, error) {
+func fetchConfig() TMConfig {
 	var cfg TMConfig
 
 	page, err := tmHttpGet("https://telemost.yandex.ru/", headless.DestDocument)
 	if err != nil {
-		return cfg, fmt.Errorf("failed to fetch telemost.yandex.ru: %w", err)
+		log.Printf("[config] failed to fetch telemost.yandex.ru: %v", err)
+		return finishConfig(cfg)
 	}
 
-	stateRe := regexp.MustCompile(`<script[^>]*id="preloaded-state"[^>]*>([\s\S]*?)</script>`)
-	stateMatch := stateRe.FindSubmatch(page)
-	if stateMatch == nil {
-		return cfg, fmt.Errorf("preloaded-state not found in page")
-	}
-	var state struct {
-		Config struct {
-			AppVersion string `json:"appVersion"`
-		} `json:"config"`
-		AppVersion string `json:"appVersion"`
-	}
-	if err := json.Unmarshal(stateMatch[1], &state); err != nil {
-		return cfg, fmt.Errorf("failed to parse preloaded-state: %w", err)
-	}
-	cfg.AppVersion = state.Config.AppVersion
-	if cfg.AppVersion == "" {
-		cfg.AppVersion = state.AppVersion
-	}
-	if cfg.AppVersion == "" {
-		return cfg, fmt.Errorf("appVersion not found in preloaded-state")
-	}
-	log.Printf("[config] appVersion=%s", cfg.AppVersion)
+	cfg.AppVersion = parseAppVersion(page)
+	cfg.SDKVersion = fetchSDKVersion(page)
+	return finishConfig(cfg)
+}
 
-	bundleRe := regexp.MustCompile(`https://telemost\.yastatic\.net/s3/telemost/_/main\.\w+\.[a-f0-9]+\.js`)
-	bundleURL := bundleRe.FindString(string(page))
+func parseAppVersion(page []byte) string {
+	loc := globalParamsRe.FindIndex(page)
+	if loc == nil {
+		log.Println("[config] globalParams not found in page")
+		return ""
+	}
+	var params struct {
+		Version string `json:"version"`
+	}
+	if err := json.NewDecoder(bytes.NewReader(page[loc[1]:])).Decode(&params); err != nil {
+		log.Printf("[config] failed to parse globalParams: %v", err)
+		return ""
+	}
+	if params.Version == "" {
+		log.Println("[config] version not found in globalParams")
+	}
+	return params.Version
+}
+
+func fetchSDKVersion(page []byte) string {
+	bundleURL := parseBundleURL(page)
 	if bundleURL == "" {
-		return cfg, fmt.Errorf("main bundle URL not found in page")
+		log.Println("[config] app bundle URL not found in page")
+		return ""
 	}
 	log.Printf("[config] Found bundle: %s", bundleURL)
 
 	bundle, err := tmHttpGet(bundleURL, headless.DestScript)
 	if err != nil {
-		return cfg, fmt.Errorf("failed to fetch bundle: %w", err)
+		log.Printf("[config] failed to fetch bundle: %v", err)
+		return ""
 	}
-
-	sdkVerPatterns := []*regexp.Regexp{
-		regexp.MustCompile(`goloom_sdk_version:"(\d+\.\d+\.\d+)"`),
-		regexp.MustCompile(`"@yandex-video-platform/goloom-sdk":"(\d+\.\d+\.\d+)"`),
-		regexp.MustCompile(`goloom-sdk\.(\d+\.\d+\.\d+)\.js`),
-	}
-	for _, re := range sdkVerPatterns {
-		if m := re.FindSubmatch(bundle); m != nil {
-			cfg.SDKVersion = string(m[1])
-			break
+	for _, pattern := range sdkVersionPatterns {
+		if match := pattern.FindSubmatch(bundle); match != nil {
+			return string(match[1])
 		}
 	}
-	if cfg.SDKVersion == "" {
-		return cfg, fmt.Errorf("goloom SDK version not found in bundle")
-	}
+	log.Println("[config] goloom SDK version not found in bundle")
+	return ""
+}
 
+func parseBundleURL(page []byte) string {
+	match := appBundleRe.FindSubmatch(page)
+	if match == nil {
+		return ""
+	}
+	bundleURL := string(match[1])
+	if strings.HasPrefix(bundleURL, "//") {
+		bundleURL = "https:" + bundleURL
+	}
+	return bundleURL
+}
+
+func finishConfig(cfg TMConfig) TMConfig {
+	if cfg.AppVersion == "" {
+		cfg.AppVersion = fallbackAppVersion
+		log.Printf("[config] page scrape missed appVersion, using pinned %s", fallbackAppVersion)
+	}
+	if cfg.SDKVersion == "" {
+		cfg.SDKVersion = fallbackSDKVersion
+		log.Printf("[config] bundle scrape missed sdkVersion, using pinned %s", fallbackSDKVersion)
+	}
 	log.Printf("[config] app=%s sdk=%s", cfg.AppVersion, cfg.SDKVersion)
-	return cfg, nil
+	return cfg
 }
 
 func tmHttpGet(endpoint string, dest headless.RequestDest) ([]byte, error) {
