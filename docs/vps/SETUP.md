@@ -47,7 +47,7 @@ sudo apt install libfuse2
 
 Скачиваем приложение по ссылке, полученной ранее
 ```shell
-wget https://github.com/kulikov0/whitelist-bypass/releases/download/v0.4.3/WhitelistBypass.Creator-0.4.3-x86_64.AppImage && \
+wget https://github.com/kulikov0/whitelist-bypass/releases/download/v0.4.4/WhitelistBypass.Creator-0.4.4-x86_64.AppImage && \
 mv *.AppImage creator.AppImage
 ```
 
