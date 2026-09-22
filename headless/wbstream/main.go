@@ -67,59 +67,14 @@ func main() {
 		log.Fatalf("[auth] --cookies is required")
 	}
 	rawCookies := common.LoadCookies(*cookiesPath)
-	deviceID := common.CookieValue(rawCookies, "__wb_device_id")
-	cookieHeader := common.FilterCookies(rawCookies, wbstream.WBStreamCookieAllowlist)
-	persistEntries := func(updates map[string]string) {
-		if len(updates) == 0 {
-			return
-		}
-		if werr := common.UpdateCookieFile(*cookiesPath, updates); werr != nil {
-			log.Printf("[auth] warn: persist cookie file entries: %v", werr)
-			return
-		}
-		rawCookies = common.LoadCookies(*cookiesPath)
-		cookieHeader = common.FilterCookies(rawCookies, wbstream.WBStreamCookieAllowlist)
-		log.Printf("[auth] persisted %d cookie file entries", len(updates))
-	}
-	refreshBearer := func() (string, error) {
-		if deviceID == "" {
-			return "", fmt.Errorf("cookies file is missing __wb_device_id, re-export via creator-app")
-		}
-		token, rotated, refreshErr := wbstream.RefreshAccessToken(nil, cookieHeader, deviceID)
-		if refreshErr != nil {
-			return "", refreshErr
-		}
-		updates := make(map[string]string, len(rotated)+1)
-		for name, value := range rotated {
-			updates[name] = value
-		}
-		updates[wbstream.AccessTokenEntry] = token
-		persistEntries(updates)
-		return token, nil
-	}
 	bearer := common.CookieValue(rawCookies, wbstream.AccessTokenEntry)
 	if bearer == "" {
-		var refreshErr error
-		bearer, refreshErr = refreshBearer()
-		if refreshErr != nil {
-			common.EmitAuthErrorFor(refreshErr)
-			log.Fatalf("[auth] slide-v3 refresh: %v", refreshErr)
-		}
-		log.Printf("[auth] bearer minted via slide-v3 len=%d", len(bearer))
-	} else {
-		log.Printf("[auth] bearer loaded from cookies file len=%d", len(bearer))
+		common.EmitAuthError(common.AuthErrorSessionExpired)
+		log.Fatalf("[auth] cookies file has no %s, log into WB Stream in the creator app and export the cookies again", wbstream.AccessTokenEntry)
 	}
+	log.Printf("[auth] bearer loaded from cookies file len=%d", len(bearer))
 	requestedRoom := wbstream.ParseRoomID(*roomFlag)
-	roomID, roomToken, accessToken, serverURL, err := wbstream.AuthAsLoggedIn(nil, cookieHeader, bearer, requestedRoom, *displayName)
-	if err != nil {
-		log.Printf("[auth] stored bearer rejected: %v, refreshing", err)
-		bearer, err = refreshBearer()
-		if err != nil {
-			common.EmitAuthErrorFor(err)
-			log.Fatalf("[auth] slide-v3 refresh: %v", err)
-		}
-		roomID, roomToken, accessToken, serverURL, err = wbstream.AuthAsLoggedIn(nil, cookieHeader, bearer, requestedRoom, *displayName)
-	}
+	roomID, roomToken, accessToken, serverURL, err := wbstream.AuthAsLoggedIn(nil, bearer, requestedRoom, *displayName)
 	if err != nil {
 		common.EmitAuthErrorFor(err)
 		log.Fatalf("[auth] %v", err)
@@ -206,15 +161,9 @@ func main() {
 		}
 		time.Sleep(3 * time.Second)
 
-		_, newRoomToken, newAccessToken, newServerURL, err := wbstream.AuthAsLoggedIn(nil, cookieHeader, bearer, roomID, *displayName)
+		_, newRoomToken, newAccessToken, newServerURL, err := wbstream.AuthAsLoggedIn(nil, bearer, roomID, *displayName)
 		if err != nil {
-			log.Printf("[rejoin] auth failed: %v, refreshing bearer", err)
-			newBearer, refreshErr := refreshBearer()
-			if refreshErr != nil {
-				log.Printf("[rejoin] slide-v3 refresh failed: %v, retrying in 5s", refreshErr)
-			} else {
-				bearer = newBearer
-			}
+			log.Printf("[rejoin] auth failed: %v, retrying in 5s", err)
 			time.Sleep(5 * time.Second)
 			continue
 		}

@@ -239,7 +239,7 @@ export class TabManager {
     return this.cookies.buildCookiesZip();
   }
 
-  setWBStreamDeviceId(id: string): Promise<void> {
-    return this.cookies.setWBStreamDeviceId(id);
+  setWBStreamAccessToken(token: string): Promise<void> {
+    return this.cookies.setWBStreamAccessToken(token);
   }
 }

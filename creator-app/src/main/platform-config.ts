@@ -11,13 +11,12 @@ import {
   VK_AUTH_COOKIE,
   YANDEX_AUTH_COOKIE,
   DION_AUTH_COOKIE,
-  WBSTREAM_AUTH_COOKIE,
+  WBSTREAM_ACCESS_TOKEN_COOKIE,
 } from '../constants';
 
 export interface PlatformConfig {
   tunnelMode: TunnelMode;
   authCookie: string;
-  refreshCookie: string;
   loginUrl: string;
   cookieDomains: string[];
   platformName: string;
@@ -31,7 +30,6 @@ export const PLATFORM_CONFIG: Partial<Record<Platform, PlatformConfig>> = {
   [Platform.VK]: {
     tunnelMode: TunnelMode.HeadlessVK,
     authCookie: VK_AUTH_COOKIE,
-    refreshCookie: VK_AUTH_COOKIE,
     loginUrl: VK_LOGIN_URL,
     cookieDomains: VK_COOKIE_DOMAINS,
     platformName: 'VK',
@@ -43,7 +41,6 @@ export const PLATFORM_CONFIG: Partial<Record<Platform, PlatformConfig>> = {
   [Platform.Telemost]: {
     tunnelMode: TunnelMode.HeadlessTelemost,
     authCookie: YANDEX_AUTH_COOKIE,
-    refreshCookie: YANDEX_AUTH_COOKIE,
     loginUrl: YANDEX_LOGIN_URL,
     cookieDomains: YANDEX_COOKIE_DOMAINS,
     platformName: 'Yandex',
@@ -55,7 +52,6 @@ export const PLATFORM_CONFIG: Partial<Record<Platform, PlatformConfig>> = {
   [Platform.Dion]: {
     tunnelMode: TunnelMode.HeadlessDion,
     authCookie: DION_AUTH_COOKIE,
-    refreshCookie: DION_AUTH_COOKIE,
     loginUrl: DION_LOGIN_URL,
     cookieDomains: DION_COOKIE_DOMAINS,
     platformName: 'DION',
@@ -66,14 +62,13 @@ export const PLATFORM_CONFIG: Partial<Record<Platform, PlatformConfig>> = {
   },
   [Platform.WBStream]: {
     tunnelMode: TunnelMode.HeadlessWBStream,
-    authCookie: WBSTREAM_AUTH_COOKIE,
-    refreshCookie: 'wbx-refresh',
+    authCookie: WBSTREAM_ACCESS_TOKEN_COOKIE,
     loginUrl: WBSTREAM_LOGIN_URL,
     cookieDomains: WBSTREAM_COOKIE_DOMAINS,
     platformName: 'WB Stream',
     binarySubdir: 'wbstream',
     binaryBase: 'headless-wbstream-creator',
     joinFlag: '--room',
-    loginWaitCookies: ['x_wbaas_token', 'wbx-refresh', 'wbx-validation-key'],
+    loginWaitCookies: [WBSTREAM_ACCESS_TOKEN_COOKIE],
   },
 };

@@ -21,8 +21,3 @@ export function extractTaggedCallLink(msg: string, platform: Platform): { tabId:
   if (!match) return null;
   return { tabId: match[1].trim(), link: match[2].trim() };
 }
-
-export function parseWBDeviceId(msg: string): string | null {
-  const match = msg.match(/\[WB_DEVICE_ID\]\s+(\S+)/);
-  return match ? match[1] : null;
-}

@@ -8,6 +8,8 @@ import {
   YANDEX_COOKIE_DOMAINS,
   DION_COOKIE_DOMAINS,
   WBSTREAM_COOKIE_DOMAINS,
+  WBSTREAM_API_ORIGIN,
+  WBSTREAM_ACCESS_TOKEN_COOKIE,
   BITRIX_COOKIE_DOMAINS,
   BITRIX_SESSION_COOKIE,
   BITRIX_AUTH_NET_HOST,
@@ -242,25 +244,28 @@ export class CookieStore {
     return buildStoredZip(entries);
   }
 
-  async setWBStreamDeviceId(id: string): Promise<void> {
-    if (!id) return;
+  async setWBStreamAccessToken(token: string): Promise<void> {
+    if (!token) return;
     const ses = session.fromPartition(SESSION_PARTITION);
-    const existing = await ses.cookies.get({ url: 'https://stream.wb.ru/', name: '__wb_device_id' });
-    if (existing.length > 0 && existing[0].value === id) return;
+    const existing = await ses.cookies.get({
+      url: `${WBSTREAM_API_ORIGIN}/`,
+      name: WBSTREAM_ACCESS_TOKEN_COOKIE,
+    });
+    if (existing.length > 0 && existing[0].value === token) return;
     try {
       await ses.cookies.set({
-        url: 'https://stream.wb.ru/',
-        name: '__wb_device_id',
-        value: id,
+        url: `${WBSTREAM_API_ORIGIN}/`,
+        name: WBSTREAM_ACCESS_TOKEN_COOKIE,
+        value: token,
         domain: 'stream.wb.ru',
         path: '/',
         secure: true,
         httpOnly: false,
         expirationDate: Math.floor(Date.now() / 1000) + 60 * 60 * 24 * 365 * 5,
       });
-      console.log(`[wb-device-id] persisted ${id}`);
+      console.log(`[wb-access-token] persisted len=${token.length}`);
     } catch (err) {
-      console.log(`[wb-device-id] failed to persist:`, err);
+      console.log(`[wb-access-token] failed to persist:`, err);
     }
   }
 }

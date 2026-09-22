@@ -157,10 +157,10 @@ export class HeadlessLauncher {
     const dionCookieFile = platform === Platform.Dion ? new DionCookieFile(cookiesPath) : null;
     const fileHasSession =
       platform === Platform.WBStream
-        ? await cookieFileHasCookie(cookiesPath, config.refreshCookie)
+        ? await cookieFileHasCookie(cookiesPath, config.authCookie)
         : dionCookieFile != null && (await dionCookieFile.hasSession());
     let cookies = await this.cookies.getCookiesForDomains(config.cookieDomains);
-    const needsLogin = !fileHasSession && !cookies.some((c) => c.name === config.refreshCookie);
+    const needsLogin = !fileHasSession && !cookies.some((c) => c.name === config.authCookie);
     if (needsLogin) {
       if (tab.isBot) {
         const reply = `Please log into ${config.platformName} in the creator app first, then try again.`;
@@ -219,7 +219,6 @@ export class HeadlessLauncher {
         if (dionCookieFile) await dionCookieFile.clearTokens();
         if (platform === Platform.WBStream) await fs.unlink(cookiesPath).catch(() => {});
         await this.cookies.clearAuthCookies(config.cookieDomains, config.authCookie);
-        await this.cookies.clearAuthCookies(config.cookieDomains, config.refreshCookie);
         if (this.host.getTab(tabId) === tab) this.startHeadless(tabId, platform, args);
       }
     });

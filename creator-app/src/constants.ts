@@ -24,11 +24,12 @@ export const VK_LOGIN_URL = 'https://vk.ru/';
 export const YANDEX_LOGIN_URL = 'https://passport.yandex.ru/auth?retpath=https%3A%2F%2Ftelemost.yandex.ru%2F';
 export const DION_LOGIN_URL = 'https://dion.vc/login';
 export const WBSTREAM_LOGIN_URL = 'https://stream.wb.ru/login';
+export const WBSTREAM_API_ORIGIN = 'https://stream.wb.ru';
 export const BITRIX_LOGIN_URL = 'https://www.bitrix24.ru/';
 export const VK_AUTH_COOKIE = 'remixsid';
 export const YANDEX_AUTH_COOKIE = 'Session_id';
 export const DION_AUTH_COOKIE = 'vc-refresh-token';
-export const WBSTREAM_AUTH_COOKIE = 'x_wbaas_token';
+export const WBSTREAM_ACCESS_TOKEN_COOKIE = 'wb_access_token';
 export const BITRIX_SESSION_COOKIE = 'BITRIX_SM_UIDH';
 export const BITRIX_AUTH_NET_HOST = 'https://auth2.bitrix24.net';
 

@@ -60,7 +60,7 @@
 3. Нажмите **Export Cookies** - получится `cookies.zip` с файлами `cookies-vk.json`, `cookies-yandex.json`, `cookies-wbstream.json`, `cookies-dion.json`, `cookies-bitrix.json`
 4. Распакуйте и скопируйте нужные файлы на сервер
 
-`cookies-dion.json`, `cookies-bitrix.json` и `cookies-wbstream.json` creator перезаписывает на ходу, когда обновляет токен или перелогинивается - эти три файла должны быть доступны процессу на запись. VK и Telemost только читаются.
+`cookies-dion.json` и `cookies-bitrix.json` creator перезаписывает на ходу, когда обновляет токен или перелогинивается - эти два файла должны быть доступны процессу на запись. VK, Telemost и WB Stream только читаются.
 
 > **Bitrix:** портал, зарегистрированный на `gmail.com`, падает при создании звонка с `403 invalid signature`. Заводите портал на другой почте: проверены `mail.ru` и `onetimemail.com.au`.
 
@@ -363,7 +363,7 @@ curl -L https://raw.githubusercontent.com/kulikov0/whitelist-bypass/main/headles
 # отредактируйте .env: VK_TOKEN, VK_GROUP_ID, VK_USER_IDS
 # положите рядом cookies-vk.json, cookies-yandex.json, cookies-wbstream.json, cookies-dion.json, cookies-bitrix.json
 # (для платформ, которые не используете - создайте файл с содержимым `[]`)
-sudo chown 999:999 cookies-dion.json cookies-bitrix.json cookies-wbstream.json
+sudo chown 999:999 cookies-dion.json cookies-bitrix.json
 docker compose up -d
 docker compose logs -f
 ```
@@ -393,7 +393,7 @@ docker compose pull && docker compose up -d
 | `ALLOW_PRIVATE_DST` | нет | `0` | `--allow-private-dst`, включается значением `1` |
 | `ALLOW_LOOPBACK_DST` | нет | `0` | `--allow-loopback`, включается значением `1`. В контейнере это loopback самого контейнера, если не задан `network_mode: host` |
 
-> `cookies-dion.json`, `cookies-bitrix.json` и `cookies-wbstream.json` монтируются без `:ro` - creator перезаписывает их при обновлении токена, поэтому на хосте они должны принадлежать uid 999 (иначе `save cookies failed: permission denied`). VK и Telemost только читаются.
+> `cookies-dion.json` и `cookies-bitrix.json` монтируются без `:ro` - creator перезаписывает их при обновлении токена, поэтому на хосте они должны принадлежать uid 999 (иначе `save cookies failed: permission denied`). VK, Telemost и WB Stream монтируются с `:ro`.
 
 > Если WebRTC-туннель не доходит через сетевой бридж Docker (UDP может отбрасываться), добавьте в `docker-compose.yml` строку `network_mode: host` под сервисом `bot`.
 
