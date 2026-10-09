@@ -9,6 +9,8 @@ enum DefaultsKeys {
     static let socksAuthMode = "socksAuthMode"
     static let socksUser = "socksUser"
     static let socksPass = "socksPass"
+    static let autoSocksUser = "autoSocksUser"
+    static let autoSocksPass = "autoSocksPass"
     static let vp8Fps = "vp8Fps"
     static let vp8Batch = "vp8Batch"
     static let dualTrack = "dualTrack"
@@ -62,6 +64,18 @@ struct AppDefaults {
     static var socksPass: String {
         get { defaults.string(forKey: DefaultsKeys.socksPass) ?? "" }
         set { defaults.set(newValue, forKey: DefaultsKeys.socksPass) }
+    }
+
+    /// Generated once on first launch and never rotated - an imported Happ profile has to
+    /// stay valid across app restarts.
+    static var autoSocksUser: String {
+        get { defaults.string(forKey: DefaultsKeys.autoSocksUser) ?? "" }
+        set { defaults.set(newValue, forKey: DefaultsKeys.autoSocksUser) }
+    }
+
+    static var autoSocksPass: String {
+        get { defaults.string(forKey: DefaultsKeys.autoSocksPass) ?? "" }
+        set { defaults.set(newValue, forKey: DefaultsKeys.autoSocksPass) }
     }
 
     static var vp8Fps: Int {
