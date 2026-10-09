@@ -11,6 +11,8 @@ import (
 	"os/exec"
 	"os/signal"
 	"path/filepath"
+	"runtime"
+	"strconv"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -433,11 +435,13 @@ func waitForLink(path string, timeout time.Duration) (string, error) {
 		if err == nil && len(data) > 0 {
 			line := strings.TrimSpace(strings.SplitN(string(data), "\n", 2)[0])
 			if line != "" {
+				os.Remove(path)
 				return line, nil
 			}
 		}
 		time.Sleep(500 * time.Millisecond)
 	}
+	os.Remove(path)
 	return "", fmt.Errorf("creator did not write link within %s", timeout)
 }
 
@@ -478,7 +482,12 @@ func (b *bot) handleClose(peerID int64, id string) {
 		b.sendMessage(peerID, fmt.Sprintf("Session %s not found", id), mainMenuKeyboard())
 		return
 	}
-	sess.cmd.Process.Signal(syscall.SIGTERM)
+	if runtime.GOOS == "windows" {
+		args := []string{"/T", "/F", "/PID", strconv.Itoa(sess.cmd.Process.Pid)}
+		exec.Command("TASKKILL", args...).Start()
+	} else {
+		sess.cmd.Process.Signal(syscall.SIGTERM)
+	}
 	b.sendMessage(peerID, fmt.Sprintf("Session %s closed", id), mainMenuKeyboard())
 }
 
