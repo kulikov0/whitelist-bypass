@@ -1,0 +1,142 @@
+#!/bin/bash
+#
+# Restart a headless creator when its tunnel has gone deaf.
+#
+# The failure this catches is not a crash. The process stays up, the control
+# channel keeps accepting CONNECTs, the log keeps moving - but no payload ever
+# arrives. On the phone it looks like "connected, no internet". systemd sees a
+# healthy process and does nothing, which is exactly why Restart=always is not
+# enough on its own.
+#
+# The signal is in the relay log. Every tunnelled connection normally logs
+# "first read <N>B" once the first payload bytes come back. A connection that
+# opens and then never reads anything logs "EOF with no data read" instead.
+# On a healthy tunnel the second line simply does not occur - measured over
+# 13.5 h of live traffic, including a night with the phone asleep (~40
+# connections per 5 min), the count was exactly zero. So any EOF at all is
+# already an anomaly and the thresholds below can afford to be low.
+#
+# Usage:  creator-watchdog [instance]
+# Config: /etc/whitelist-bypass/watchdog-<instance>.conf (see watchdog.conf.example)
+#
+set -u
+
+INSTANCE="${1:-}"
+CONF="${WATCHDOG_CONF:-/etc/whitelist-bypass/watchdog${INSTANCE:+-$INSTANCE}.conf}"
+
+# --- rules -------------------------------------------------------------------
+#
+# Three of them. All three need pending empty connections, so a phone that is
+# simply switched off or in airplane mode never triggers anything.
+#
+# STALL     - no first read at all and >= 5 empty in 90 s. Catches the abrupt
+#             collapse where every open connection dies at once (one live
+#             incident: 107 empty connections in a single minute, against 0 in
+#             the preceding 25).
+# QUIET     - no first read at all and >= 2 empty in 150 s. Backstop for a
+#             tunnel that dies quietly rather than all at once.
+# DEGRADED  - >= 25 empty AND more empty than first reads in 120 s, with no
+#             requirement that reads hit zero. This is the one that took a
+#             second incident to discover: reads and EOFs came interleaved
+#             (12 reads vs 26 empty in one minute, 37 vs 27 in the next), so
+#             STALL never fired - there were always reads in its window - and
+#             QUIET sat waiting for its window to drain. Recovery took eight
+#             minutes. With this rule the same log trips at 2.5 minutes.
+#             The threshold is deliberately high: a short burst of EOFs is
+#             normal when the client reconnects, and restarting then would kick
+#             out the user who just came back.
+#
+STALL_WINDOW_SEC=90
+STALL_MIN_EOF=5
+QUIET_WINDOW_SEC=150
+QUIET_MIN_EOF=2
+DEGRADED_WINDOW_SEC=120
+DEGRADED_MIN_EOF=25
+
+GRACE_SEC=180       # leave a freshly started service alone
+COOLDOWN_SEC=300    # minimum gap between restarts
+MAX_STREAK=3        # give up after this many restarts that changed nothing
+
+LOG=""
+SERVICE=""
+
+# shellcheck source=/dev/null
+[ -r "$CONF" ] && . "$CONF"
+
+LOG="${LOG:-/var/log/wbstream${INSTANCE:+-$INSTANCE}.log}"
+SERVICE="${SERVICE:-wbstream${INSTANCE:+@$INSTANCE}.service}"
+
+STATE="${STATE_DIR:-/var/lib/creator-watchdog}/${INSTANCE:-default}"
+LAST="$STATE/last-restart"
+STREAK="$STATE/streak"
+mkdir -p "$STATE"
+[ -f "$STREAK" ] || echo 0 > "$STREAK"
+
+NOW=$(date +%s)
+
+systemctl is-active --quiet "$SERVICE" || exit 0
+[ -r "$LOG" ] || exit 0
+
+# grace period: let the service come up and produce some log
+STARTED=$(systemctl show -p ActiveEnterTimestamp --value "$SERVICE")
+if [ -n "$STARTED" ]; then
+    S=$(date -d "$STARTED" +%s 2>/dev/null || echo 0)
+    [ "$S" -gt 0 ] && [ $((NOW - S)) -lt "$GRACE_SEC" ] && exit 0
+fi
+
+# The log timestamps are "2026/08/01 07:26:24", which sorts lexicographically,
+# so the windows are plain string comparisons - no date parsing per line.
+STALL_T=$(date -d "$STALL_WINDOW_SEC seconds ago" +'%Y/%m/%d %H:%M:%S')
+QUIET_T=$(date -d "$QUIET_WINDOW_SEC seconds ago" +'%Y/%m/%d %H:%M:%S')
+DEGRADED_T=$(date -d "$DEGRADED_WINDOW_SEC seconds ago" +'%Y/%m/%d %H:%M:%S')
+
+# logrotate with copytruncate leaves the live log empty for a moment, and a
+# watchdog that only reads it goes blind right after each rotation. Reading the
+# previous file too costs nothing - the time filter drops whatever is too old.
+# QUIET_T is the widest window, so everything is cut against that.
+STATS=$( { tail -n 20000 "$LOG.1" 2>/dev/null; tail -n 20000 "$LOG"; } | awk \
+    -v qt="$QUIET_T" -v st="$STALL_T" -v dt="$DEGRADED_T" '
+    # timestamped lines only - anything else has no place on the time axis
+    $1 !~ /^[0-9][0-9][0-9][0-9]\/[0-9][0-9]\/[0-9][0-9]$/ { next }
+    {
+        ts = $1 " " $2
+        if (ts < qt) next
+        stall    = (ts >= st)
+        degraded = (ts >= dt)
+    }
+    /first read/            { qr++; if (stall) sr++; if (degraded) dr++ }
+    /EOF with no data read/ { qe++; if (stall) se++; if (degraded) de++ }
+    END { print (sr+0), (se+0), (qr+0), (qe+0), (dr+0), (de+0) }
+')
+read -r SR SE QR QE DR DE <<< "$STATS"
+
+# payload is flowing somewhere in the widest window - clear the failure counter
+[ "$QR" -gt 0 ] && echo 0 > "$STREAK"
+
+REASON=""
+if [ "$SR" -eq 0 ] && [ "$SE" -ge "$STALL_MIN_EOF" ]; then
+    REASON="stalled: $SE empty, 0 reads in ${STALL_WINDOW_SEC}s"
+elif [ "$QR" -eq 0 ] && [ "$QE" -ge "$QUIET_MIN_EOF" ]; then
+    REASON="quiet: $QE empty, 0 reads in ${QUIET_WINDOW_SEC}s"
+elif [ "$DE" -ge "$DEGRADED_MIN_EOF" ] && [ "$DE" -gt "$DR" ]; then
+    REASON="degraded: $DE empty vs $DR reads in ${DEGRADED_WINDOW_SEC}s"
+fi
+
+# Silence with no empty connections means the client is asleep, off, or in
+# airplane mode. Not our business.
+[ -z "$REASON" ] && exit 0
+
+if [ -f "$LAST" ] && [ $((NOW - $(cat "$LAST"))) -lt "$COOLDOWN_SEC" ]; then
+    exit 0
+fi
+
+N=$(cat "$STREAK")
+if [ "$N" -ge "$MAX_STREAK" ]; then
+    logger -t creator-watchdog "$REASON, but $N restarts changed nothing - client side, leaving it alone"
+    exit 0
+fi
+
+logger -t creator-watchdog "$REASON - restarting $SERVICE ($((N+1))/$MAX_STREAK)"
+echo "$NOW" > "$LAST"
+echo $((N + 1)) > "$STREAK"
+systemctl restart "$SERVICE"
