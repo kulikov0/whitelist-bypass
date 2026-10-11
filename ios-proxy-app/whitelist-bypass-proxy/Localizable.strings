@@ -36,3 +36,9 @@
 "proxy_url_copied" = "Proxy URL copied";
 "toast_happ_params_copied" = "v2ray URL copied";
 "dc_mode_not_supported" = "DC mode not supported - falling back to video";
+
+"settings_keepalive" = "Keepalive, ms (min / max)";
+"skip_video_title" = "No video track (DC)";
+"skip_video_sub" = "Payload rides the data channel. Saves battery, but the platform may reject a participant without video - turn this off if the tunnel does not come up.";
+"disable_mdns_title" = "No mDNS candidates";
+"disable_mdns_sub" = "Local .local addresses are not used in this setup.";

@@ -256,6 +256,35 @@ struct SettingsView: View {
                             .multilineTextAlignment(.trailing)
                             .frame(width: 80)
                     }
+                    HStack {
+                        Text(NSLocalizedString("settings_keepalive", comment: ""))
+                        Spacer()
+                        TextField("", value: $proxyManager.keepaliveMinMs, format: .number)
+                            .keyboardType(.numberPad)
+                            .multilineTextAlignment(.trailing)
+                            .frame(width: 60)
+                        Text("/").foregroundColor(.secondary)
+                        TextField("", value: $proxyManager.keepaliveMaxMs, format: .number)
+                            .keyboardType(.numberPad)
+                            .multilineTextAlignment(.trailing)
+                            .frame(width: 60)
+                    }
+                    Toggle(isOn: $proxyManager.skipVideoTrack) {
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text(NSLocalizedString("skip_video_title", comment: ""))
+                            Text(NSLocalizedString("skip_video_sub", comment: ""))
+                                .font(.caption)
+                                .foregroundColor(.secondary)
+                        }
+                    }
+                    Toggle(isOn: $proxyManager.disableMdns) {
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text(NSLocalizedString("disable_mdns_title", comment: ""))
+                            Text(NSLocalizedString("disable_mdns_sub", comment: ""))
+                                .font(.caption)
+                                .foregroundColor(.secondary)
+                        }
+                    }
                     Toggle(isOn: $proxyManager.dualTrack) {
                         VStack(alignment: .leading, spacing: 2) {
                             Text(NSLocalizedString("vp8_dual_track_title", comment: ""))
