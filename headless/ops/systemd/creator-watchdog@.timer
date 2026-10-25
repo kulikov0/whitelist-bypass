@@ -1,0 +1,13 @@
+[Unit]
+Description=Run the tunnel watchdog for %i every minute
+
+[Timer]
+# The watchdog's own windows decide how fast it reacts; ticking every minute
+# just keeps the granularity below that. OnBootSec is longer than the grace
+# period so a reboot never trips it.
+OnBootSec=5min
+OnUnitActiveSec=1min
+AccuracySec=15s
+
+[Install]
+WantedBy=timers.target

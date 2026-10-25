@@ -1,0 +1,6 @@
+[Unit]
+Description=Tunnel watchdog for creator instance %i
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/bin/creator-watchdog %i

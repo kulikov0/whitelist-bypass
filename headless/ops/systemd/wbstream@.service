@@ -1,0 +1,20 @@
+[Unit]
+Description=Headless WB Stream creator (%i)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+EnvironmentFile=/etc/whitelist-bypass/wbstream-%i.env
+ExecStart=/usr/local/bin/headless-wbstream-creator \
+    --cookies ${WB_COOKIES} \
+    --write-file ${WB_LINK_FILE} \
+    --resources ${WB_RESOURCES} \
+    $WB_FLAGS
+Restart=always
+RestartSec=5
+StandardOutput=append:/var/log/wbstream-%i.log
+StandardError=append:/var/log/wbstream-%i.log
+
+[Install]
+WantedBy=multi-user.target
