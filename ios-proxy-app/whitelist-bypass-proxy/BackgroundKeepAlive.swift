@@ -9,7 +9,10 @@ class BackgroundKeepAlive {
         try? session.setCategory(.playback, mode: .default, options: .mixWithOthers)
         try? session.setActive(true)
 
-        let sampleRate = 44100.0
+        // Silence needs no studio quality: 8kHz holds the session open just as
+        // well. That is 5.5x fewer samples for the audio path to chew through
+        // around the clock while the tunnel is up.
+        let sampleRate = 8000.0
         let channels: UInt32 = 1
         let samples = Int(sampleRate)
         let bufferSize = samples * 2
