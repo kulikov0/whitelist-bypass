@@ -17,6 +17,7 @@ final class VPNController: ObservableObject {
     @Published var logs: [String] = []
     @Published var lastError: String?
     @Published var captchaURL: String?
+    @Published var loginLink: String?
 
     var appState: AppState?
 
@@ -55,6 +56,7 @@ final class VPNController: ObservableObject {
         Log.app.log("connect requested: platform=\(config.platform.rawValue, privacy: .public) room=\(config.roomId, privacy: .public)")
         lastError = nil
         captchaURL = nil
+        loginLink = nil
         relayUp = false
         connectedSince = nil
         logs = []
@@ -105,6 +107,7 @@ final class VPNController: ObservableObject {
         refreshStatus()
         if phase == .disconnected || phase == .failed {
             captchaURL = nil
+            loginLink = nil
         }
     }
 
@@ -123,6 +126,7 @@ final class VPNController: ObservableObject {
         case .disconnected, .invalid:
             relayUp = false
             connectedSince = nil
+            loginLink = nil
             uptimeText = "00:00:00"
             phase = lastStatus.hasPrefix(GoStatus.error) ? .failed : .disconnected
         @unknown default:
@@ -172,6 +176,7 @@ final class VPNController: ObservableObject {
             statusDetail = msg.isEmpty ? NSLocalizedString("status_error", comment: "") : msg
             lastError = statusDetail
             captchaURL = nil
+            loginLink = nil
             relayUp = false
             return
         }
@@ -184,8 +189,20 @@ final class VPNController: ObservableObject {
             }
             return
         }
+        if status.hasPrefix("LOGIN_LINK:") {
+            if phase == .connecting || phase == .connected {
+                loginLink = String(status.dropFirst("LOGIN_LINK:".count))
+                statusDetail = NSLocalizedString("status_blink_login", comment: "")
+            } else {
+                loginLink = nil
+            }
+            return
+        }
         if captchaURL != nil, status != "CAPTCHA" {
             captchaURL = nil
+        }
+        if loginLink != nil {
+            loginLink = nil
         }
         switch status {
         case GoStatus.tunnelConnected:
