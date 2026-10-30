@@ -13,6 +13,7 @@ enum JoinerFactory {
         case .dion: return DionJoiner()
         case .vk: return VKJoiner()
         case .bitrix: return BitrixJoiner()
+        case .blink: return BlinkJoiner()
         }
     }
 }
@@ -106,6 +107,31 @@ struct BitrixJoiner: HeadlessJoiner {
         sendJoinParams(Params(
             joinLink: config.url,
             displayName: config.displayName,
+            tunnelMode: config.tunnelMode.rawValue,
+            vp8Fps: config.vp8Fps,
+            vp8Batch: config.vp8Batch,
+            dualTrack: config.dualTrack,
+            reliable: config.reliable
+        ))
+    }
+}
+
+struct BlinkJoiner: HeadlessJoiner {
+    private struct Params: Encodable {
+        let joinLink: String
+        let cookiesPath: String
+        let tunnelMode: String
+        let vp8Fps: Int
+        let vp8Batch: Int
+        let dualTrack: Bool
+        let reliable: Bool
+    }
+
+    func start(_ config: TunnelConfig, callback: IosHeadlessCallbackProtocol) {
+        IosStartBlinkHeadless(config.socksPort, config.socksUser, config.socksPass, callback)
+        sendJoinParams(Params(
+            joinLink: config.url,
+            cookiesPath: AppIdentifiers.blinkCookiesURL?.path ?? "",
             tunnelMode: config.tunnelMode.rawValue,
             vp8Fps: config.vp8Fps,
             vp8Batch: config.vp8Batch,

@@ -39,7 +39,7 @@ func main() {
 		log.Fatal("--cookies is required")
 	}
 	if *loginFlag {
-		if err := blink.LoginToFile(*cookiesPath, nil, common.EmitStatus, log.Printf); err != nil {
+		if err := blink.LoginToFile(*cookiesPath, nil, nil, common.EmitStatus, log.Printf); err != nil {
 			log.Fatalf("[login] %v", err)
 		}
 		return

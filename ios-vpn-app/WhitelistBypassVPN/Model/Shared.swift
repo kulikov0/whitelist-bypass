@@ -17,6 +17,10 @@ enum AppIdentifiers {
     static var relayLogURL: URL? {
         FileManager.default.containerURL(forSecurityApplicationGroupIdentifier: appGroup)?.appendingPathComponent("relay.log")
     }
+
+    static var blinkCookiesURL: URL? {
+        FileManager.default.containerURL(forSecurityApplicationGroupIdentifier: appGroup)?.appendingPathComponent("cookies-blink.json")
+    }
 }
 
 enum VpnConfig {
@@ -70,16 +74,19 @@ enum CallPlatform: String {
     case wbstream
     case dion
     case bitrix
+    case blink
 
     static let wbstreamPrefix = "wbstream://"
     static let dionPrefix = "dion://"
     static let dionEventInfix = "dion.vc/event/"
     static let bitrixMarker = "/video/"
+    static let blinkPrefix = "blink://"
 
     static func detect(url: String) -> CallPlatform {
         if url.hasPrefix(dionPrefix) || url.contains(dionEventInfix) { return .dion }
         if url.hasPrefix(wbstreamPrefix) { return .wbstream }
         if url.contains("bitrix24") && url.contains(bitrixMarker) { return .bitrix }
+        if url.hasPrefix(blinkPrefix) || (url.contains("blinkmap.com") && url.contains("/join/")) { return .blink }
         if url.contains("telemost") { return .telemost }
         return .vk
     }
@@ -108,6 +115,7 @@ enum CallPlatform: String {
         case .wbstream: return "WB"
         case .dion: return "DN"
         case .bitrix: return "BX"
+        case .blink: return "BL"
         }
     }
 }

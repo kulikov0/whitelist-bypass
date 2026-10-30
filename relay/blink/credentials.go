@@ -54,8 +54,8 @@ func SaveTokens(path string, tokens TokenPair) error {
 	})
 }
 
-func LoginToFile(path string, client *http.Client, statusFn func(string), logFn func(string, ...any)) error {
-	tokens, err := waitForLogin(client, statusFn, logFn)
+func LoginToFile(path string, client *http.Client, stop <-chan struct{}, statusFn func(string), logFn func(string, ...any)) error {
+	tokens, err := waitForLogin(client, stop, statusFn, logFn)
 	if err != nil {
 		return err
 	}
@@ -175,7 +175,7 @@ func accessTokenFresh(tokens TokenPair) bool {
 	return tokens.Token != "" && expiresIn > accessTokenRefreshMargin
 }
 
-func waitForLogin(client *http.Client, statusFn func(string), logFn func(string, ...any)) (TokenPair, error) {
+func waitForLogin(client *http.Client, stop <-chan struct{}, statusFn func(string), logFn func(string, ...any)) (TokenPair, error) {
 	for {
 		request, err := RequestLogin(client)
 		if err != nil {
@@ -190,7 +190,11 @@ func waitForLogin(client *http.Client, statusFn func(string), logFn func(string,
 		}
 		renewAt := time.Now().Add(time.Duration(float64(ttl)*loginRenewFraction) * time.Second)
 		for time.Now().Before(renewAt) {
-			time.Sleep(loginPollInterval)
+			select {
+			case <-stop:
+				return TokenPair{}, ErrLoginCancelled
+			case <-time.After(loginPollInterval):
+			}
 			tokens, err := PollLogin(client, request.WAT)
 			if err == nil {
 				return tokens, nil

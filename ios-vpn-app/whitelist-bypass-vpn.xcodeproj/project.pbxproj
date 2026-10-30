@@ -38,6 +38,7 @@
 		0000000000000000000000B4 /* PacketFlowSink.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0000000000000000000000A4 /* PacketFlowSink.swift */; };
 		0000000000000000000000B5 /* CallRow.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0000000000000000000000A5 /* CallRow.swift */; };
 		0000000000000000000000B6 /* HeroRing.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0000000000000000000000A6 /* HeroRing.swift */; };
+		0000000000000000000000B7 /* BlinkLoginScreen.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0000000000000000000000A7 /* BlinkLoginScreen.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -110,6 +111,7 @@
 		0000000000000000000000A4 /* PacketFlowSink.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PacketFlowSink.swift; sourceTree = "<group>"; };
 		0000000000000000000000A5 /* CallRow.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CallRow.swift; sourceTree = "<group>"; };
 		0000000000000000000000A6 /* HeroRing.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HeroRing.swift; sourceTree = "<group>"; };
+		0000000000000000000000A7 /* BlinkLoginScreen.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BlinkLoginScreen.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -218,6 +220,7 @@
 				000000000000000000000055 /* Sheets.swift */,
 				000000000000000000000056 /* FeatureSheets.swift */,
 				000000000000000000000059 /* CaptchaWebView.swift */,
+				0000000000000000000000A7 /* BlinkLoginScreen.swift */,
 				000000000000000000000052 /* QRScanner.swift */,
 			);
 			path = Components;
@@ -355,6 +358,7 @@
 				000000000000000000000077 /* CaptchaWebView.swift in Sources */,
 				0000000000000000000000B5 /* CallRow.swift in Sources */,
 				0000000000000000000000B6 /* HeroRing.swift in Sources */,
+				0000000000000000000000B7 /* BlinkLoginScreen.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

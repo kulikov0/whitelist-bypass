@@ -51,6 +51,7 @@
 "suggest_name_wbstream" = "WB Stream";
 "suggest_name_dion" = "DION";
 "suggest_name_bitrix" = "Bitrix";
+"suggest_name_blink" = "Blink";
 
 "destination_menu_rename" = "Rename";
 "destination_menu_delete" = "Delete";
@@ -149,3 +150,10 @@
 "status_error" = "Error";
 "status_captcha" = "Action required (captcha)";
 "status_solve_captcha" = "Solve the captcha:";
+"status_blink_login" = "Action required (Blink login)";
+
+"blink_login_title" = "Log in to Blink";
+"blink_login_subtitle" = "Scan the QR with the Blink app on another phone, open the link on this phone, or copy it and send it to whoever has Blink.";
+"blink_login_open" = "Open in Blink";
+"blink_login_copy" = "Copy link";
+"blink_login_copied" = "Login link copied";

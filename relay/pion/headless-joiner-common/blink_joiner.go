@@ -215,7 +215,7 @@ func (j *BlinkHeadlessJoiner) loadCredentials() (*blink.Credentials, error) {
 }
 
 func (j *BlinkHeadlessJoiner) login() error {
-	return blink.LoginToFile(j.cookiesPath, j.httpClient, j.Status.EmitStatus, j.logFn)
+	return blink.LoginToFile(j.cookiesPath, j.httpClient, j.stopCh, j.Status.EmitStatus, j.logFn)
 }
 
 func (j *BlinkHeadlessJoiner) waitBeforeRetry(attempt int) bool {

@@ -48,6 +48,14 @@ struct ContentView: View {
                 CaptchaScreen(url: url) { vpn.disconnect() }
             }
         }
+        .fullScreenCover(isPresented: Binding(
+            get: { vpn.loginLink != nil },
+            set: { if !$0 { vpn.loginLink = nil } }
+        )) {
+            if let link = vpn.loginLink {
+                BlinkLoginScreen(link: link) { vpn.disconnect() }
+            }
+        }
     }
 }
 
