@@ -221,7 +221,7 @@ func StartBlinkHeadless(socksPort int, socksUser, socksPass string, callback Hea
 	callback.OnStatus(common.StatusReady)
 }
 
-func StartVKHeadless(socksPort int, socksUser, socksPass string, joinLink, displayName, tunnelMode string, vp8Fps, vp8Batch int, dualTrack bool, callback HeadlessCallback) {
+func StartVKHeadless(socksPort int, socksUser, socksPass string, joinLink, displayName, tunnelMode string, vp8Fps, vp8Batch int, dualTrack, reliable bool, callback HeadlessCallback) {
 	StopHeadless()
 
 	activeHeadless.Lock()
@@ -255,11 +255,12 @@ func StartVKHeadless(socksPort int, socksUser, socksPass string, joinLink, displ
 				params["vp8Batch"] = vp8Batch
 			}
 			params["dualTrack"] = dualTrack
+			params["reliable"] = reliable
 			if patched, err := json.Marshal(params); err == nil {
 				authJSON = string(patched)
 			}
 		}
-		logFn("vk-auth: sending join params to relay mode=%s vp8Fps=%d vp8Batch=%d dualTrack=%v", tunnelMode, vp8Fps, vp8Batch, dualTrack)
+		logFn("vk-auth: sending join params to relay mode=%s vp8Fps=%d vp8Batch=%d dualTrack=%v reliable=%v", tunnelMode, vp8Fps, vp8Batch, dualTrack, reliable)
 		vkJoiner.RunWithParams(authJSON)
 	}()
 }

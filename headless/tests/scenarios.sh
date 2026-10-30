@@ -125,6 +125,8 @@ start_joiner() {
 start_stdin_joiner() {
     _tunnel_mode=video
     [ "$1" = "dc" ] && _tunnel_mode=dc
+    _reliable=false
+    [ "$1" = "kcp" ] && _reliable=true
     JOINER_FIFO=$(mktemp -u -t e2e-joiner-fifo.XXXXXX)
     mkfifo "$JOINER_FIFO"
     $JOINER_WRAP "$PF_JOINER" --mode "$PF_JOINER_MODE" --socks-host "$JOINER_SOCKS_HOST" --socks-port "$JOINER_PORT" <"$JOINER_FIFO" >"$JOINER_LOG" 2>&1 &
@@ -135,12 +137,25 @@ start_stdin_joiner() {
     answer_resolves "$JOINER_LOG" &
     RESOLVER_PID=$!
     track_pid "$RESOLVER_PID"
-    printf 'AUTH:{"joinLink":"%s","displayName":"e2e","tunnelMode":"%s"}\n' "$JOIN_LINK" "$_tunnel_mode" >&3
+    printf 'AUTH:{"joinLink":"%s","displayName":"e2e","tunnelMode":"%s","reliable":%s}\n' "$JOIN_LINK" "$_tunnel_mode" "$_reliable" >&3
     open_captcha "$JOINER_LOG"
 }
 
 joiner_up() {
     wait_socks "$1" "$CONNECT_TIMEOUT" && probe_ready "$1" "$PROBE_TIMEOUT"
+}
+
+kcp_active() {
+    [ "$1" = "kcp" ] || return 0
+    if ! grep -q 'kcptunnel: init' "$JOINER_LOG"; then
+        log "  joiner carried traffic without kcp"
+        return 1
+    fi
+    if ! tail -n +"$(($2 + 1))" "$CREATOR_LOG" | grep -q 'kcptunnel: init'; then
+        log "  creator carried traffic without kcp"
+        return 1
+    fi
+    return 0
 }
 
 sc_connect() {
@@ -165,13 +180,17 @@ sc_params() {
         return
     fi
     log "=== $_name ==="
+    _creator_mark=$(wc -l <"$CREATOR_LOG")
     start_joiner "$_variant"
-    if joiner_up "$JOINER_PORT"; then
-        record PASS "$_name"
-    else
+    if ! joiner_up "$JOINER_PORT"; then
         log "  joiner did not carry traffic"
         dump_logs
         record FAIL "$_name"
+    elif ! kcp_active "$_variant" "$_creator_mark"; then
+        dump_logs
+        record FAIL "$_name"
+    else
+        record PASS "$_name"
     fi
 }
 

@@ -134,7 +134,7 @@ function spawnJoiner(settings: JoinerSettings): { ok: boolean; error?: string } 
   if (settings.dualTrack && (settings.platform === 'vk' || settings.platform === 'wbstream' || settings.platform === 'bitrix' || settings.platform === 'blink')) {
     args.push('--dual-track');
   }
-  if (settings.reliable && (settings.platform === 'wbstream' || settings.platform === 'bitrix' || settings.platform === 'telemost' || settings.platform === 'blink')) {
+  if (settings.reliable && (settings.platform === 'vk' || settings.platform === 'wbstream' || settings.platform === 'bitrix' || settings.platform === 'telemost' || settings.platform === 'blink')) {
     args.push('--reliable');
   }
 

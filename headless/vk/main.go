@@ -750,7 +750,11 @@ func main() {
 		ur.SetObfuscator(obf)
 		ur.SetUpstreamSocks(*upstreamSocks, *upstreamUser, *upstreamPass)
 		ur.OnConnected = func(tun tunnel.DataTunnel) {
-			rb := tunnel.NewRelayBridge(tun, "creator", common.VP8BufSize, log.Printf)
+			bridgeReadBuf := common.VP8BufSize
+			if _, ok := tun.(*rtc.MultiTrackKCPTunnel); ok {
+				bridgeReadBuf = readBuf
+			}
+			rb := tunnel.NewRelayBridge(tun, "creator", bridgeReadBuf, log.Printf)
 			rb.SetUpstreamSocks(*upstreamSocks, *upstreamUser, *upstreamPass)
 			if st, ok := tun.(*rtc.SymmetricScreenTunnel); ok {
 				rb.SetOnPeerConfig(func(fps, batch, trackCount int) {

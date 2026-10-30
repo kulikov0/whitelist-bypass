@@ -153,6 +153,7 @@ struct VKJoiner: HeadlessJoiner {
             config.vp8Fps,
             config.vp8Batch,
             config.dualTrack,
+            config.reliable,
             callback
         )
     }

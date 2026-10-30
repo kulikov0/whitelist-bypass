@@ -54,6 +54,7 @@ type VKHeadlessAuthParams struct {
 	VP8FPS          int    `json:"vp8Fps"`
 	VP8Batch        int    `json:"vp8Batch"`
 	DualTrack       bool   `json:"dualTrack"`
+	Reliable        bool   `json:"reliable"`
 }
 
 type VKJoinResponse struct {
@@ -102,6 +103,7 @@ type VKHeadlessJoiner struct {
 	vp8FPS         int
 	vp8Batch       int
 	dualTrack      bool
+	reliable       bool
 	remoteSet      bool
 	pendingICE     []webrtc.ICECandidateInit
 
@@ -141,10 +143,11 @@ func (h *VKHeadlessJoiner) RunWithParams(jsonParams string) {
 	h.vp8FPS = params.VP8FPS
 	h.vp8Batch = params.VP8Batch
 	// h.dualTrack = params.DualTrack // temporarily disabled for VK joiners
+	h.reliable = params.Reliable
 	h.logFn("vk-joiner: auth params received")
 	h.logFn("vk-joiner: obf key-source=%q localEpoch=0x%08x", params.JoinLink, obf.LocalEpoch())
-	h.logFn("vk-joiner:   appVersion=%s protocolVersion=%s vp8Fps=%d vp8Batch=%d",
-		params.AppVersion, params.ProtocolVersion, params.VP8FPS, params.VP8Batch)
+	h.logFn("vk-joiner:   appVersion=%s protocolVersion=%s vp8Fps=%d vp8Batch=%d reliable=%v",
+		params.AppVersion, params.ProtocolVersion, params.VP8FPS, params.VP8Batch, params.Reliable)
 
 	h.Status.EmitStatus(common.StatusConnecting)
 	if err := h.runOnce(); err != nil {
@@ -647,7 +650,11 @@ func (h *VKHeadlessJoiner) initPC() {
 			h.vp8tunnel.Start(h.vp8FPS, h.vp8Batch)
 			var downlink tunnel.DataTunnel = h.vp8tunnel
 			trackCount := 1
-			if h.dualTrack {
+			if h.reliable {
+				mt := rtc.NewMultiTrackTunnel([]*rtc.VP8DataTunnel{h.vp8tunnel})
+				downlink = rtc.NewMultiTrackKCPTunnel(mt, h.logFn)
+				h.logFn("vk-joiner: per-track kcp reliability active over video tunnel")
+			} else if h.dualTrack {
 				writer := rtc.NewScreenWriter(h.obf, "screen-up", h.logFn)
 				writer.Reconfigure(h.vp8tunnel.FPS(), h.vp8tunnel.Batch())
 				writer.SetSend(h.producerScreen.send)
@@ -660,7 +667,7 @@ func (h *VKHeadlessJoiner) initPC() {
 			vp8tun := h.vp8tunnel
 			if !h.configAck.acknowledged() {
 				acked, cancel := h.configAck.arm()
-				go tunnel.SendVP8ConfigUntilAcked(acked, cancel, h.stopCh, vp8tun,
+				go tunnel.SendVP8ConfigUntilAcked(acked, cancel, h.stopCh, downlink,
 					vp8tun.FPS(), vp8tun.Batch(), trackCount, h.logFn, "vk-joiner")
 				h.logFn("vk-joiner: pushed vp8 config to creator fps=%d batch=%d trackCount=%d", vp8tun.FPS(), vp8tun.Batch(), trackCount)
 			}

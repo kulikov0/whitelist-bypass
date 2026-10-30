@@ -86,6 +86,7 @@ func (h *VKHeadlessJoiner) runWithAuth(jsonParams string) {
 		TunnelMode  string `json:"tunnelMode"`
 		VP8FPS      int    `json:"vp8Fps"`
 		VP8Batch    int    `json:"vp8Batch"`
+		Reliable    bool   `json:"reliable"`
 		// DualTrack   bool   `json:"dualTrack"` // VK does not support dual track
 	}
 	if err := json.Unmarshal([]byte(jsonParams), &params); err != nil {
@@ -112,6 +113,7 @@ func (h *VKHeadlessJoiner) runWithAuth(jsonParams string) {
 		authParams["vp8Fps"] = params.VP8FPS
 		authParams["vp8Batch"] = params.VP8Batch
 		// authParams["dualTrack"] = params.DualTrack
+		authParams["reliable"] = params.Reliable
 		if patched, err := json.Marshal(authParams); err == nil {
 			authJSON = string(patched)
 		}
