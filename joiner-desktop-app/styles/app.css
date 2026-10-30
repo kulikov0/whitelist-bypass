@@ -30,6 +30,16 @@ main { flex: 1; display: grid; grid-template-columns: 1fr 1fr; gap: 12px; paddin
 section.form { display: flex; flex-direction: column; gap: 10px; }
 section.log-wrap { display: flex; flex-direction: column; min-height: 0; }
 section.log-wrap h2 { font-size: 12px; margin: 0 0 6px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.05em; display: flex; align-items: center; }
+.login-card {
+  display: flex; flex-direction: column; align-items: center; gap: 8px;
+  margin-bottom: 12px; padding: 12px; background: var(--bg-elev);
+  border: 1px solid #2c2e35; border-radius: 6px;
+}
+.login-card[hidden] { display: none; }
+#loginQr { width: 200px; height: 200px; padding: 6px; background: #fff; border-radius: 4px; image-rendering: pixelated; }
+.login-link-row { display: flex; align-items: center; gap: 8px; width: 100%; }
+.login-link-row code { flex: 1; font: 11px/1.4 "SF Mono", Menlo, Consolas, monospace; color: #c5c8cf; word-break: break-all; }
+.login-link-row button { flex: 0 0 auto; }
 .log-download-btn { width: 14px; height: 14px; margin-left: auto; cursor: pointer; filter: invert(0.55); }
 .log-download-btn:hover { filter: invert(0.88); }
 pre#log {

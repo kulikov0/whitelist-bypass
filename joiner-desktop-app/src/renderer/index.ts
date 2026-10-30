@@ -1,4 +1,5 @@
-type JoinerPlatform = 'wbstream' | 'telemost' | 'vk' | 'dion' | 'bitrix';
+type JoinerPlatform = import('../constants').JoinerPlatform;
+type LoginLink = import('../constants').LoginLink;
 
 function detectPlatform(url: string): JoinerPlatform | null {
   const u = url.toLowerCase();
@@ -7,6 +8,7 @@ function detectPlatform(url: string): JoinerPlatform | null {
   if (u.includes('telemost.yandex')) return 'telemost';
   if (u.includes('dion://') || u.includes('dion.vc')) return 'dion';
   if (u.includes('bitrix24') && u.includes('/video/')) return 'bitrix';
+  if (u.includes('blink://') || (u.includes('blinkmap.com') && u.includes('/join/'))) return 'blink';
   return 'vk';
 }
 
@@ -17,6 +19,7 @@ function platformLabel(p: JoinerPlatform | null): string {
     case 'vk': return 'VK';
     case 'dion': return 'DION';
     case 'bitrix': return 'Bitrix';
+    case 'blink': return 'Blink';
     default: return '-';
   }
 }
@@ -27,6 +30,7 @@ interface Bridge {
   onLog(cb: (text: string) => void): void;
   onStatus(cb: (status: string) => void): void;
   onRunning(cb: (running: boolean) => void): void;
+  onLoginLink(cb: (login: LoginLink | null) => void): void;
 }
 declare const bridge: Bridge;
 
@@ -41,6 +45,10 @@ const stopBtn = $('stop') as HTMLButtonElement;
 const downloadLogsBtn = $('downloadLogs') as HTMLImageElement;
 const platformHint = $('platformHint');
 const linkInput = input('link');
+const loginCard = $('loginCard');
+const loginQr = $('loginQr') as HTMLImageElement;
+const loginLinkEl = $('loginLink');
+const copyLoginLinkBtn = $('copyLoginLink') as HTMLButtonElement;
 
 stopBtn.disabled = true;
 
@@ -84,6 +92,17 @@ bridge.onStatus((s) => {
 bridge.onRunning((running) => {
   startBtn.disabled = running;
   stopBtn.disabled = !running;
+});
+bridge.onLoginLink((login) => {
+  loginCard.hidden = !login;
+  if (!login) return;
+  loginQr.src = login.qr;
+  loginQr.hidden = !login.qr;
+  loginLinkEl.textContent = login.link;
+});
+
+copyLoginLinkBtn.addEventListener('click', () => {
+  navigator.clipboard.writeText(loginLinkEl.textContent || '');
 });
 
 startBtn.addEventListener('click', async () => {

@@ -2,6 +2,7 @@ import { app, BrowserWindow, ipcMain } from 'electron';
 import { spawn, ChildProcess } from 'node:child_process';
 import { existsSync } from 'node:fs';
 import { join } from 'node:path';
+import * as QRCode from 'qrcode';
 import { IPC, JoinerSettings } from '../constants';
 
 // Single global joiner process. We never run two tunnels at once: the
@@ -38,6 +39,17 @@ function closeCaptchaWindow() {
     captchaWindow.close();
   }
   captchaWindow = null;
+}
+
+async function showLoginLink(link: string) {
+  send(IPC.STATUS, 'waiting for login');
+  try {
+    const qr = await QRCode.toDataURL(link, { errorCorrectionLevel: 'M', margin: 1, scale: 6 });
+    send(IPC.LOGIN_LINK, { link, qr });
+  } catch (err) {
+    send(IPC.LOG, `[main] login QR failed: ${(err as Error).message}\n`);
+    send(IPC.LOGIN_LINK, { link, qr: '' });
+  }
 }
 
 function resolveJoinerExe(): string {
@@ -119,10 +131,10 @@ function spawnJoiner(settings: JoinerSettings): { ok: boolean; error?: string } 
   if (settings.socksUser) args.push('--socks-user', settings.socksUser);
   if (settings.socksPass) args.push('--socks-pass', settings.socksPass);
   if (noTun) args.push('--no-tun');
-  if (settings.dualTrack && (settings.platform === 'vk' || settings.platform === 'wbstream' || settings.platform === 'bitrix')) {
+  if (settings.dualTrack && (settings.platform === 'vk' || settings.platform === 'wbstream' || settings.platform === 'bitrix' || settings.platform === 'blink')) {
     args.push('--dual-track');
   }
-  if (settings.reliable && (settings.platform === 'wbstream' || settings.platform === 'bitrix' || settings.platform === 'telemost')) {
+  if (settings.reliable && (settings.platform === 'wbstream' || settings.platform === 'bitrix' || settings.platform === 'telemost' || settings.platform === 'blink')) {
     args.push('--reliable');
   }
 
@@ -160,11 +172,19 @@ function spawnJoiner(settings: JoinerSettings): { ok: boolean; error?: string } 
     } else if (captchaWindow && /captcha solved|Auth complete|TUNNEL/i.test(text)) {
       closeCaptchaWindow();
     }
+    const loginMatch = text.match(/STATUS:LOGIN_LINK:(\S+)/);
+    if (loginMatch) {
+      showLoginLink(loginMatch[1]);
+    } else if (text.includes('[login] approved')) {
+      send(IPC.LOGIN_LINK, null);
+      send(IPC.STATUS, 'starting');
+    }
   };
   joinerProcess.stdout?.on('data', (b: Buffer) => handleOutput(b.toString()));
   joinerProcess.stderr?.on('data', (b: Buffer) => handleOutput(b.toString()));
   joinerProcess.on('exit', (code, signal) => {
     closeCaptchaWindow();
+    send(IPC.LOGIN_LINK, null);
     send(IPC.LOG, `\n[main] joiner exited code=${code} signal=${signal}\n`);
     send(IPC.STATUS, 'stopped');
     send(IPC.RUNNING, false);

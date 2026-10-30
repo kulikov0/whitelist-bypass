@@ -15,11 +15,12 @@ import (
 )
 
 type BlinkHeadlessJoiner struct {
-	logFn       func(string, ...any)
-	OnConnected func(tunnel.DataTunnel)
-	ResolveFn   ResolveFunc
-	Status      StatusEmitter
-	PCConfig    PeerConnectionConfigurer
+	logFn             func(string, ...any)
+	OnConnected       func(tunnel.DataTunnel)
+	OnRemoteCandidate func(target int, candidateOrSDP string)
+	ResolveFn         ResolveFunc
+	Status            StatusEmitter
+	PCConfig          PeerConnectionConfigurer
 
 	httpClient  *http.Client
 	cookiesPath string
@@ -181,6 +182,7 @@ func (j *BlinkHeadlessJoiner) runOnce(credentials *blink.Credentials, chatID int
 			j.OnConnected(tun)
 		}
 	}
+	sess.OnRemoteCandidate = j.OnRemoteCandidate
 
 	j.mu.Lock()
 	if j.closed {

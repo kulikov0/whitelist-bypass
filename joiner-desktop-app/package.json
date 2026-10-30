@@ -7,8 +7,12 @@
     "start": "tsc && electron .",
     "start:dev": "electron ."
   },
+  "dependencies": {
+    "qrcode": "^1.5.4"
+  },
   "devDependencies": {
     "@types/node": "^22.0.0",
+    "@types/qrcode": "^1.5.6",
     "electron": "^33.0.0",
     "electron-builder": "^25.0.0",
     "typescript": "^5.6.0"

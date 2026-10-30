@@ -2,7 +2,7 @@
 <html lang="en">
   <head>
     <meta charset="utf-8" />
-    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'" />
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:" />
     <title>WhitelistBypass Joiner</title>
     <link rel="stylesheet" href="styles/app.css" />
   </head>
@@ -87,6 +87,15 @@
         </div>
       </section>
       <section class="log-wrap">
+        <div class="login-card" id="loginCard" hidden>
+          <h2>Blink login</h2>
+          <span class="hint">Scan the QR with the Blink app on your phone, or copy the link and send it to whoever has Blink.</span>
+          <img id="loginQr" alt="Blink login QR" />
+          <div class="login-link-row">
+            <code id="loginLink"></code>
+            <button id="copyLoginLink">Copy</button>
+          </div>
+        </div>
         <h2>Log <img class="log-download-btn" id="downloadLogs" src="resources/icons8-download-64.png" title="Download logs"></h2>
         <pre id="log"></pre>
       </section>

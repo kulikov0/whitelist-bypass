@@ -45,7 +45,7 @@ func (statusEmitter) EmitStatus(status string) {
 	// CAPTCHA:url is fired by the VK auth path when an interactive
 	// captcha is required. The Electron wrapper watches stdout for
 	// this exact prefix and opens a BrowserWindow at the URL.
-	if strings.HasPrefix(status, "CAPTCHA:") {
+	if strings.HasPrefix(status, "CAPTCHA:") || strings.HasPrefix(status, common.StatusLoginLink+":") {
 		fmt.Printf("STATUS:%s\n", status)
 	}
 	if status == common.StatusTunnelLost && !selfHealReconnect {
@@ -96,7 +96,7 @@ const (
 )
 
 func main() {
-	platform := flag.String("platform", "", "wbstream | telemost | vk | dion | bitrix (required)")
+	platform := flag.String("platform", "", "wbstream | telemost | vk | dion | bitrix | blink (required)")
 	link := flag.String("link", "", "WB Stream room link, Telemost join URI, VK call link, or DION event link (required)")
 	displayName := flag.String("name", "Joiner", "display name in the room")
 	socksHost := flag.String("socks-host", common.SocksLocalhostIP, "SOCKS5 listen address (use 0.0.0.0 to expose on LAN; tun2socks always connects via loopback)")
@@ -335,6 +335,9 @@ func main() {
 		runDion(*link, *displayName, onConnected, addCandidate)
 	case "bitrix", "bx":
 		runBitrix(*link, *displayName, *tunnelMode, *vp8FPS, *vp8Batch, *dualTrack, *reliable,
+			onConnected, addCandidate, bypassIP)
+	case "blink", "bl":
+		runBlink(*link, *tunnelMode, *vp8FPS, *vp8Batch, *dualTrack, *reliable,
 			onConnected, addCandidate, bypassIP)
 	default:
 		log.Fatalf("[config] unknown --platform %q", *platform)
@@ -578,6 +581,58 @@ func runBitrix(link, name, mode string, fps, batch int, dualTrack, reliable bool
 	}{
 		JoinLink:    strings.TrimSpace(link),
 		DisplayName: name,
+		TunnelMode:  mode,
+		VP8FPS:      fps,
+		VP8Batch:    batch,
+		DualTrack:   dualTrack,
+		Reliable:    reliable,
+	})
+	go inner.RunWithParams(string(params))
+}
+
+func runBlink(link, mode string, fps, batch int, dualTrack, reliable bool,
+	onConnected func(tunnel.DataTunnel),
+	onCandidate func(int, string),
+	bypassIP func(string),
+) {
+	configDir, err := os.UserConfigDir()
+	if err != nil {
+		log.Fatalf("[blink] config dir: %v", err)
+	}
+	cookiesDir := filepath.Join(configDir, "whitelist-bypass")
+	if err := os.MkdirAll(cookiesDir, 0700); err != nil {
+		log.Fatalf("[blink] config dir: %v", err)
+	}
+
+	resolve := func(host string) (string, error) {
+		ip, err := resolveHostname(host)
+		if err == nil {
+			bypassIP(ip)
+		}
+		return ip, err
+	}
+
+	inner := joinerCommon.NewBlinkHeadlessJoiner(
+		log.Printf,
+		resolve,
+		statusEmitter{},
+		nil,
+	)
+	joinerConfigAck = inner.MarkConfigAcked
+	inner.OnConnected = onConnected
+	inner.OnRemoteCandidate = onCandidate
+
+	params, _ := json.Marshal(struct {
+		JoinLink    string `json:"joinLink"`
+		CookiesPath string `json:"cookiesPath"`
+		TunnelMode  string `json:"tunnelMode"`
+		VP8FPS      int    `json:"vp8Fps"`
+		VP8Batch    int    `json:"vp8Batch"`
+		DualTrack   bool   `json:"dualTrack"`
+		Reliable    bool   `json:"reliable"`
+	}{
+		JoinLink:    strings.TrimSpace(link),
+		CookiesPath: filepath.Join(cookiesDir, "cookies-blink.json"),
 		TunnelMode:  mode,
 		VP8FPS:      fps,
 		VP8Batch:    batch,
