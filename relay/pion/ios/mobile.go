@@ -201,6 +201,26 @@ func StartBitrixHeadless(socksPort int, socksUser, socksPass string, callback He
 	callback.OnStatus(common.StatusReady)
 }
 
+func StartBlinkHeadless(socksPort int, socksUser, socksPass string, callback HeadlessCallback) {
+	StopHeadless()
+
+	activeHeadless.Lock()
+	activeHeadless.callback = callback
+	activeHeadless.stopped = false
+	activeHeadless.platform = "blink"
+	activeHeadless.Unlock()
+
+	logFn, resolveFn, statusEmitter := makeHelpers(callback)
+	blinkJoiner := joiner.NewBlinkHeadlessJoiner(logFn, resolveFn, statusEmitter, nil)
+	blinkJoiner.OnConnected = makeOnConnected(socksPort, socksUser, socksPass, logFn, callback, blinkJoiner.MarkConfigAcked)
+
+	activeHeadless.Lock()
+	activeHeadless.joiner = blinkJoiner
+	activeHeadless.Unlock()
+
+	callback.OnStatus(common.StatusReady)
+}
+
 func StartVKHeadless(socksPort int, socksUser, socksPass string, joinLink, displayName, tunnelMode string, vp8Fps, vp8Batch int, dualTrack bool, callback HeadlessCallback) {
 	StopHeadless()
 
@@ -274,6 +294,10 @@ func SendJoinParams(jsonParams string) {
 	case "bitrix":
 		if bxJoiner, ok := currentJoiner.(*joiner.BitrixHeadlessJoiner); ok {
 			go bxJoiner.RunWithParams(jsonParams)
+		}
+	case "blink":
+		if blinkJoiner, ok := currentJoiner.(*joiner.BlinkHeadlessJoiner); ok {
+			go blinkJoiner.RunWithParams(jsonParams)
 		}
 	}
 }

@@ -26,7 +26,10 @@ const (
 	InviteLinkHost  = "blinkmap.com"
 )
 
-var ErrLoginPending = errors.New("blink login is not approved yet")
+var (
+	ErrLoginPending   = errors.New("blink login is not approved yet")
+	ErrLoginCancelled = errors.New("blink login cancelled")
+)
 
 type StatusError struct {
 	Operation string

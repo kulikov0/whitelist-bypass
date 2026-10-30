@@ -122,11 +122,13 @@ enum CallPlatform: String {
     case wbstream = "wbstream"
     case dion = "dion"
     case bitrix = "bitrix"
+    case blink = "blink"
 
     static let wbstreamPrefix = "wbstream://"
     static let dionPrefix = "dion://"
     static let dionEventInfix = "dion.vc/event/"
     static let bitrixMarker = "/video/"
+    static let blinkPrefix = "blink://"
 
     static func detect(url: String) -> CallPlatform {
         if url.hasPrefix(dionPrefix) || url.contains(dionEventInfix) {
@@ -137,6 +139,9 @@ enum CallPlatform: String {
         }
         if url.contains("bitrix24") && url.contains(bitrixMarker) {
             return .bitrix
+        }
+        if url.hasPrefix(blinkPrefix) || (url.contains("blinkmap.com") && url.contains("/join/")) {
+            return .blink
         }
         if url.contains("telemost") {
             return .telemost
@@ -169,6 +174,8 @@ class ProxyManager: ObservableObject {
     @Published var isRunning: Bool = false
     @Published var toastMessage: String?
     @Published var statusText: String?
+    @Published var pinging: Bool = false
+    @Published var pingResult: PingResult?
     var detectedPlatform: CallPlatform = .vk
 
     @Published var callUrl: String = AppDefaults.lastUrl { didSet { AppDefaults.lastUrl = callUrl } }
@@ -228,6 +235,12 @@ class ProxyManager: ObservableObject {
             }
         }
         return result == 0
+    }
+
+    private func blinkCookiesPath() -> String {
+        let directory = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
+        try? FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        return directory.appendingPathComponent("cookies-blink.json").path
     }
 
     func connect() {
@@ -375,6 +388,24 @@ class ProxyManager: ObservableObject {
                 IosSendJoinParams(jsonString)
                 appendLog("Sent join params")
             }
+
+        case .blink:
+            IosStartBlinkHeadless(socksPort, activeSocksUser, activeSocksPass, bridge)
+            appendLog("Started Blink headless joiner")
+            let joinParams: [String: Any] = [
+                "joinLink": callUrl,
+                "cookiesPath": blinkCookiesPath(),
+                "tunnelMode": tunnelMode.rawValue,
+                "vp8Fps": vp8Fps,
+                "vp8Batch": vp8Batch,
+                "dualTrack": dualTrack,
+                "reliable": reliable,
+            ]
+            if let jsonData = try? JSONSerialization.data(withJSONObject: joinParams),
+               let jsonString = String(data: jsonData, encoding: .utf8) {
+                IosSendJoinParams(jsonString)
+                appendLog("Sent join params")
+            }
         }
     }
 
@@ -392,7 +423,9 @@ class ProxyManager: ObservableObject {
     func resetAll() {
         disconnect()
         captchaURL = nil
+        loginLink = nil
         statusText = nil
+        pingResult = nil
         logs.removeAll()
         pendingLogs.removeAll()
         errorMessage = ""
@@ -400,6 +433,7 @@ class ProxyManager: ObservableObject {
     }
 
     @Published var captchaURL: String?
+    @Published var loginLink: String?
 
     func handleStatus(_ statusString: String) {
         if statusString.hasPrefix("ERROR:") {
@@ -408,14 +442,25 @@ class ProxyManager: ObservableObject {
             errorMessage = errorText
             isRunning = false
             captchaURL = nil
+            if loginLink != nil {
+                loginLink = nil
+                statusText = nil
+            }
             appendLog("ERROR: \(errorText)")
         } else if statusString.hasPrefix("CAPTCHA:") {
             captchaURL = String(statusString.dropFirst(8))
             statusText = NSLocalizedString("status_solve_captcha", comment: "")
             appendLog("Captcha: \(captchaURL ?? "")")
+        } else if statusString.hasPrefix("LOGIN_LINK:") {
+            loginLink = String(statusString.dropFirst(11))
+            statusText = NSLocalizedString("blink_login_title", comment: "")
         } else {
             if captchaURL != nil && statusString != "CAPTCHA" {
                 captchaURL = nil
+                statusText = nil
+            }
+            if loginLink != nil {
+                loginLink = nil
                 statusText = nil
             }
             status = ProxyStatus(rawValue: statusString) ?? .idle
@@ -472,6 +517,34 @@ class ProxyManager: ObservableObject {
         let proxyUri = "socks://\(credsB64)@127.0.0.1:\(socksPort)#WLB-\(socksPort)"
         UIPasteboard.general.string = proxyUri
         showToast(NSLocalizedString("toast_happ_params_copied", comment: ""))
+    }
+
+    func copyLoginLink() {
+        guard let link = loginLink else { return }
+        UIPasteboard.general.string = link
+        showToast(NSLocalizedString("blink_login_copied", comment: ""))
+    }
+
+    func openLoginLink() {
+        if let link = loginLink, let url = URL(string: link) {
+            UIApplication.shared.open(url)
+        }
+    }
+
+    func runPing() {
+        guard !pinging else { return }
+        pinging = true
+        pingResult = nil
+        let port = socksPort
+        let user = activeSocksUser
+        let pass = activeSocksPass
+        DispatchQueue.global(qos: .userInitiated).async { [weak self] in
+            let result = Ping.run(socksPort: port, user: user, pass: pass)
+            DispatchQueue.main.async {
+                self?.pingResult = result
+                self?.pinging = false
+            }
+        }
     }
 
 }
