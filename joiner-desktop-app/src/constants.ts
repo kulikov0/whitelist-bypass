@@ -1,4 +1,5 @@
 export const IPC = {
+  STATE: 'joiner:state',
   START: 'joiner:start',
   STOP: 'joiner:stop',
   LOG: 'joiner:log',

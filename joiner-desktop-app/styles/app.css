@@ -27,7 +27,7 @@ h1 { font-size: 14px; margin: 0; }
 .status[data-state="active"], .status[data-state="connected"] { background: var(--ok); color: #fff; }
 .status[data-state="stopped"] { background: #4a3030; color: #ffb4a8; }
 main { flex: 1; display: grid; grid-template-columns: 1fr 1fr; gap: 12px; padding: 12px; min-height: 0; }
-section.form { display: flex; flex-direction: column; gap: 10px; }
+section.form { overflow-y: auto; padding-right: 4px; display: flex; flex-direction: column; gap: 10px; }
 section.log-wrap { display: flex; flex-direction: column; min-height: 0; }
 section.log-wrap h2 { font-size: 12px; margin: 0 0 6px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.05em; display: flex; align-items: center; }
 .log-download-btn { width: 14px; height: 14px; margin-left: auto; cursor: pointer; filter: invert(0.55); }

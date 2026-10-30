@@ -22,6 +22,7 @@ function platformLabel(p: JoinerPlatform | null): string {
 }
 
 interface Bridge {
+  state(): Promise<{ settings: any; running: boolean; status: string; log: string }>;
   start(settings: any): Promise<{ ok: boolean; error?: string }>;
   stop(): Promise<{ ok: boolean }>;
   onLog(cb: (text: string) => void): void;
@@ -43,6 +44,7 @@ const platformHint = $('platformHint');
 const linkInput = input('link');
 
 stopBtn.disabled = true;
+startBtn.disabled = true;
 
 downloadLogsBtn.addEventListener('click', () => {
   const blob = new Blob([logEl.textContent || ''], { type: 'text/plain' });
@@ -81,9 +83,32 @@ bridge.onStatus((s) => {
   statusEl.textContent = s;
   statusEl.dataset.state = s;
 });
-bridge.onRunning((running) => {
+function setRunning(running: boolean) {
   startBtn.disabled = running;
   stopBtn.disabled = !running;
+  document.querySelectorAll<HTMLInputElement | HTMLSelectElement>('.form input, .form select')
+    .forEach((element) => { element.disabled = running; });
+}
+bridge.onRunning(setRunning);
+bridge.state().then((state) => {
+  const settings = state.settings;
+  const fields: Record<string, string> = {
+    link: 'link', name: 'displayName', socksPort: 'socksPort',
+    socksUser: 'socksUser', socksPass: 'socksPass', tunnelMode: 'tunnelMode',
+    vp8Fps: 'vp8Fps', vp8Batch: 'vp8Batch', resources: 'resources', dns: 'dns',
+  };
+  for (const [id, key] of Object.entries(fields)) {
+    (document.getElementById(id) as HTMLInputElement).value = String(settings[key] ?? '');
+  }
+  for (const key of ['noTun', 'dualTrack', 'reliable']) input(key).checked = Boolean(settings[key]);
+  refreshPlatformHint();
+  statusEl.textContent = state.status;
+  statusEl.dataset.state = state.status;
+  appendLog(state.log);
+  setRunning(state.running);
+}).catch(() => {
+  appendLog('[ui] Could not load saved settings.\n');
+  startBtn.disabled = false;
 });
 
 startBtn.addEventListener('click', async () => {
@@ -114,8 +139,14 @@ startBtn.addEventListener('click', async () => {
     dualTrack: input('dualTrack').checked,
     reliable: input('reliable').checked,
   };
-  const r = await bridge.start(settings);
-  if (!r.ok) appendLog(`[ui] start failed: ${r.error}\n`);
+  startBtn.disabled = true;
+  try {
+    const r = await bridge.start(settings);
+    if (!r.ok) { appendLog(`[ui] start failed: ${r.error}\n`); setRunning(false); }
+  } catch {
+    appendLog('[ui] Could not start the client.\n');
+    setRunning(false);
+  }
 });
 
 stopBtn.addEventListener('click', async () => {

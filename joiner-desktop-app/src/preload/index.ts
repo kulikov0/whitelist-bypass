@@ -2,6 +2,7 @@ import { contextBridge, ipcRenderer } from 'electron';
 import { IPC, JoinerSettings } from '../constants';
 
 contextBridge.exposeInMainWorld('bridge', {
+  state: () => ipcRenderer.invoke(IPC.STATE),
   start: (settings: JoinerSettings) => ipcRenderer.invoke(IPC.START, settings),
   stop: () => ipcRenderer.invoke(IPC.STOP),
   onLog(cb: (text: string) => void) {
