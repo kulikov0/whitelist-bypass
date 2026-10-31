@@ -1,6 +1,6 @@
 {
   "name": "whitelist-bypass-creator",
-  "version": "0.4.4",
+  "version": "0.5.0",
   "main": "dist/main/index.js",
   "scripts": {
     "build": "tsc",
