@@ -296,7 +296,7 @@ func (h *VKHeadlessJoiner) joinCall() error {
 		"isVideo":         {"true"},
 		"isAudio":         {"false"},
 		"mediaSettings":   {`{"isAudioEnabled":false,"isVideoEnabled":true,"isScreenSharingEnabled":` + screenFlag + `}`},
-		"format":          {"json"},
+		"format":          {"JSON"},
 	}
 
 	client := &http.Client{
@@ -317,8 +317,11 @@ func (h *VKHeadlessJoiner) joinCall() error {
 	if err != nil {
 		return fmt.Errorf("new request: %w", err)
 	}
+	req.Header = headless.ChromeWindows.Headers(headless.DestEmpty)
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
-	req.Header.Set("User-Agent", headless.ChromeWindows.UserAgent())
+	req.Header.Set("Origin", vkOrigin)
+	req.Header.Set("Referer", vkOrigin+"/")
+	req.Header.Set("Sec-Fetch-Site", "cross-site")
 
 	h.logFn("vk-joiner: calling joinConversationByLink...")
 	resp, err := client.Do(req)
