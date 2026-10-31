@@ -9,7 +9,7 @@
 
 Для установки whitelist-bypass требуется настроить графическое окружение. 
 
-У `Creator` есть `headless` версия, но она сырая, так что ставим обычную с GUI. Так как на нашем VPS 90% нет графического окружения, то используем [XPRA](https://github.com/Xpra-org/xpra/wiki/Download#-linux)
+Для сервера рекомендуется `headless` версия `Creator` без GUI, см. [Creator (headless, сервер)](../SETUP.md#creator-headless-сервер). Эта инструкция - для тех, кому нужен обычный `Creator` с GUI. Так как на VPS почти всегда нет графического окружения, используем [XPRA](https://github.com/Xpra-org/xpra/wiki/Download#-linux)
 
 ```shell
 curl https://xpra.org/get-xpra.sh | bash

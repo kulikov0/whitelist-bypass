@@ -13,7 +13,7 @@ No external network is used.
 ## Platforms and scenarios
 
 Platforms: telemost, wbstream, dion, bitrix, blink, vk. A platform skips the scenarios it
-does not support: dion supports only connect and kick, vk only connect and dc, blink
+does not support: dion supports only connect and kick, vk only connect, dc and kcp, blink
 everything except kick.
 
 `vk` runs only when named, needs `relay/relay` from `./build-go.sh`, and opens the VK
