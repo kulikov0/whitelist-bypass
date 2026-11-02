@@ -1,0 +1,117 @@
+#!/bin/bash
+#
+# Replay the watchdog rules over logs you already have.
+#
+# The thresholds in creator-watchdog were calibrated against one particular
+# tunnel. Yours will see a different amount of traffic, so before trusting them
+# - or after changing them - run them against your own history and look at what
+# they would have done:
+#
+#   creator-watchdog-replay /var/log/wbstream*.log*
+#
+# Every line it prints is a restart that would have happened. Check each one
+# against a moment you remember losing connectivity. Lines you cannot account
+# for are false positives, and the fix is to raise the matching threshold.
+#
+# It reads the same config file as the watchdog, so tune the numbers in one
+# place and replay until the output looks right.
+#
+set -u
+
+CONF="${WATCHDOG_CONF:-/etc/whitelist-bypass/watchdog.conf}"
+
+STALL_WINDOW_SEC=90
+STALL_MIN_EOF=5
+QUIET_WINDOW_SEC=150
+QUIET_MIN_EOF=2
+DEGRADED_WINDOW_SEC=120
+DEGRADED_MIN_EOF=25
+COOLDOWN_SEC=300
+
+# shellcheck source=/dev/null
+[ -r "$CONF" ] && . "$CONF"
+
+if [ $# -eq 0 ]; then
+    echo "usage: ${0##*/} <logfile> [logfile...]   (.gz is fine)" >&2
+    exit 2
+fi
+
+zcat -f -- "$@" 2>/dev/null | awk \
+    -v sw="$STALL_WINDOW_SEC" -v sm="$STALL_MIN_EOF" \
+    -v qw="$QUIET_WINDOW_SEC" -v qm="$QUIET_MIN_EOF" \
+    -v dw="$DEGRADED_WINDOW_SEC" -v dm="$DEGRADED_MIN_EOF" \
+    -v cd="$COOLDOWN_SEC" '
+# days since epoch from a civil date, so logs spanning midnight or several
+# days line up on one axis. mawk has no mktime(), hence the arithmetic.
+function days_from_civil(y, m, d,    era, yoe, doy, doe) {
+    if (m <= 2) y--
+    era = int((y >= 0 ? y : y - 399) / 400)
+    yoe = y - era * 400
+    doy = int((153 * (m + (m > 2 ? -3 : 9)) + 2) / 5) + d - 1
+    doe = yoe * 365 + int(yoe / 4) - int(yoe / 100) + doy
+    return era * 146097 + doe - 719468
+}
+function civil_from_days(z,    era, doe, yoe, y, doy, mp, d, m) {
+    z += 719468
+    era = int((z >= 0 ? z : z - 146096) / 146097)
+    doe = z - era * 146097
+    yoe = int((doe - int(doe / 1460) + int(doe / 36524) - int(doe / 146096)) / 365)
+    y = yoe + era * 400
+    doy = doe - (365 * yoe + int(yoe / 4) - int(yoe / 100))
+    mp = int((5 * doy + 2) / 153)
+    d = doy - int((153 * mp + 2) / 5) + 1
+    m = mp + (mp < 10 ? 3 : -9)
+    if (m <= 2) y++
+    return sprintf("%04d/%02d/%02d", y, m, d)
+}
+function stamp(t,    s) {
+    s = t % 86400
+    return sprintf("%s %02d:%02d:%02d", civil_from_days(int(t / 86400)),
+                   int(s / 3600), int(s % 3600 / 60), s % 60)
+}
+# Only lines that actually start with a timestamp. Without this check a line
+# like "TUNNEL CONNECTED" parses as year zero, and the replay range explodes
+# from one day to two millennia.
+$1 !~ /^[0-9][0-9][0-9][0-9]\/[0-9][0-9]\/[0-9][0-9]$/ { next }
+$2 !~ /^[0-9][0-9]:[0-9][0-9]:[0-9][0-9]$/             { next }
+{
+    split($1, dp, "/"); split($2, tp, ":")
+    t = days_from_civil(dp[1] + 0, dp[2] + 0, dp[3] + 0) * 86400 \
+        + tp[1] * 3600 + tp[2] * 60 + tp[3]
+    if (mn == 0 || t < mn) mn = t
+    if (t > mx) mx = t
+}
+/first read/            { r[t]++; reads++ }
+/EOF with no data read/ { e[t]++; empties++ }
+END {
+    if (mn == 0) { print "no timestamped lines found"; exit 1 }
+    last = -999999
+    # Sliding sums: each second enters and leaves every window exactly once, so
+    # this stays linear in the log span instead of span x window.
+    sr = se = qr = qe = dr = de = 0
+    for (t = mn; t <= mx; t++) {
+        if (t in r) { qr += r[t]; sr += r[t]; dr += r[t] }
+        if (t in e) { qe += e[t]; se += e[t]; de += e[t] }
+        k = t - qw - 1; if (k in r) qr -= r[k]; if (k in e) qe -= e[k]
+        k = t - sw - 1; if (k in r) sr -= r[k]; if (k in e) se -= e[k]
+        k = t - dw - 1; if (k in r) dr -= r[k]; if (k in e) de -= e[k]
+        why = ""
+        if (sr == 0 && se >= sm)
+            why = sprintf("STALL     %d empty, 0 reads in %ds", se, sw)
+        else if (qr == 0 && qe >= qm)
+            why = sprintf("QUIET     %d empty, 0 reads in %ds", qe, qw)
+        else if (de >= dm && de > dr)
+            why = sprintf("DEGRADED  %d empty vs %d reads in %ds", de, dr, dw)
+        if (why != "" && t - last >= cd) {
+            printf "  %s  %s\n", stamp(t), why
+            last = t; n++
+        }
+    }
+    hours = (mx - mn) / 3600.0
+    printf "\n  %d restart(s) over %.1f h of log", n + 0, hours
+    if (n > 0 && hours > 0) printf " (one per %.1f h)", hours / n
+    printf "\n  %d first reads, %d empty connections\n", reads + 0, empties + 0
+    if (empties == 0)
+        print "  no empty connections at all - nothing here would ever have fired"
+}
+'

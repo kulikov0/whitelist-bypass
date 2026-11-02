@@ -1,0 +1,25 @@
+# Creator logs grow around 2 MB a day per instance at ordinary traffic.
+#
+# copytruncate is required, not a preference: the creator holds the log open
+# through systemd's append: redirection and never reopens it, so a plain rename
+# would leave it writing to an unlinked inode and the live log would stay empty
+# forever.
+#
+# The cost is that the log is briefly empty right after each rotation, which
+# would blind a watchdog that only reads the current file. creator-watchdog
+# reads <log>.1 alongside it for exactly this reason - keep at least one
+# uncompressed generation, hence delaycompress.
+#
+# hourly needs logrotate to actually run hourly. On Debian/Ubuntu the stock
+# timer is daily, so either move it to /etc/cron.hourly or override
+# logrotate.timer with OnCalendar=hourly.
+
+/var/log/wbstream-*.log {
+    hourly
+    rotate 24
+    missingok
+    notifempty
+    compress
+    delaycompress
+    copytruncate
+}
