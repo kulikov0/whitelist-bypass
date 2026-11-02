@@ -1,5 +1,5 @@
 import { contextBridge, ipcRenderer } from 'electron';
-import { IPC, JoinerSettings } from '../constants';
+import { IPC, JoinerSettings, LoginLink } from '../constants';
 
 contextBridge.exposeInMainWorld('bridge', {
   state: () => ipcRenderer.invoke(IPC.STATE),
@@ -13,5 +13,8 @@ contextBridge.exposeInMainWorld('bridge', {
   },
   onRunning(cb: (running: boolean) => void) {
     ipcRenderer.on(IPC.RUNNING, (_e, v) => cb(v));
+  },
+  onLoginLink(cb: (login: LoginLink | null) => void) {
+    ipcRenderer.on(IPC.LOGIN_LINK, (_e, login) => cb(login));
   },
 });

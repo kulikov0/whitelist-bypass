@@ -34,5 +34,16 @@
 "vp8_reliable_title" = "Reliable (KCP)";
 "vp8_reliable_sub" = "Wrap the video tunnel with KCP reliability. Off = raw VP8, faster but lossy.";
 "proxy_url_copied" = "Proxy URL copied";
+"ping_run" = "Ping through tunnel";
+"ping_running" = "Pinging...";
+"ping_ok" = "%@ reached via tunnel";
+"ping_fail" = "%@ not reachable via tunnel";
+"ping_ms" = "%d ms";
+"ping_timeout" = "timeout";
 "toast_happ_params_copied" = "v2ray URL copied";
 "dc_mode_not_supported" = "DC mode not supported - falling back to video";
+"blink_login_title" = "Log in to Blink";
+"blink_login_subtitle" = "Scan the QR with the Blink app on another phone, open the link on this phone, or copy it and send it to whoever has Blink.";
+"blink_login_open" = "Open in Blink";
+"blink_login_copy" = "Copy link";
+"blink_login_copied" = "Login link copied";

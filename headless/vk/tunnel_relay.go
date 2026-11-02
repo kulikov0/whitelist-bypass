@@ -37,6 +37,8 @@ type TunnelRelay struct {
 
 	sampleTrack *webrtc.TrackLocalStaticSample
 	tun         *rtc.VP8DataTunnel
+	tunMu       sync.Mutex
+	tunFired    bool
 	obf         *tunnel.TunnelObfuscator
 	OnConnected func(tunnel.DataTunnel)
 
@@ -171,20 +173,7 @@ func (u *TunnelRelay) Init(iceServers []webrtc.ICEServer) error {
 			log.Println("[relay] === MODE: VIDEO ===")
 			u.tun = rtc.NewVP8DataTunnel(sampleTrack, u.obf, log.Printf)
 			u.tun.Start(0, 0)
-			var downlink tunnel.DataTunnel = u.tun
-			if u.screenDC != nil {
-				writer := rtc.NewScreenWriter(u.obf, "screen-down", log.Printf)
-				dc := u.screenDC
-				writer.SetSend(dc.Send)
-				u.sym = rtc.NewSymmetricScreenTunnel(u.tun, writer, u.obf, func() bool {
-					return dc.ReadyState() == webrtc.DataChannelStateOpen
-				}, log.Printf)
-				downlink = u.sym
-				log.Println("[relay] === MODE: VIDEO (with screenshare) ===")
-			}
-			if u.OnConnected != nil {
-				u.OnConnected(downlink)
-			}
+			u.tun.SetOnData(u.activate)
 		})
 		go u.readTrack(track)
 	})
@@ -264,6 +253,40 @@ func (u *TunnelRelay) Close() {
 	u.remoteSet = false
 	u.pending = nil
 	u.sampleTrack = nil
+}
+
+func (u *TunnelRelay) activate(payload []byte) {
+	u.tunMu.Lock()
+	if u.tunFired || u.OnConnected == nil {
+		u.tunMu.Unlock()
+		return
+	}
+	u.tunFired = true
+	u.tunMu.Unlock()
+
+	if !tunnel.LooksLikeRelayFrame(payload) {
+		kcptun := rtc.NewMultiTrackKCPTunnel(rtc.NewMultiTrackTunnel([]*rtc.VP8DataTunnel{u.tun}), log.Printf)
+		log.Println("[relay] per-track kcp reliability active over video tunnel")
+		log.Printf("[relay] auto-detected active tunnel: %T", kcptun)
+		u.OnConnected(kcptun)
+		kcptun.InjectSegment(payload)
+		return
+	}
+
+	var downlink tunnel.DataTunnel = u.tun
+	if u.screenDC != nil {
+		writer := rtc.NewScreenWriter(u.obf, "screen-down", log.Printf)
+		dc := u.screenDC
+		writer.SetSend(dc.Send)
+		u.sym = rtc.NewSymmetricScreenTunnel(u.tun, writer, u.obf, func() bool {
+			return dc.ReadyState() == webrtc.DataChannelStateOpen
+		}, log.Printf)
+		downlink = u.sym
+		log.Println("[relay] === MODE: VIDEO (with screenshare) ===")
+	}
+	log.Printf("[relay] auto-detected active tunnel: %T", downlink)
+	u.OnConnected(downlink)
+	u.tun.OnData(payload)
 }
 
 func (u *TunnelRelay) handleDCMessage(data []byte) {

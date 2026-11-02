@@ -2,6 +2,7 @@ import { app, BrowserWindow, ipcMain } from 'electron';
 import { spawn, ChildProcess } from 'node:child_process';
 import { existsSync, readFileSync, writeFileSync, mkdirSync, renameSync } from 'node:fs';
 import { join } from 'node:path';
+import * as QRCode from 'qrcode';
 import { IPC, JoinerSettings } from '../constants';
 import { DEFAULT_SETTINGS, buildJoinerArgs, redactLog, validateSettings } from './settings';
 import { portIsAvailable } from './port';
@@ -71,6 +72,17 @@ function closeCaptchaWindow() {
     captchaWindow.close();
   }
   captchaWindow = null;
+}
+
+async function showLoginLink(link: string) {
+  send(IPC.STATUS, 'waiting for login');
+  try {
+    const qr = await QRCode.toDataURL(link, { errorCorrectionLevel: 'M', margin: 1, scale: 6 });
+    send(IPC.LOGIN_LINK, { link, qr });
+  } catch (err) {
+    send(IPC.LOG, `[main] login QR failed: ${(err as Error).message}\n`);
+    send(IPC.LOGIN_LINK, { link, qr: '' });
+  }
 }
 
 function resolveJoinerExe(): string {
@@ -174,11 +186,12 @@ async function spawnJoiner(settings: JoinerSettings): Promise<{ ok: boolean; err
   send(IPC.RUNNING, true);
   send(IPC.STATUS, 'starting');
 
+  let spawned = false;
+  joinerProcess.once('spawn', () => { spawned = true; });
   joinerProcess.on('error', (err) => {
     send(IPC.LOG, `[main] spawn error: ${err.message}\n`);
-    send(IPC.STATUS, 'stopped');
-    send(IPC.RUNNING, false);
-    // Keep ownership until close so an old child cannot clear a newer start.
+    // close also follows a failed spawn. Keep ownership until then and
+    // emit the terminal state only once, from the close handler.
   });
   const handleOutput = (text: string) => {
     send(IPC.LOG, text);
@@ -193,17 +206,25 @@ async function spawnJoiner(settings: JoinerSettings): Promise<{ ok: boolean; err
     } else if (captchaWindow && /captcha solved|Auth complete|TUNNEL/i.test(text)) {
       closeCaptchaWindow();
     }
+    const loginMatch = text.match(/STATUS:LOGIN_LINK:(\S+)/);
+    if (loginMatch) {
+      showLoginLink(loginMatch[1]);
+    } else if (text.includes('[login] approved')) {
+      send(IPC.LOGIN_LINK, null);
+      send(IPC.STATUS, 'starting');
+    }
   };
   joinerProcess.stdout?.on('data', (b: Buffer) => handleOutput(b.toString()));
   joinerProcess.stderr?.on('data', (b: Buffer) => handleOutput(b.toString()));
   joinerProcess.on('close', (code, signal) => {
     closeCaptchaWindow();
+    send(IPC.LOGIN_LINK, null);
     send(IPC.LOG, `\n[main] joiner exited code=${code} signal=${signal}\n`);
     send(IPC.STATUS, 'stopped');
     send(IPC.RUNNING, false);
     joinerProcess = null;
 
-    if (userRequestedStop || !lastSettings) return;
+    if (!spawned || userRequestedStop || !lastSettings) return;
     if (retryCount >= MAX_RETRIES) {
       send(IPC.LOG, `[main] auto-reconnect: giving up after ${MAX_RETRIES} attempts\n`);
       return;
@@ -245,7 +266,9 @@ ipcMain.handle(IPC.START, async (_e, settings: JoinerSettings) => {
 });
 
 ipcMain.handle(IPC.STATE, async () => {
-  const settings = readSettings();
+  // Reopening a window must retain the current in-memory password. Only
+  // disk persistence omits it; a fresh application still starts without it.
+  const settings = lastSettings ?? readSettings();
   const occupied = !running && !startInProgress && !(await portIsAvailable(settings.socksPort));
   return { settings, running, status: occupied ? 'port in use' : currentStatus, log: logBuffer };
 });

@@ -64,8 +64,9 @@ type Session struct {
 	configAcked     chan struct{}
 	configAckedOnce sync.Once
 
-	OnConnected   func(tunnel.DataTunnel)
-	OnPeerRestart func()
+	OnConnected       func(tunnel.DataTunnel)
+	OnPeerRestart     func()
+	OnRemoteCandidate func(target int, candidateOrSDP string)
 }
 
 func NewSession(cfg SessionConfig) *Session {
@@ -108,6 +109,16 @@ func (s *Session) Start() error {
 	s.lk.OnTrack = s.onRemoteTrack
 	s.lk.OnDataChannel = s.onRemoteDataChannel
 	s.lk.OnPubConnected = s.startTunnel
+	s.lk.OnRemoteCandidate = func(target int, ic webrtc.ICECandidateInit) {
+		if s.OnRemoteCandidate != nil {
+			s.OnRemoteCandidate(target, ic.Candidate)
+		}
+	}
+	s.lk.OnRemoteSDP = func(target int, _, sdp string) {
+		if s.OnRemoteCandidate != nil {
+			s.OnRemoteCandidate(-1, sdp)
+		}
+	}
 
 	if err := s.lk.Connect(); err != nil {
 		return err

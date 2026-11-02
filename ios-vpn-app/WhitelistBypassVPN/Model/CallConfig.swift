@@ -8,6 +8,7 @@ extension CallPlatform {
         case .wbstream: return "WB Stream"
         case .dion: return "DION"
         case .bitrix: return "Bitrix"
+        case .blink: return "Blink"
         }
     }
 
@@ -18,6 +19,7 @@ extension CallPlatform {
         case .wbstream: return NSLocalizedString("suggest_name_wbstream", comment: "")
         case .dion: return NSLocalizedString("suggest_name_dion", comment: "")
         case .bitrix: return NSLocalizedString("suggest_name_bitrix", comment: "")
+        case .blink: return NSLocalizedString("suggest_name_blink", comment: "")
         }
     }
 }

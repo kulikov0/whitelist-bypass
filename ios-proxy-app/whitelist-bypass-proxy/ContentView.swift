@@ -47,6 +47,10 @@ struct ContentView: View {
                             .frame(maxWidth: .infinity, maxHeight: .infinity)
                     }
 
+                    if let loginLink = proxyManager.loginLink {
+                        BlinkLoginView(link: loginLink, onCopy: proxyManager.copyLoginLink, onOpen: proxyManager.openLoginLink)
+                    }
+
                     if proxyManager.status == .tunnelConnected {
                         ProxyInfoView(proxyUrl: proxyManager.socksUrl, onCopy: proxyManager.copyProxyUrl)
 
@@ -65,6 +69,18 @@ struct ContentView: View {
                         .buttonStyle(.borderedProminent)
                         .tint(.blue)
                         .padding(.horizontal)
+
+                        Button(action: { proxyManager.runPing() }) {
+                            Label(NSLocalizedString(proxyManager.pinging ? "ping_running" : "ping_run", comment: ""), systemImage: "dot.radiowaves.left.and.right")
+                                .frame(maxWidth: .infinity)
+                        }
+                        .buttonStyle(.bordered)
+                        .disabled(proxyManager.pinging)
+                        .padding(.horizontal)
+
+                        if let pingResult = proxyManager.pingResult {
+                            PingResultView(result: pingResult)
+                        }
                     }
                 }
                 .padding(.vertical, 12)
@@ -168,6 +184,40 @@ struct ProxyInfoView: View {
         .padding(.horizontal)
         .padding(.vertical, 6)
         .background(Color.green.opacity(0.1))
+        .cornerRadius(8)
+        .padding(.horizontal)
+    }
+}
+
+struct PingResultView: View {
+    let result: PingResult
+
+    var body: some View {
+        switch result {
+        case .ok(let ms):
+            pill(text: String(format: NSLocalizedString("ping_ok", comment: ""), Ping.host),
+                 detail: String(format: NSLocalizedString("ping_ms", comment: ""), ms),
+                 color: .green)
+        case .timeout:
+            pill(text: String(format: NSLocalizedString("ping_fail", comment: ""), Ping.host),
+                 detail: NSLocalizedString("ping_timeout", comment: ""),
+                 color: .red)
+        }
+    }
+
+    private func pill(text: String, detail: String, color: Color) -> some View {
+        HStack {
+            Text(text)
+                .font(.caption)
+            Spacer(minLength: 8)
+            Text(detail)
+                .font(.system(.caption, design: .monospaced))
+                .fontWeight(.bold)
+                .foregroundColor(color)
+        }
+        .padding(.horizontal)
+        .padding(.vertical, 6)
+        .background(color.opacity(0.1))
         .cornerRadius(8)
         .padding(.horizontal)
     }

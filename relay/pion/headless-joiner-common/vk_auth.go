@@ -49,8 +49,8 @@ func RunVKAuth(joinLink string, displayName string, logFn func(string, ...any), 
 
 	httpPost := func(targetURL string, form url.Values, extraHeaders map[string]string) (map[string]interface{}, error) {
 		req, _ := http.NewRequest("POST", targetURL, strings.NewReader(form.Encode()))
+		req.Header = headless.ChromeWindows.Headers(headless.DestEmpty)
 		req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
-		req.Header.Set("User-Agent", headless.ChromeWindows.UserAgent())
 		req.Header.Set("Origin", "https://vk.ru")
 		req.Header.Set("Referer", "https://vk.ru/")
 		for k, v := range extraHeaders {
@@ -80,6 +80,10 @@ func RunVKAuth(joinLink string, displayName string, logFn func(string, ...any), 
 	}
 	logFn("vk-auth: appID=%s api=%s appVersion=%s proto=%s", cfg.AppID, cfg.ApiVersion, cfg.AppVersion, cfg.ProtocolVersion)
 
+	vkMethodURL := func(method string) string {
+		return "https://web.api.vk.ru/method/" + method + "?v=" + cfg.ApiVersion + "&client_id=" + cfg.AppID
+	}
+
 	// Get anonymous token
 	statusFn("Getting anonymous token...")
 	logFn("vk-auth: getting anon token")
@@ -96,15 +100,14 @@ func RunVKAuth(joinLink string, displayName string, logFn func(string, ...any), 
 		return "", fmt.Errorf("empty access_token: %v", anonResp)
 	}
 	logFn("vk-auth: anon token OK")
-	auth := map[string]string{"Authorization": "Bearer " + accessToken}
 
 	// Get call settings (public key)
 	statusFn("Getting call settings...")
 	logFn("vk-auth: getting call settings")
 
-	settingsResp, err := httpPost("https://api.vk.ru/method/calls.getSettings", url.Values{
-		"v": {cfg.ApiVersion},
-	}, auth)
+	settingsResp, err := httpPost(vkMethodURL("calls.getSettings"), url.Values{
+		"access_token": {accessToken},
+	}, nil)
 	if err != nil {
 		return "", fmt.Errorf("calls.getSettings: %w", err)
 	}
@@ -121,10 +124,10 @@ func RunVKAuth(joinLink string, displayName string, logFn func(string, ...any), 
 	statusFn("Getting call preview...")
 	logFn("vk-auth: getting call preview")
 
-	previewResp, err := httpPost("https://api.vk.ru/method/calls.getCallPreview", url.Values{
-		"v":            {cfg.ApiVersion},
+	previewResp, err := httpPost(vkMethodURL("calls.getCallPreview"), url.Values{
 		"vk_join_link": {joinLink},
-	}, auth)
+		"access_token": {accessToken},
+	}, nil)
 	if err == nil {
 		if respObj, ok := previewResp["response"].(map[string]interface{}); ok {
 			if okLink, ok := respObj["ok_join_link"].(string); ok {
@@ -138,9 +141,9 @@ func RunVKAuth(joinLink string, displayName string, logFn func(string, ...any), 
 	logFn("vk-auth: getting call token")
 
 	callParams := url.Values{
-		"v":            {cfg.ApiVersion},
 		"vk_join_link": {joinLink},
 		"name":         {displayName},
+		"access_token": {accessToken},
 	}
 
 	var callToken string
@@ -148,7 +151,7 @@ func RunVKAuth(joinLink string, displayName string, logFn func(string, ...any), 
 	var okJoinLink string
 
 	for attempt := 0; attempt < 5; attempt++ {
-		callResp, err := httpPost("https://api.vk.ru/method/calls.getAnonymousToken", callParams, auth)
+		callResp, err := httpPost(vkMethodURL("calls.getAnonymousToken"), callParams, nil)
 		if err != nil {
 			return "", fmt.Errorf("getAnonymousToken: %w", err)
 		}
@@ -185,7 +188,6 @@ func RunVKAuth(joinLink string, displayName string, logFn func(string, ...any), 
 					captchaAttempt = "1"
 				}
 				callParams = url.Values{
-					"v":                {cfg.ApiVersion},
 					"vk_join_link":     {joinLink},
 					"name":             {displayName},
 					"captcha_key":      {""},
@@ -194,6 +196,7 @@ func RunVKAuth(joinLink string, displayName string, logFn func(string, ...any), 
 					"success_token":    {successToken},
 					"captcha_ts":       {captchaErr.captchaTs},
 					"captcha_attempt":  {captchaAttempt},
+					"access_token":     {accessToken},
 				}
 				continue
 			}
@@ -235,8 +238,8 @@ func RunVKAuth(joinLink string, displayName string, logFn func(string, ...any), 
 		"method":          {"auth.anonymLogin"},
 		"session_data":    {string(sessionData)},
 		"application_key": {cfg.PublicKey},
-		"format":          {"json"},
-	}, nil)
+		"format":          {"JSON"},
+	}, map[string]string{"Sec-Fetch-Site": "cross-site"})
 	if err != nil {
 		return "", fmt.Errorf("anonymLogin: %w", err)
 	}

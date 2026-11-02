@@ -106,8 +106,8 @@ func httpPost(endpoint string, form url.Values, extraHeaders map[string]string) 
 	if err != nil {
 		return nil, err
 	}
+	req.Header = headless.ChromeWindows.Headers(headless.DestEmpty)
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
-	req.Header.Set("User-Agent", headless.ChromeWindows.UserAgent())
 	req.Header.Set("Origin", "https://vk.ru")
 	req.Header.Set("Referer", "https://vk.ru/")
 	for k, v := range extraHeaders {
@@ -175,7 +175,7 @@ func authAndJoin(cookieStr, okJoinLink string, cfg VKConfig) (*JoinResponse, err
 	r, err = httpPost(apiBaseURL, url.Values{
 		"method": {"auth.anonymLogin"}, "application_key": {appKey},
 		"format": {"json"}, "session_data": {string(sd)},
-	}, nil)
+	}, map[string]string{"Sec-Fetch-Site": "cross-site"})
 	if err != nil {
 		return nil, fmt.Errorf("auth.anonymLogin: %w", err)
 	}
@@ -192,7 +192,7 @@ func authAndJoin(cookieStr, okJoinLink string, cfg VKConfig) (*JoinResponse, err
 		"method": {"vchat.joinConversationByLink"}, "session_key": {okAuth.SessionKey},
 		"application_key": {appKey}, "format": {"json"}, "joinLink": {okJoinLink},
 		"isVideo": {"true"}, "isAudio": {"false"}, "mediaSettings": {string(ms)},
-	}, nil)
+	}, map[string]string{"Sec-Fetch-Site": "cross-site"})
 	if err != nil {
 		return nil, fmt.Errorf("vchat.joinConversationByLink: %w", err)
 	}
@@ -750,7 +750,11 @@ func main() {
 		ur.SetObfuscator(obf)
 		ur.SetUpstreamSocks(*upstreamSocks, *upstreamUser, *upstreamPass)
 		ur.OnConnected = func(tun tunnel.DataTunnel) {
-			rb := tunnel.NewRelayBridge(tun, "creator", common.VP8BufSize, log.Printf)
+			bridgeReadBuf := common.VP8BufSize
+			if _, ok := tun.(*rtc.MultiTrackKCPTunnel); ok {
+				bridgeReadBuf = readBuf
+			}
+			rb := tunnel.NewRelayBridge(tun, "creator", bridgeReadBuf, log.Printf)
 			rb.SetUpstreamSocks(*upstreamSocks, *upstreamUser, *upstreamPass)
 			if st, ok := tun.(*rtc.SymmetricScreenTunnel); ok {
 				rb.SetOnPeerConfig(func(fps, batch, trackCount int) {

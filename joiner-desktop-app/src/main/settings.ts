@@ -1,4 +1,4 @@
-import { JoinerSettings } from '../constants';
+import { JOINER_PLATFORMS, JoinerSettings } from '../constants';
 
 export const DEFAULT_SETTINGS: JoinerSettings = {
   platform: 'telemost', link: '', displayName: 'Joiner', socksPort: 1080,
@@ -13,10 +13,10 @@ export function validateSettings(value: JoinerSettings): void {
     if (typeof value[key] !== 'string') throw new Error(`Invalid ${key}`);
   }
   if (!value.link.trim()) throw new Error('Join link is required');
-  if (!['telemost', 'wbstream', 'vk', 'dion', 'bitrix'].includes(value.platform)) throw new Error('Invalid platform');
+  if (!JOINER_PLATFORMS.includes(value.platform)) throw new Error('Invalid platform');
   if (!['video', 'dc'].includes(value.tunnelMode)) throw new Error('Invalid tunnel mode');
   if (!['moderate', 'default', 'unlimited'].includes(value.resources)) throw new Error('Invalid resources');
-  for (const [key, min, max] of [['socksPort', 1, 65535], ['vp8Fps', 1, 60], ['vp8Batch', 1, 3000]] as const) {
+  for (const [key, min, max] of [['socksPort', 1, 65535], ['vp8Fps', 1, 60], ['vp8Batch', 1, 256]] as const) {
     if (!Number.isInteger(value[key]) || value[key] < min || value[key] > max) throw new Error(`Invalid ${key}`);
   }
   for (const key of ['noTun', 'dualTrack', 'reliable'] as const) {
@@ -36,8 +36,8 @@ export function buildJoinerArgs(settings: JoinerSettings): string[] {
   if (settings.socksUser) args.push('--socks-user', settings.socksUser);
   if (settings.socksPass) args.push('--socks-pass', settings.socksPass);
   if (settings.noTun) args.push('--no-tun');
-  if (settings.dualTrack && ['vk', 'wbstream', 'bitrix'].includes(settings.platform)) args.push('--dual-track');
-  if (settings.reliable && ['telemost', 'wbstream', 'bitrix'].includes(settings.platform)) args.push('--reliable');
+  if (settings.dualTrack && ['vk', 'wbstream', 'bitrix', 'blink'].includes(settings.platform)) args.push('--dual-track');
+  if (settings.reliable && ['vk', 'telemost', 'wbstream', 'bitrix', 'blink'].includes(settings.platform)) args.push('--reliable');
   return args;
 }
 

@@ -5,9 +5,16 @@ export const IPC = {
   LOG: 'joiner:log',
   STATUS: 'joiner:status',
   RUNNING: 'joiner:running',
+  LOGIN_LINK: 'joiner:login-link',
 } as const;
 
-export type JoinerPlatform = 'wbstream' | 'telemost' | 'vk' | 'dion' | 'bitrix';
+export const JOINER_PLATFORMS = ['wbstream', 'telemost', 'vk', 'dion', 'bitrix', 'blink'] as const;
+export type JoinerPlatform = typeof JOINER_PLATFORMS[number];
+
+export interface LoginLink {
+  link: string;
+  qr: string;
+}
 
 export interface JoinerSettings {
   platform: JoinerPlatform;

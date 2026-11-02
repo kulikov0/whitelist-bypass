@@ -38,7 +38,7 @@ pf_select() {
             PF_JOINER_MODE="vk-headless-joiner"
             PF_CREATOR_ROOM_FLAG="--vk-link"
             PF_READY_RE="\[vk-ws\] Connected"
-            PF_CAPS="connect dc"
+            PF_CAPS="connect dc kcp"
             ;;
         telemost)
             PF_CREATOR="$HEADLESS/telemost/headless-telemost-creator"

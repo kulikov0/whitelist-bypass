@@ -201,7 +201,27 @@ func StartBitrixHeadless(socksPort int, socksUser, socksPass string, callback He
 	callback.OnStatus(common.StatusReady)
 }
 
-func StartVKHeadless(socksPort int, socksUser, socksPass string, joinLink, displayName, tunnelMode string, vp8Fps, vp8Batch int, dualTrack bool, callback HeadlessCallback) {
+func StartBlinkHeadless(socksPort int, socksUser, socksPass string, callback HeadlessCallback) {
+	StopHeadless()
+
+	activeHeadless.Lock()
+	activeHeadless.callback = callback
+	activeHeadless.stopped = false
+	activeHeadless.platform = "blink"
+	activeHeadless.Unlock()
+
+	logFn, resolveFn, statusEmitter := makeHelpers(callback)
+	blinkJoiner := joiner.NewBlinkHeadlessJoiner(logFn, resolveFn, statusEmitter, nil)
+	blinkJoiner.OnConnected = makeOnConnected(socksPort, socksUser, socksPass, logFn, callback, blinkJoiner.MarkConfigAcked)
+
+	activeHeadless.Lock()
+	activeHeadless.joiner = blinkJoiner
+	activeHeadless.Unlock()
+
+	callback.OnStatus(common.StatusReady)
+}
+
+func StartVKHeadless(socksPort int, socksUser, socksPass string, joinLink, displayName, tunnelMode string, vp8Fps, vp8Batch int, dualTrack, reliable bool, callback HeadlessCallback) {
 	StopHeadless()
 
 	activeHeadless.Lock()
@@ -235,11 +255,12 @@ func StartVKHeadless(socksPort int, socksUser, socksPass string, joinLink, displ
 				params["vp8Batch"] = vp8Batch
 			}
 			params["dualTrack"] = dualTrack
+			params["reliable"] = reliable
 			if patched, err := json.Marshal(params); err == nil {
 				authJSON = string(patched)
 			}
 		}
-		logFn("vk-auth: sending join params to relay mode=%s vp8Fps=%d vp8Batch=%d dualTrack=%v", tunnelMode, vp8Fps, vp8Batch, dualTrack)
+		logFn("vk-auth: sending join params to relay mode=%s vp8Fps=%d vp8Batch=%d dualTrack=%v reliable=%v", tunnelMode, vp8Fps, vp8Batch, dualTrack, reliable)
 		vkJoiner.RunWithParams(authJSON)
 	}()
 }
@@ -274,6 +295,10 @@ func SendJoinParams(jsonParams string) {
 	case "bitrix":
 		if bxJoiner, ok := currentJoiner.(*joiner.BitrixHeadlessJoiner); ok {
 			go bxJoiner.RunWithParams(jsonParams)
+		}
+	case "blink":
+		if blinkJoiner, ok := currentJoiner.(*joiner.BlinkHeadlessJoiner); ok {
+			go blinkJoiner.RunWithParams(jsonParams)
 		}
 	}
 }

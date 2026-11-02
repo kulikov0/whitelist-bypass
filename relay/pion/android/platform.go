@@ -13,6 +13,7 @@ import (
 
 var stdinReader = bufio.NewReader(os.Stdin)
 var stdinMu sync.Mutex
+var resolveMu sync.Mutex
 
 func ReadStdinLine() (string, error) {
 	stdinMu.Lock()
@@ -25,6 +26,8 @@ func ReadStdinLine() (string, error) {
 }
 
 func RequestResolve(hostname string) (string, error) {
+	resolveMu.Lock()
+	defer resolveMu.Unlock()
 	stdinMu.Lock()
 	fmt.Printf("RESOLVE:%s\n", hostname)
 	stdinMu.Unlock()
