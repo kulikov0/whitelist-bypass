@@ -1,4 +1,4 @@
-import { app, BrowserWindow, ipcMain } from 'electron';
+import { app, BrowserWindow, ipcMain, safeStorage } from 'electron';
 import { spawn, ChildProcess } from 'node:child_process';
 import { existsSync, readFileSync, writeFileSync, mkdirSync, renameSync } from 'node:fs';
 import { join } from 'node:path';
@@ -25,17 +25,30 @@ const profileDir = app.getPath('userData');
 mkdirSync(profileDir, { recursive: true });
 const settingsFile = join(profileDir, 'settings.json');
 
+function encryptPassword(password: string): string | undefined {
+  if (!password || !safeStorage.isEncryptionAvailable()) return undefined;
+  if (process.platform === 'linux' && safeStorage.getSelectedStorageBackend() === 'basic_text') return undefined;
+  try { return safeStorage.encryptString(password).toString('base64'); }
+  catch { return undefined; }
+}
+function decryptPassword(encrypted: unknown): string {
+  if (typeof encrypted !== 'string' || !encrypted || !safeStorage.isEncryptionAvailable()) return '';
+  try { return safeStorage.decryptString(Buffer.from(encrypted, 'base64')); }
+  catch { return ''; }
+}
 function readSettings(): JoinerSettings {
   try {
-    const settings = { ...DEFAULT_SETTINGS, ...JSON.parse(readFileSync(settingsFile, 'utf8')), socksPass: '' };
+    const { socksPassEncrypted, ...saved } = JSON.parse(readFileSync(settingsFile, 'utf8'));
+    const settings = { ...DEFAULT_SETTINGS, ...saved, socksPass: decryptPassword(socksPassEncrypted) };
     validateSettings(settings);
     return settings;
   }
   catch { return { ...DEFAULT_SETTINGS }; }
 }
 function saveSettings(settings: JoinerSettings) {
+  const { socksPass, ...saved } = settings;
   const tempFile = settingsFile + '.tmp';
-  writeFileSync(tempFile, JSON.stringify({ ...settings, socksPass: '' }, null, 2), { mode: 0o600 });
+  writeFileSync(tempFile, JSON.stringify({ ...saved, socksPassEncrypted: encryptPassword(socksPass) }, null, 2), { mode: 0o600 });
   renameSync(tempFile, settingsFile);
 }
 
