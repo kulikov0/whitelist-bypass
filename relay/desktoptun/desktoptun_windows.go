@@ -117,8 +117,8 @@ func (t *Tunnel) Start() error {
 		Device: "tun://" + t.cfg.AdapterName,
 		MTU:    t.cfg.MTU,
 	}
-	t.log("[desktoptun] starting tun2socks engine adapter=%s mtu=%d proxy=%s",
-		t.cfg.AdapterName, t.cfg.MTU, proxy)
+	t.log("[desktoptun] starting tun2socks engine adapter=%s mtu=%d proxy=socks5://%s:%d",
+		t.cfg.AdapterName, t.cfg.MTU, t.cfg.SocksHost, t.cfg.SocksPort)
 	engine.Insert(key)
 	engine.Start()
 

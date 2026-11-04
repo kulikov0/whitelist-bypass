@@ -131,10 +131,8 @@ function send(channel: string, payload: unknown) {
 
 function createWindow() {
   mainWindow = new BrowserWindow({
-    width: 1060,
-    height: 780,
-    minWidth: 850,
-    minHeight: 650,
+    width: 900,
+    height: 600,
     title: 'WhitelistBypass Joiner',
     icon: join(__dirname, '..', '..', 'resources', 'icon.png'),
     webPreferences: {
@@ -189,7 +187,9 @@ async function spawnJoiner(settings: JoinerSettings): Promise<{ ok: boolean; err
     process.getuid && process.getuid() !== 0;
   const spawnCmd = elevateOnLinux ? 'pkexec' : exe;
   const spawnArgs = elevateOnLinux ? [exe, ...args] : args;
-  const commandLine = [spawnCmd, ...spawnArgs].map((s) => (/\s/.test(s) ? `"${s}"` : s)).join(' ');
+  const commandLine = [spawnCmd, ...spawnArgs]
+    .map((s, index, all) => (all[index - 1] === '--socks-pass' ? '[redacted]' : s))
+    .map((s) => (/\s/.test(s) ? `"${s}"` : s)).join(' ');
   send(IPC.LOG, `[main] spawning: ${commandLine}\n`);
   try {
     joinerProcess = spawn(spawnCmd, spawnArgs, { windowsHide: true });
@@ -279,8 +279,6 @@ ipcMain.handle(IPC.START, async (_e, settings: JoinerSettings) => {
 });
 
 ipcMain.handle(IPC.STATE, async () => {
-  // Reopening a window must retain the current in-memory password. Only
-  // disk persistence omits it; a fresh application still starts without it.
   const settings = lastSettings ?? readSettings();
   const occupied = !running && !startInProgress && !(await portIsAvailable(settings.socksPort));
   return { settings, running, status: occupied ? 'port in use' : currentStatus, log: logBuffer };

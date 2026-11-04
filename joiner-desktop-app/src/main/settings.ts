@@ -1,4 +1,4 @@
-import { JOINER_PLATFORMS, JoinerSettings } from '../constants';
+import { DUAL_TRACK_PLATFORMS, JOINER_PLATFORMS, JoinerSettings, RELIABLE_PLATFORMS } from '../constants';
 
 export const DEFAULT_SETTINGS: JoinerSettings = {
   platform: 'telemost', link: '', displayName: 'Joiner', socksPort: 1080,
@@ -36,14 +36,12 @@ export function buildJoinerArgs(settings: JoinerSettings): string[] {
   if (settings.socksUser) args.push('--socks-user', settings.socksUser);
   if (settings.socksPass) args.push('--socks-pass', settings.socksPass);
   if (settings.noTun) args.push('--no-tun');
-  if (settings.dualTrack && ['vk', 'wbstream', 'bitrix', 'blink'].includes(settings.platform)) args.push('--dual-track');
-  if (settings.reliable && ['vk', 'telemost', 'wbstream', 'bitrix', 'blink'].includes(settings.platform)) args.push('--reliable');
+  if (settings.dualTrack && DUAL_TRACK_PLATFORMS.includes(settings.platform)) args.push('--dual-track');
+  if (settings.reliable && RELIABLE_PLATFORMS.includes(settings.platform)) args.push('--reliable');
   return args;
 }
 
 export function redactLog(text: string, settings: JoinerSettings | null): string {
-  for (const secret of [settings?.link, settings?.socksPass]) {
-    if (secret) text = text.split(secret).join('[redacted]');
-  }
+  if (settings?.link) text = text.split(settings.link).join('[redacted]');
   return text;
 }
