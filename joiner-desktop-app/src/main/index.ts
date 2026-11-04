@@ -1,9 +1,11 @@
-import { app, BrowserWindow, ipcMain } from 'electron';
+import { app, BrowserWindow, ipcMain, safeStorage } from 'electron';
 import { spawn, ChildProcess } from 'node:child_process';
-import { existsSync } from 'node:fs';
+import { existsSync, readFileSync, writeFileSync, mkdirSync, renameSync } from 'node:fs';
 import { join } from 'node:path';
 import * as QRCode from 'qrcode';
 import { IPC, JoinerSettings } from '../constants';
+import { DEFAULT_SETTINGS, buildJoinerArgs, redactLog, validateSettings } from './settings';
+import { portIsAvailable } from './port';
 
 // Single global joiner process. We never run two tunnels at once: the
 // wintun adapter and the route table are exclusive resources.
@@ -15,6 +17,50 @@ let reconnectTimer: NodeJS.Timeout | null = null;
 let retryCount = 0;
 let lastSettings: JoinerSettings | null = null;
 const MAX_RETRIES = 8;
+let startInProgress = false;
+let currentStatus = 'idle';
+let running = false;
+let logBuffer = '';
+const profileDir = app.getPath('userData');
+mkdirSync(profileDir, { recursive: true });
+const settingsFile = join(profileDir, 'settings.json');
+
+function encryptPassword(password: string): string | undefined {
+  if (!password || !safeStorage.isEncryptionAvailable()) return undefined;
+  if (process.platform === 'linux' && safeStorage.getSelectedStorageBackend() === 'basic_text') return undefined;
+  try { return safeStorage.encryptString(password).toString('base64'); }
+  catch { return undefined; }
+}
+function decryptPassword(encrypted: unknown): string {
+  if (typeof encrypted !== 'string' || !encrypted || !safeStorage.isEncryptionAvailable()) return '';
+  try { return safeStorage.decryptString(Buffer.from(encrypted, 'base64')); }
+  catch { return ''; }
+}
+function readSettings(): JoinerSettings {
+  try {
+    const { socksPassEncrypted, ...saved } = JSON.parse(readFileSync(settingsFile, 'utf8'));
+    const settings = { ...DEFAULT_SETTINGS, ...saved, socksPass: decryptPassword(socksPassEncrypted) };
+    validateSettings(settings);
+    return settings;
+  }
+  catch { return { ...DEFAULT_SETTINGS }; }
+}
+function saveSettings(settings: JoinerSettings) {
+  const { socksPass, ...saved } = settings;
+  const tempFile = settingsFile + '.tmp';
+  writeFileSync(tempFile, JSON.stringify({ ...saved, socksPassEncrypted: encryptPassword(socksPass) }, null, 2), { mode: 0o600 });
+  renameSync(tempFile, settingsFile);
+}
+
+const gotLock = app.requestSingleInstanceLock();
+if (!gotLock) app.quit();
+app.on('second-instance', () => {
+  if (mainWindow) {
+    if (mainWindow.isMinimized()) mainWindow.restore();
+    mainWindow.show();
+    mainWindow.focus();
+  }
+});
 
 function openCaptchaWindow(url: string) {
   if (captchaWindow && !captchaWindow.isDestroyed()) {
@@ -72,6 +118,12 @@ function resolveJoinerExe(): string {
 }
 
 function send(channel: string, payload: unknown) {
+  if (channel === IPC.LOG) {
+    payload = redactLog(String(payload), lastSettings);
+    logBuffer = (logBuffer + payload).slice(-200000);
+  }
+  if (channel === IPC.STATUS) currentStatus = String(payload);
+  if (channel === IPC.RUNNING) running = Boolean(payload);
   if (mainWindow && !mainWindow.isDestroyed()) {
     mainWindow.webContents.send(channel, payload);
   }
@@ -95,6 +147,7 @@ function createWindow() {
 }
 
 app.whenReady().then(() => {
+  if (!gotLock) return;
   createWindow();
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) createWindow();
@@ -102,11 +155,13 @@ app.whenReady().then(() => {
 });
 
 app.on('window-all-closed', () => {
+  userRequestedStop = true;
+  if (reconnectTimer) clearTimeout(reconnectTimer);
   stopJoiner();
   if (process.platform !== 'darwin') app.quit();
 });
 
-function spawnJoiner(settings: JoinerSettings): { ok: boolean; error?: string } {
+async function spawnJoiner(settings: JoinerSettings): Promise<{ ok: boolean; error?: string }> {
   const exe = resolveJoinerExe();
   if (!existsSync(exe)) {
     return { ok: false, error: `desktop-joiner binary not found at ${exe}` };
@@ -117,33 +172,24 @@ function spawnJoiner(settings: JoinerSettings): { ok: boolean; error?: string } 
   if (process.platform !== 'win32' && !noTun && process.getuid && process.getuid() !== 0) {
     send(IPC.LOG, `[main] WARNING: ${process.platform} TUN routing needs root; relaunch with sudo or untick the TUN option\n`);
   }
-  const args = [
-    '--platform', settings.platform,
-    '--link', settings.link,
-    '--name', settings.displayName,
-    '--socks-port', String(settings.socksPort),
-    '--tunnel-mode', settings.tunnelMode,
-    '--vp8-fps', String(settings.vp8Fps),
-    '--vp8-batch', String(settings.vp8Batch),
-    '--resources', settings.resources,
-    '--dns', settings.dns,
-  ];
-  if (settings.socksUser) args.push('--socks-user', settings.socksUser);
-  if (settings.socksPass) args.push('--socks-pass', settings.socksPass);
-  if (noTun) args.push('--no-tun');
-  if (settings.dualTrack && (settings.platform === 'vk' || settings.platform === 'wbstream' || settings.platform === 'bitrix' || settings.platform === 'blink')) {
-    args.push('--dual-track');
+  let args: string[];
+  try { args = buildJoinerArgs({ ...settings, noTun }); }
+  catch (err) { return { ok: false, error: (err as Error).message }; }
+  if (!(await portIsAvailable(settings.socksPort))) {
+    return { ok: false, error: 'SOCKS port is already in use. Stop the other client first; no process was changed.' };
   }
-  if (settings.reliable && (settings.platform === 'vk' || settings.platform === 'wbstream' || settings.platform === 'bitrix' || settings.platform === 'telemost' || settings.platform === 'blink')) {
-    args.push('--reliable');
-  }
+  if (userRequestedStop) return { ok: false, error: 'Start cancelled' };
+  try { saveSettings(settings); }
+  catch { return { ok: false, error: 'Cannot save GUI settings' }; }
 
   const elevateOnLinux =
     process.platform === 'linux' && !noTun &&
     process.getuid && process.getuid() !== 0;
   const spawnCmd = elevateOnLinux ? 'pkexec' : exe;
   const spawnArgs = elevateOnLinux ? [exe, ...args] : args;
-  const commandLine = [spawnCmd, ...spawnArgs].map((s) => (/\s/.test(s) ? `"${s}"` : s)).join(' ');
+  const commandLine = [spawnCmd, ...spawnArgs]
+    .map((s, index, all) => (all[index - 1] === '--socks-pass' ? '[redacted]' : s))
+    .map((s) => (/\s/.test(s) ? `"${s}"` : s)).join(' ');
   send(IPC.LOG, `[main] spawning: ${commandLine}\n`);
   try {
     joinerProcess = spawn(spawnCmd, spawnArgs, { windowsHide: true });
@@ -153,16 +199,17 @@ function spawnJoiner(settings: JoinerSettings): { ok: boolean; error?: string } 
   send(IPC.RUNNING, true);
   send(IPC.STATUS, 'starting');
 
+  let spawned = false;
+  joinerProcess.once('spawn', () => { spawned = true; });
   joinerProcess.on('error', (err) => {
     send(IPC.LOG, `[main] spawn error: ${err.message}\n`);
-    send(IPC.STATUS, 'stopped');
-    send(IPC.RUNNING, false);
-    joinerProcess = null;
+    // close also follows a failed spawn. Keep ownership until then and
+    // emit the terminal state only once, from the close handler.
   });
   const handleOutput = (text: string) => {
     send(IPC.LOG, text);
-    if (text.includes('TUNNEL ACTIVE')) send(IPC.STATUS, 'active');
-    if (text.includes('TUNNEL CONNECTED')) {
+    if (/TUNNEL[ _]ACTIVE/.test(text)) send(IPC.STATUS, 'active');
+    if (/TUNNEL[ _]CONNECTED/.test(text)) {
       send(IPC.STATUS, 'connected');
       retryCount = 0;
     }
@@ -182,7 +229,7 @@ function spawnJoiner(settings: JoinerSettings): { ok: boolean; error?: string } 
   };
   joinerProcess.stdout?.on('data', (b: Buffer) => handleOutput(b.toString()));
   joinerProcess.stderr?.on('data', (b: Buffer) => handleOutput(b.toString()));
-  joinerProcess.on('exit', (code, signal) => {
+  joinerProcess.on('close', (code, signal) => {
     closeCaptchaWindow();
     send(IPC.LOGIN_LINK, null);
     send(IPC.LOG, `\n[main] joiner exited code=${code} signal=${signal}\n`);
@@ -190,7 +237,7 @@ function spawnJoiner(settings: JoinerSettings): { ok: boolean; error?: string } 
     send(IPC.RUNNING, false);
     joinerProcess = null;
 
-    if (userRequestedStop || !lastSettings) return;
+    if (!spawned || userRequestedStop || !lastSettings) return;
     if (retryCount >= MAX_RETRIES) {
       send(IPC.LOG, `[main] auto-reconnect: giving up after ${MAX_RETRIES} attempts\n`);
       return;
@@ -198,25 +245,43 @@ function spawnJoiner(settings: JoinerSettings): { ok: boolean; error?: string } 
     retryCount++;
     const delayMs = Math.min(30_000, 2_000 * 2 ** (retryCount - 1));
     send(IPC.LOG, `[main] auto-reconnect attempt ${retryCount}/${MAX_RETRIES} in ${Math.round(delayMs / 1000)}s\n`);
-    reconnectTimer = setTimeout(() => {
+    send(IPC.STATUS, 'reconnecting');
+    reconnectTimer = setTimeout(async () => {
       reconnectTimer = null;
       if (userRequestedStop || !lastSettings) return;
-      const r = spawnJoiner(lastSettings);
-      if (!r.ok) send(IPC.LOG, `[main] auto-reconnect spawn failed: ${r.error}\n`);
+      startInProgress = true;
+      const r = await spawnJoiner(lastSettings).finally(() => { startInProgress = false; });
+      if (!r.ok) {
+        send(IPC.STATUS, 'stopped');
+        send(IPC.LOG, `[main] auto-reconnect spawn failed: ${r.error}\n`);
+      }
     }, delayMs);
   });
   return { ok: true };
 }
 
 ipcMain.handle(IPC.START, async (_e, settings: JoinerSettings) => {
-  if (joinerProcess) {
+  if (joinerProcess || startInProgress) {
     return { ok: false, error: 'joiner already running' };
   }
   userRequestedStop = false;
   retryCount = 0;
   lastSettings = settings;
   if (reconnectTimer) { clearTimeout(reconnectTimer); reconnectTimer = null; }
-  return spawnJoiner(settings);
+  startInProgress = true;
+  try {
+    const result = await spawnJoiner(settings);
+    if (!result.ok) send(IPC.STATUS, 'stopped');
+    return result;
+  } finally {
+    startInProgress = false;
+  }
+});
+
+ipcMain.handle(IPC.STATE, async () => {
+  const settings = lastSettings ?? readSettings();
+  const occupied = !running && !startInProgress && !(await portIsAvailable(settings.socksPort));
+  return { settings, running, status: occupied ? 'port in use' : currentStatus, log: logBuffer };
 });
 
 ipcMain.handle(IPC.STOP, async () => {
