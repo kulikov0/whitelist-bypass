@@ -2,6 +2,7 @@ package livekit
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"net"
 	"sync"
@@ -21,6 +22,10 @@ const (
 	SDKVersion      = "2.7.0"
 	PingPeriod      = 5 * time.Second
 
+	SinglePCProtocolVersion = 17
+	SinglePCSDKVersion      = "2.22.0"
+	SinglePCClientProtocol  = 2
+
 	TargetPublisher  = signalTargetPublisher
 	TargetSubscriber = signalTargetSubscriber
 
@@ -29,10 +34,31 @@ const (
 	TrackTypeData          = trackTypeData
 	TrackSourceCamera      = trackSourceCamera
 	TrackSourceScreenShare = trackSourceScreenShare
+
+	initialAudioSections  = 3
+	initialVideoSections  = 3
+	resumeResponseTimeout = 5 * time.Second
+)
+
+var (
+	errResumeRefused = errors.New("livekit: server refused resume")
+	resumeDelays     = []time.Duration{
+		0,
+		300 * time.Millisecond,
+		1200 * time.Millisecond,
+		2700 * time.Millisecond,
+		4800 * time.Millisecond,
+		7 * time.Second,
+		7 * time.Second,
+		7 * time.Second,
+		7 * time.Second,
+		7 * time.Second,
+	}
 )
 
 type ICEServer = iceServer
 type JoinResponse = joinResponse
+type MediaSections = mediaSections
 
 type Config struct {
 	ServerURL              string
@@ -44,6 +70,7 @@ type Config struct {
 	ConfigureSettingEngine func(*webrtc.SettingEngine)
 	NetDialContext         func(ctx context.Context, network, addr string) (net.Conn, error)
 	ResolveICEHost         func(host string) (string, error)
+	SinglePeerConnection   bool
 }
 
 type Client struct {
@@ -72,6 +99,13 @@ type Client struct {
 	subRemoteSet bool
 	pubPending   []webrtc.ICECandidateInit
 	subPending   []webrtc.ICECandidateInit
+
+	singlePC            bool
+	reliableDC          *webrtc.DataChannel
+	pendingInitialOffer *webrtc.SessionDescription
+	renegotiate         bool
+	offerID             atomic.Uint32
+	leaveReceived       atomic.Bool
 
 	joined     chan struct{}
 	joinedOnce sync.Once
@@ -112,6 +146,7 @@ func NewClient(cfg Config) (*Client, error) {
 		configureSettingEngine: cfg.ConfigureSettingEngine,
 		netDialContext:         cfg.NetDialContext,
 		resolveICEHost:         cfg.ResolveICEHost,
+		singlePC:               cfg.SinglePeerConnection,
 		joined:                 make(chan struct{}),
 	}, nil
 }
@@ -121,12 +156,39 @@ func (c *Client) PubPC() *webrtc.PeerConnection { return c.pubPC }
 func (c *Client) SubPC() *webrtc.PeerConnection { return c.subPC }
 func (c *Client) Joined() <-chan struct{}       { return c.joined }
 
+func (c *Client) ReliableDataChannel() *webrtc.DataChannel { return c.reliableDC }
+
 func (c *Client) Connect() error {
-	target, err := c.codec.DialURL(c.wsURL, c.token)
+	target, err := c.dialTarget()
 	if err != nil {
 		return err
 	}
+	conn, err := c.dial(target)
+	if err != nil {
+		return err
+	}
+	c.wsMu.Lock()
+	c.ws = conn
+	c.wsMu.Unlock()
+	c.logFn("[lk] signaling connected")
+	return nil
+}
 
+func (c *Client) dialTarget() (string, error) {
+	if !c.singlePC {
+		return c.codec.DialURL(c.wsURL, c.token)
+	}
+	offer, err := c.buildSinglePeerConnection()
+	if err != nil {
+		return "", err
+	}
+	request := encJoinRequest(joinRequest{
+		PublisherOffer: &sessionDescription{Type: "offer", SDP: offer.SDP, ID: c.nextOfferID()},
+	})
+	return c.codec.SinglePCDialURL(c.wsURL, c.token, request)
+}
+
+func (c *Client) dial(target string) (*websocket.Conn, error) {
 	headers := headless.ChromeWindows.Headers(headless.DestWebSocket)
 	if c.ua != "" {
 		headers.Set("User-Agent", c.ua)
@@ -142,15 +204,11 @@ func (c *Client) Connect() error {
 	conn, resp, err := dialer.Dial(target, headers)
 	if err != nil {
 		if resp != nil {
-			return fmt.Errorf("ws dial: %w, status %d", err, resp.StatusCode)
+			return nil, fmt.Errorf("ws dial: %w, status %d", err, resp.StatusCode)
 		}
-		return fmt.Errorf("ws dial: %w", err)
+		return nil, fmt.Errorf("ws dial: %w", err)
 	}
-	c.wsMu.Lock()
-	c.ws = conn
-	c.wsMu.Unlock()
-	c.logFn("[lk] signaling connected")
-	return nil
+	return conn, nil
 }
 
 func (c *Client) sendSignal(payload []byte) error {
@@ -166,7 +224,13 @@ func (c *Client) sendSignal(payload []byte) error {
 }
 
 func (c *Client) SendOffer(sdp string) error {
-	return c.sendSignal(c.codec.EncodeOffer(sdp))
+	return c.sendSignal(c.codec.EncodeOffer(sdp, c.nextOfferID()))
+}
+
+func (c *Client) Negotiate() error {
+	c.pubMu.Lock()
+	defer c.pubMu.Unlock()
+	return c.negotiateLocked()
 }
 
 func (c *Client) SendAnswer(sdp string) error {
@@ -217,9 +281,38 @@ func (c *Client) Close() {
 	}
 }
 
-func (c *Client) iceServersAsWebRTC() []webrtc.ICEServer {
-	out := make([]webrtc.ICEServer, 0, len(c.join.ICEServers))
-	for _, s := range c.join.ICEServers {
+func (c *Client) nextOfferID() uint32 {
+	if !c.singlePC {
+		return 0
+	}
+	return c.offerID.Add(1)
+}
+
+func (c *Client) negotiateLocked() error {
+	if c.pubPC == nil {
+		return fmt.Errorf("publisher not created")
+	}
+	if c.pendingInitialOffer != nil || c.pubPC.SignalingState() == webrtc.SignalingStateHaveLocalOffer {
+		c.renegotiate = true
+		return nil
+	}
+	offer, err := c.pubPC.CreateOffer(nil)
+	if err != nil {
+		return fmt.Errorf("create offer: %w", err)
+	}
+	if err := c.pubPC.SetLocalDescription(offer); err != nil {
+		return fmt.Errorf("set local offer: %w", err)
+	}
+	if err := c.SendOffer(offer.SDP); err != nil {
+		return fmt.Errorf("send offer: %w", err)
+	}
+	c.logFn("[lk] sent publisher offer, %d bytes", len(offer.SDP))
+	return nil
+}
+
+func (c *Client) iceServersAsWebRTC(servers []ICEServer) []webrtc.ICEServer {
+	out := make([]webrtc.ICEServer, 0, len(servers))
+	for _, s := range servers {
 		urls := common.ResolveICEHosts(s.URLs, c.resolveICEHost, c.logFn, "[lk]")
 		ice := webrtc.ICEServer{URLs: urls}
 		if s.Username != "" {
@@ -231,9 +324,7 @@ func (c *Client) iceServersAsWebRTC() []webrtc.ICEServer {
 	return out
 }
 
-func (c *Client) buildPeerConnections() error {
-	cfg := webrtc.Configuration{ICEServers: c.iceServersAsWebRTC()}
-
+func (c *Client) webRTCAPI() (*webrtc.API, error) {
 	api, err := headlessapi.WebRTCAPI(headlessapi.Options{
 		Profile: headless.ChromeWindows,
 		Configure: func(settingEngine *webrtc.SettingEngine) {
@@ -244,7 +335,37 @@ func (c *Client) buildPeerConnections() error {
 		},
 	})
 	if err != nil {
-		return fmt.Errorf("build webrtc api: %w", err)
+		return nil, fmt.Errorf("build webrtc api: %w", err)
+	}
+	return api, nil
+}
+
+func (c *Client) watchPublisher(pubPC *webrtc.PeerConnection) {
+	pubPC.OnICECandidate(func(cand *webrtc.ICECandidate) {
+		if cand == nil {
+			c.logFn("[lk] pub ICE gathering complete")
+			return
+		}
+		c.logFn("[lk] pub local cand: %s", cand.String())
+		_ = c.SendTrickle(cand.ToJSON(), TargetPublisher)
+	})
+	pubPC.OnConnectionStateChange(func(state webrtc.PeerConnectionState) {
+		c.logFn("[lk] pub PC state: %s", state.String())
+		if state == webrtc.PeerConnectionStateConnected && c.OnPubConnected != nil {
+			c.OnPubConnected()
+		}
+	})
+	pubPC.OnICEConnectionStateChange(func(state webrtc.ICEConnectionState) {
+		c.logFn("[lk] pub ICE state: %s", state.String())
+	})
+}
+
+func (c *Client) buildPeerConnections() error {
+	cfg := webrtc.Configuration{ICEServers: c.iceServersAsWebRTC(c.join.ICEServers)}
+
+	api, err := c.webRTCAPI()
+	if err != nil {
+		return err
 	}
 
 	pubPC, err := api.NewPeerConnection(cfg)
@@ -264,14 +385,7 @@ func (c *Client) buildPeerConnections() error {
 	c.subPC = subPC
 	c.subMu.Unlock()
 
-	pubPC.OnICECandidate(func(cand *webrtc.ICECandidate) {
-		if cand == nil {
-			c.logFn("[lk] pub ICE gathering complete")
-			return
-		}
-		c.logFn("[lk] pub local cand: %s", cand.String())
-		_ = c.SendTrickle(cand.ToJSON(), TargetPublisher)
-	})
+	c.watchPublisher(pubPC)
 	subPC.OnICECandidate(func(cand *webrtc.ICECandidate) {
 		if cand == nil {
 			c.logFn("[lk] sub ICE gathering complete")
@@ -280,21 +394,11 @@ func (c *Client) buildPeerConnections() error {
 		c.logFn("[lk] sub local cand: %s", cand.String())
 		_ = c.SendTrickle(cand.ToJSON(), TargetSubscriber)
 	})
-
-	pubPC.OnConnectionStateChange(func(state webrtc.PeerConnectionState) {
-		c.logFn("[lk] pub PC state: %s", state.String())
-		if state == webrtc.PeerConnectionStateConnected && c.OnPubConnected != nil {
-			c.OnPubConnected()
-		}
-	})
 	subPC.OnConnectionStateChange(func(state webrtc.PeerConnectionState) {
 		c.logFn("[lk] sub PC state: %s", state.String())
 		if state == webrtc.PeerConnectionStateConnected && c.OnSubConnected != nil {
 			c.OnSubConnected()
 		}
-	})
-	pubPC.OnICEConnectionStateChange(func(state webrtc.ICEConnectionState) {
-		c.logFn("[lk] pub ICE state: %s", state.String())
 	})
 	subPC.OnICEConnectionStateChange(func(state webrtc.ICEConnectionState) {
 		c.logFn("[lk] sub ICE state: %s", state.String())
@@ -320,6 +424,140 @@ func (c *Client) buildPeerConnections() error {
 	return nil
 }
 
+func (c *Client) buildSinglePeerConnection() (webrtc.SessionDescription, error) {
+	api, err := c.webRTCAPI()
+	if err != nil {
+		return webrtc.SessionDescription{}, err
+	}
+	pc, err := api.NewPeerConnection(webrtc.Configuration{})
+	if err != nil {
+		return webrtc.SessionDescription{}, fmt.Errorf("create pc: %w", err)
+	}
+
+	c.watchPublisher(pc)
+	pc.OnTrack(func(track *webrtc.TrackRemote, receiver *webrtc.RTPReceiver) {
+		c.logFn("[lk] remote track: %s", track.Codec().MimeType)
+		if c.OnTrack != nil {
+			c.OnTrack(track, receiver)
+		}
+	})
+	pc.OnDataChannel(func(dc *webrtc.DataChannel) {
+		c.logFn("[lk] remote data channel: %s", dc.Label())
+		if c.OnDataChannel != nil {
+			c.OnDataChannel(dc)
+		}
+	})
+
+	ordered := true
+	unordered := false
+	var noRetransmits uint16
+	lossyChannel, err := pc.CreateDataChannel("_lossy", &webrtc.DataChannelInit{
+		Ordered:        &unordered,
+		MaxRetransmits: &noRetransmits,
+	})
+	if err != nil {
+		_ = pc.Close()
+		return webrtc.SessionDescription{}, fmt.Errorf("create lossy DC: %w", err)
+	}
+	reliableChannel, err := pc.CreateDataChannel("_reliable", &webrtc.DataChannelInit{
+		Ordered: &ordered,
+	})
+	if err != nil {
+		_ = pc.Close()
+		return webrtc.SessionDescription{}, fmt.Errorf("create reliable DC: %w", err)
+	}
+	dataTrackChannel, err := pc.CreateDataChannel("_data_track", &webrtc.DataChannelInit{
+		Ordered:        &unordered,
+		MaxRetransmits: &noRetransmits,
+	})
+	if err != nil {
+		_ = pc.Close()
+		return webrtc.SessionDescription{}, fmt.Errorf("create data track DC: %w", err)
+	}
+	for _, channel := range []*webrtc.DataChannel{lossyChannel, dataTrackChannel} {
+		channel.OnOpen(func() { go c.drainDataChannel(channel) })
+	}
+
+	if err := addRecvSections(pc, initialAudioSections, initialVideoSections); err != nil {
+		_ = pc.Close()
+		return webrtc.SessionDescription{}, err
+	}
+	offer, err := pc.CreateOffer(nil)
+	if err != nil {
+		_ = pc.Close()
+		return webrtc.SessionDescription{}, fmt.Errorf("create initial offer: %w", err)
+	}
+
+	c.pubMu.Lock()
+	c.pubPC = pc
+	c.reliableDC = reliableChannel
+	c.pendingInitialOffer = &offer
+	c.pubMu.Unlock()
+	return offer, nil
+}
+
+func (c *Client) drainDataChannel(channel *webrtc.DataChannel) {
+	rawChannel, err := channel.Detach()
+	if err != nil {
+		c.logFn("[lk] detach %s: %v", channel.Label(), err)
+		return
+	}
+	buf := make([]byte, common.DCBufSize)
+	for {
+		if _, err := rawChannel.Read(buf); err != nil {
+			return
+		}
+	}
+}
+
+func (c *Client) applyICEServers(servers []ICEServer) {
+	resolved := c.iceServersAsWebRTC(servers)
+	c.pubMu.Lock()
+	defer c.pubMu.Unlock()
+	if c.pubPC == nil {
+		return
+	}
+	configuration := c.pubPC.GetConfiguration()
+	configuration.ICEServers = resolved
+	if err := c.pubPC.SetConfiguration(configuration); err != nil {
+		c.logFn("[lk] set ICE servers: %v", err)
+		return
+	}
+	for i, s := range servers {
+		c.logFn("[lk] iceServer[%d]: urls=%v hasCred=%v", i, s.URLs, s.Username != "")
+	}
+}
+
+func (c *Client) addMediaSections(audios, videos int) {
+	c.pubMu.Lock()
+	defer c.pubMu.Unlock()
+	if c.pubPC == nil {
+		return
+	}
+	if err := addRecvSections(c.pubPC, audios, videos); err != nil {
+		c.logFn("[lk] %v", err)
+		return
+	}
+	if err := c.negotiateLocked(); err != nil {
+		c.logFn("[lk] negotiate media sections: %v", err)
+	}
+}
+
+func addRecvSections(pc *webrtc.PeerConnection, audios, videos int) error {
+	recvOnly := webrtc.RTPTransceiverInit{Direction: webrtc.RTPTransceiverDirectionRecvonly}
+	for range audios {
+		if _, err := pc.AddTransceiverFromKind(webrtc.RTPCodecTypeAudio, recvOnly); err != nil {
+			return fmt.Errorf("add audio section: %w", err)
+		}
+	}
+	for range videos {
+		if _, err := pc.AddTransceiverFromKind(webrtc.RTPCodecTypeVideo, recvOnly); err != nil {
+			return fmt.Errorf("add video section: %w", err)
+		}
+	}
+	return nil
+}
+
 func (c *Client) handleSignal(data []byte) {
 	ev, err := c.codec.Decode(data)
 	if err != nil {
@@ -332,6 +570,11 @@ func (c *Client) handleSignal(data []byte) {
 		c.logFn("[lk] join: room=%s participant=%s subscriberPrimary=%v iceServers=%d pingTimeout=%ds pingInterval=%ds",
 			c.join.RoomName, c.join.ParticipantID, c.join.SubscriberPrimary, len(c.join.ICEServers),
 			c.join.PingTimeoutSec, c.join.PingIntervalSec)
+		if c.singlePC {
+			c.applyICEServers(c.join.ICEServers)
+			c.joinedOnce.Do(func() { close(c.joined) })
+			return
+		}
 		if err := c.buildPeerConnections(); err != nil {
 			c.logFn("[lk] %v", err)
 			return
@@ -344,6 +587,10 @@ func (c *Client) handleSignal(data []byte) {
 		c.logFn("[lk] pub answer received, %d bytes", len(ev.SDP))
 		c.applyPubAnswer(ev.SDP)
 	case EventOffer:
+		if c.singlePC {
+			c.logFn("[lk] ignored offer, %d bytes", len(ev.SDP))
+			return
+		}
 		c.logFn("[lk] sub offer received, %d bytes", len(ev.SDP))
 		c.applySubOfferAndAnswer(ev.SDP)
 	case EventTrickle:
@@ -352,7 +599,15 @@ func (c *Client) handleSignal(data []byte) {
 	case EventToken:
 		c.token = ev.Token
 		c.logFn("[lk] token refreshed")
+	case EventReconnect:
+		c.applyICEServers(ev.ICEServers)
+	case EventMediaSections:
+		c.logFn("[lk] media sections requested audio=%d video=%d", ev.MediaSections.Audios, ev.MediaSections.Videos)
+		c.addMediaSections(ev.MediaSections.Audios, ev.MediaSections.Videos)
 	case EventLeave:
+		if ev.Leave == nil || ev.Leave.Action != leaveActionResume {
+			c.leaveReceived.Store(true)
+		}
 		if ev.Leave != nil {
 			c.logFn("[lk] ignored leave reason=%s action=%s",
 				DisconnectReasonName(ev.Leave.Reason), LeaveActionName(ev.Leave.Action))
@@ -375,16 +630,38 @@ func (c *Client) applyPubAnswer(sdp string) {
 		c.OnRemoteSDP(TargetPublisher, "answer", sdp)
 	}
 	c.pubMu.Lock()
-	defer c.pubMu.Unlock()
 	if c.pubPC == nil {
+		c.pubMu.Unlock()
 		return
 	}
+	initialOffer := c.pendingInitialOffer
+	c.pendingInitialOffer = nil
+	if initialOffer != nil {
+		if err := c.pubPC.SetLocalDescription(*initialOffer); err != nil {
+			c.pubMu.Unlock()
+			c.logFn("[lk] set initial local offer: %v", err)
+			return
+		}
+	}
 	if err := c.pubPC.SetRemoteDescription(webrtc.SessionDescription{Type: webrtc.SDPTypeAnswer, SDP: sdp}); err != nil {
+		c.pubMu.Unlock()
 		c.logFn("[lk] set pub remote answer: %v", err)
 		return
 	}
 	c.pubRemoteSet = true
 	c.drainPendingLocked(c.pubPC, &c.pubPending)
+	renegotiate := c.renegotiate
+	c.renegotiate = false
+	c.pubMu.Unlock()
+
+	if initialOffer != nil && c.OnReady != nil {
+		c.OnReady()
+	}
+	if renegotiate {
+		if err := c.Negotiate(); err != nil {
+			c.logFn("[lk] renegotiate: %v", err)
+		}
+	}
 }
 
 func (c *Client) applySubOfferAndAnswer(sdp string) {
@@ -437,7 +714,7 @@ func (c *Client) applyRemoteTrickle(m TrickleEvent) {
 	pc := &c.subPC
 	ready := &c.subRemoteSet
 	pending := &c.subPending
-	if m.Target == TargetPublisher {
+	if m.Target == TargetPublisher || c.singlePC {
 		mu = &c.pubMu
 		pc = &c.pubPC
 		ready = &c.pubRemoteSet
@@ -456,6 +733,23 @@ func (c *Client) applyRemoteTrickle(m TrickleEvent) {
 
 func (c *Client) ReadLoop() error {
 	defer c.Close()
+	for {
+		err := c.readSignals()
+		if c.closed.Load() {
+			return nil
+		}
+		if !c.singlePC || c.leaveReceived.Load() {
+			return err
+		}
+		c.logFn("[lk] signal lost: %v, resuming", err)
+		if resumeErr := c.resume(); resumeErr != nil {
+			c.logFn("[lk] resume failed: %v", resumeErr)
+			return err
+		}
+	}
+}
+
+func (c *Client) readSignals() error {
 	c.wsMu.Lock()
 	ws := c.ws
 	c.wsMu.Unlock()
@@ -465,9 +759,6 @@ func (c *Client) ReadLoop() error {
 	for {
 		mt, data, err := ws.ReadMessage()
 		if err != nil {
-			if c.closed.Load() {
-				return nil
-			}
 			return err
 		}
 		if !c.codec.Accepts(mt) {
@@ -475,6 +766,100 @@ func (c *Client) ReadLoop() error {
 		}
 		c.handleSignal(data)
 	}
+}
+
+func (c *Client) resume() error {
+	var lastErr error
+	for attempt, delay := range resumeDelays {
+		time.Sleep(delay)
+		if c.closed.Load() {
+			return fmt.Errorf("client closed")
+		}
+		err := c.resumeSignal()
+		if err == nil {
+			c.logFn("[lk] signal resumed, attempt %d", attempt+1)
+			return c.resumePublisher()
+		}
+		if errors.Is(err, errResumeRefused) {
+			return err
+		}
+		c.logFn("[lk] resume attempt %d: %v", attempt+1, err)
+		lastErr = err
+	}
+	return lastErr
+}
+
+func (c *Client) resumeSignal() error {
+	c.wsMu.Lock()
+	previous := c.ws
+	c.ws = nil
+	c.wsMu.Unlock()
+	common.CloseWS(previous)
+
+	request := encJoinRequest(joinRequest{Reconnect: true, ParticipantSID: c.join.ParticipantSID})
+	target, err := c.codec.SinglePCDialURL(c.wsURL, c.token, request)
+	if err != nil {
+		return err
+	}
+	conn, err := c.dial(target)
+	if err != nil {
+		return err
+	}
+	if err := conn.SetReadDeadline(time.Now().Add(resumeResponseTimeout)); err != nil {
+		common.CloseWS(conn)
+		return err
+	}
+	_, data, err := conn.ReadMessage()
+	if err != nil {
+		common.CloseWS(conn)
+		return fmt.Errorf("read first message: %w", err)
+	}
+	if err := conn.SetReadDeadline(time.Time{}); err != nil {
+		common.CloseWS(conn)
+		return err
+	}
+	first, err := c.codec.Decode(data)
+	if err != nil {
+		common.CloseWS(conn)
+		return err
+	}
+	if first.Kind == EventLeave {
+		common.CloseWS(conn)
+		if first.Leave != nil {
+			return fmt.Errorf("%w: reason=%s", errResumeRefused, DisconnectReasonName(first.Leave.Reason))
+		}
+		return errResumeRefused
+	}
+
+	c.wsMu.Lock()
+	if c.closed.Load() {
+		c.wsMu.Unlock()
+		common.CloseWS(conn)
+		return fmt.Errorf("client closed")
+	}
+	c.ws = conn
+	c.wsMu.Unlock()
+	c.handleSignal(data)
+	return nil
+}
+
+func (c *Client) resumePublisher() error {
+	c.pubMu.Lock()
+	defer c.pubMu.Unlock()
+	if c.pubPC == nil || c.pendingInitialOffer != nil {
+		return fmt.Errorf("publisher was never negotiated")
+	}
+	offerPending := c.pubPC.SignalingState() == webrtc.SignalingStateHaveLocalOffer
+	if !offerPending && !c.renegotiate {
+		return nil
+	}
+	if offerPending {
+		if err := c.pubPC.SetLocalDescription(webrtc.SessionDescription{Type: webrtc.SDPTypeRollback}); err != nil {
+			return fmt.Errorf("roll back pending offer: %w", err)
+		}
+	}
+	c.renegotiate = false
+	return c.negotiateLocked()
 }
 
 func (c *Client) PingLoop() {
@@ -496,7 +881,10 @@ func (c *Client) PingLoop() {
 		}
 		if err := c.SendPing(); err != nil {
 			c.logFn("[lk] ping send failed: %v", err)
-			return
+			if !c.singlePC {
+				return
+			}
+			continue
 		}
 		sentN++
 		if common.Debug && (sentN <= 3 || sentN%12 == 0) {

@@ -1,6 +1,10 @@
 package livekit
 
-import "fmt"
+import (
+	"bytes"
+	"compress/gzip"
+	"fmt"
+)
 
 const (
 	signalReqOffer      = 1
@@ -20,9 +24,11 @@ const (
 	signalRespLeave           = 8
 	signalRespRoomUpdate      = 11
 	signalRespRefreshToken    = 16
+	signalRespReconnect       = 19
 	signalRespPongResp        = 20
 	signalRespRequestResponse = 22
 	signalRespTrackSubscribed = 23
+	signalRespMediaSections   = 25
 
 	sdpFieldType = 1
 	sdpFieldSDP  = 2
@@ -75,6 +81,8 @@ const (
 	leaveFieldReason       = 2
 	leaveFieldAction       = 3
 
+	leaveActionResume = 1
+
 	roomFieldSID  = 1
 	roomFieldName = 2
 
@@ -89,6 +97,36 @@ const (
 
 	signalTargetPublisher  = 0
 	signalTargetSubscriber = 1
+
+	joinRequestFieldClientInfo         = 1
+	joinRequestFieldConnectionSettings = 2
+	joinRequestFieldPublisherOffer     = 6
+	joinRequestFieldReconnect          = 7
+	joinRequestFieldReconnectReason    = 8
+	joinRequestFieldParticipantSID     = 9
+
+	wrappedJoinFieldCompression = 1
+	wrappedJoinFieldJoinRequest = 2
+
+	clientInfoFieldSDK            = 1
+	clientInfoFieldVersion        = 2
+	clientInfoFieldProtocol       = 3
+	clientInfoFieldClientProtocol = 12
+	clientInfoFieldCapabilities   = 13
+
+	connectionSettingsFieldAutoSubscribe  = 1
+	connectionSettingsFieldAdaptiveStream = 2
+
+	reconnectFieldICEServers = 1
+
+	mediaSectionsFieldAudios = 1
+	mediaSectionsFieldVideos = 2
+
+	clientSDKJS                       = 1
+	capabilityCompressionDeflateRaw   = 2
+	joinCompressionGzip               = 1
+	gzipOSWindows                     = 10
+	reconnectReasonSignalDisconnected = 1
 )
 
 var disconnectReasonNames = map[int]string{
@@ -193,14 +231,27 @@ type joinResponse struct {
 }
 
 type signalResponse struct {
-	Kind         int
-	Join         *joinResponse
-	SDP          *sessionDescription
-	Trickle      *trickleMsg
-	Token        string
-	PongTime     int64
-	Leave        *LeaveInfo
-	Participants []ParticipantInfo
+	Kind          int
+	Join          *joinResponse
+	SDP           *sessionDescription
+	Trickle       *trickleMsg
+	Token         string
+	PongTime      int64
+	Leave         *LeaveInfo
+	Participants  []ParticipantInfo
+	ICEServers    []iceServer
+	MediaSections *mediaSections
+}
+
+type joinRequest struct {
+	PublisherOffer *sessionDescription
+	Reconnect      bool
+	ParticipantSID string
+}
+
+type mediaSections struct {
+	Audios int
+	Videos int
 }
 
 func encSessionDescription(sd sessionDescription) []byte {
@@ -360,6 +411,54 @@ func encSignalRequestPing(timestamp int64) []byte {
 	w.int64(signalReqPingLegacy, timestamp)
 	w.message(signalReqPingReq, encPing(timestamp))
 	return w.buf
+}
+
+func encSinglePCClientInfo() []byte {
+	w := pbWriter{}
+	w.int32(clientInfoFieldSDK, clientSDKJS)
+	w.string(clientInfoFieldVersion, SinglePCSDKVersion)
+	w.int32(clientInfoFieldProtocol, SinglePCProtocolVersion)
+	w.int32(clientInfoFieldClientProtocol, SinglePCClientProtocol)
+	w.bytes(clientInfoFieldCapabilities, []byte{capabilityCompressionDeflateRaw})
+	return w.buf
+}
+
+func encConnectionSettings() []byte {
+	w := pbWriter{}
+	w.bool(connectionSettingsFieldAutoSubscribe, true)
+	w.bool(connectionSettingsFieldAdaptiveStream, true)
+	return w.buf
+}
+
+func encJoinRequest(request joinRequest) []byte {
+	w := pbWriter{}
+	w.message(joinRequestFieldClientInfo, encSinglePCClientInfo())
+	w.message(joinRequestFieldConnectionSettings, encConnectionSettings())
+	if request.PublisherOffer != nil {
+		w.message(joinRequestFieldPublisherOffer, encSessionDescription(*request.PublisherOffer))
+	}
+	if request.Reconnect {
+		w.bool(joinRequestFieldReconnect, true)
+		w.int32(joinRequestFieldReconnectReason, reconnectReasonSignalDisconnected)
+		w.string(joinRequestFieldParticipantSID, request.ParticipantSID)
+	}
+	return w.buf
+}
+
+func encWrappedJoinRequest(request []byte) ([]byte, error) {
+	var compressed bytes.Buffer
+	gzipWriter := gzip.NewWriter(&compressed)
+	gzipWriter.Header.OS = gzipOSWindows
+	if _, err := gzipWriter.Write(request); err != nil {
+		return nil, fmt.Errorf("gzip join request: %w", err)
+	}
+	if err := gzipWriter.Close(); err != nil {
+		return nil, fmt.Errorf("gzip join request: %w", err)
+	}
+	w := pbWriter{}
+	w.int32(wrappedJoinFieldCompression, joinCompressionGzip)
+	w.bytes(wrappedJoinFieldJoinRequest, compressed.Bytes())
+	return w.buf, nil
 }
 
 func decSessionDescription(data []byte) (sessionDescription, error) {
@@ -659,6 +758,60 @@ func decJoinResponse(data []byte) (joinResponse, error) {
 	return jr, nil
 }
 
+func decReconnectResponse(data []byte) ([]iceServer, error) {
+	r := pbReader{buf: data}
+	var servers []iceServer
+	for !r.eof() {
+		field, wire, err := r.tag()
+		if err != nil {
+			return servers, err
+		}
+		if field == reconnectFieldICEServers && wire == wireBytes {
+			b, err := r.bytes()
+			if err != nil {
+				return servers, err
+			}
+			s, _ := decICEServer(b)
+			servers = append(servers, s)
+			continue
+		}
+		if err := r.skipWire(wire); err != nil {
+			return servers, err
+		}
+	}
+	return servers, nil
+}
+
+func decMediaSections(data []byte) (mediaSections, error) {
+	r := pbReader{buf: data}
+	var sections mediaSections
+	for !r.eof() {
+		field, wire, err := r.tag()
+		if err != nil {
+			return sections, err
+		}
+		switch {
+		case field == mediaSectionsFieldAudios && wire == wireVarint:
+			v, err := r.varint()
+			if err != nil {
+				return sections, err
+			}
+			sections.Audios = int(v)
+		case field == mediaSectionsFieldVideos && wire == wireVarint:
+			v, err := r.varint()
+			if err != nil {
+				return sections, err
+			}
+			sections.Videos = int(v)
+		default:
+			if err := r.skipWire(wire); err != nil {
+				return sections, err
+			}
+		}
+	}
+	return sections, nil
+}
+
 func decSignalResponse(data []byte) (signalResponse, error) {
 	r := pbReader{buf: data}
 	var sr signalResponse
@@ -704,6 +857,18 @@ func decSignalResponse(data []byte) (signalResponse, error) {
 			sr.Leave = &li
 		case signalRespUpdate:
 			sr.Participants = DecodeParticipantUpdate(inner)
+		case signalRespReconnect:
+			servers, err := decReconnectResponse(inner)
+			if err != nil {
+				return sr, err
+			}
+			sr.ICEServers = servers
+		case signalRespMediaSections:
+			sections, err := decMediaSections(inner)
+			if err != nil {
+				return sr, err
+			}
+			sr.MediaSections = &sections
 		}
 		return sr, nil
 	}

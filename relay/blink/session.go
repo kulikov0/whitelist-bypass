@@ -49,9 +49,7 @@ type Session struct {
 	sampleTracks       []*webrtc.TrackLocalStaticSample
 	sampleTransceivers []*webrtc.RTPTransceiver
 
-	pubReliableDC      *webrtc.DataChannel
-	pubReliableDCReady bool
-	subReliableDC      *webrtc.DataChannel
+	reliableDC *webrtc.DataChannel
 
 	vp8tun    *rtc.MultiTrackTunnel
 	kcptun    *rtc.MultiTrackKCPTunnel
@@ -100,6 +98,7 @@ func (s *Session) Start() error {
 		ConfigureSettingEngine: s.cfg.ConfigureSettingEngine,
 		NetDialContext:         s.cfg.NetDialContext,
 		ResolveICEHost:         s.cfg.ResolveICEHost,
+		SinglePeerConnection:   true,
 	})
 	if err != nil {
 		return err
@@ -107,7 +106,6 @@ func (s *Session) Start() error {
 	s.lk = lk
 	s.lk.OnReady = s.onLKReady
 	s.lk.OnTrack = s.onRemoteTrack
-	s.lk.OnDataChannel = s.onRemoteDataChannel
 	s.lk.OnPubConnected = s.startTunnel
 	s.lk.OnRemoteCandidate = func(target int, ic webrtc.ICECandidateInit) {
 		if s.OnRemoteCandidate != nil {
@@ -190,22 +188,16 @@ func (s *Session) onLKReady() {
 	s.sampleTransceivers = transceivers
 	s.mu.Unlock()
 
-	ordered := true
-	reliableChannel, err := pubPC.CreateDataChannel("_reliable", &webrtc.DataChannelInit{
-		Ordered: &ordered,
-	})
-	if err != nil {
-		s.cfg.LogFn("[lk] create reliable DC: %v", err)
+	reliableChannel := s.lk.ReliableDataChannel()
+	if reliableChannel == nil {
+		s.cfg.LogFn("[lk] no reliable DC")
 		return
 	}
 	s.mu.Lock()
-	s.pubReliableDC = reliableChannel
+	s.reliableDC = reliableChannel
 	s.mu.Unlock()
 	reliableChannel.OnOpen(func() {
 		s.cfg.LogFn("[lk] reliable DC open")
-		s.mu.Lock()
-		s.pubReliableDCReady = true
-		s.mu.Unlock()
 		s.maybeStartDCTunnel()
 	})
 
@@ -221,20 +213,9 @@ func (s *Session) onLKReady() {
 		}
 	}
 
-	offer, err := pubPC.CreateOffer(nil)
-	if err != nil {
-		s.cfg.LogFn("[lk] create offer: %v", err)
-		return
+	if err := s.lk.Negotiate(); err != nil {
+		s.cfg.LogFn("[lk] negotiate: %v", err)
 	}
-	if err := pubPC.SetLocalDescription(offer); err != nil {
-		s.cfg.LogFn("[lk] set local offer: %v", err)
-		return
-	}
-	if err := s.lk.SendOffer(offer.SDP); err != nil {
-		s.cfg.LogFn("[lk] send offer: %v", err)
-		return
-	}
-	s.cfg.LogFn("[lk] sent publisher offer, %d bytes", len(offer.SDP))
 }
 
 func (s *Session) startTunnel() {
@@ -283,45 +264,33 @@ func (s *Session) configPingPong(dataTunnel tunnel.DataTunnel, trackCount int) {
 
 func (s *Session) maybeStartDCTunnel() {
 	s.mu.Lock()
-	pubDC := s.pubReliableDC
-	subDC := s.subReliableDC
-	pubReady := s.pubReliableDCReady
-	s.mu.Unlock()
-	if pubDC == nil || subDC == nil || !pubReady {
+	reliableChannel := s.reliableDC
+	if reliableChannel == nil || s.dcStarted {
+		s.mu.Unlock()
 		return
 	}
-	if subDC.ReadyState() != webrtc.DataChannelStateOpen {
-		return
-	}
-	s.mu.Lock()
-	if s.dcStarted {
+	if reliableChannel.ReadyState() != webrtc.DataChannelStateOpen {
 		s.mu.Unlock()
 		return
 	}
 	s.dcStarted = true
 	s.mu.Unlock()
 
-	subRaw, err := subDC.Detach()
+	rawChannel, err := reliableChannel.Detach()
 	if err != nil {
-		s.cfg.LogFn("[lk] detach sub DC: %v", err)
+		s.cfg.LogFn("[lk] detach reliable DC: %v", err)
 		return
 	}
-	pubRaw, err := pubDC.Detach()
-	if err != nil {
-		s.cfg.LogFn("[lk] detach pub DC: %v", err)
-		return
-	}
-	readWrapped := livekit.NewDataPacketWrapper(subRaw, livekit.DataPacketKindReliable)
-	writeWrapped := livekit.NewDataPacketWrapper(pubRaw, livekit.DataPacketKindReliable)
+	wrapped := livekit.NewDataPacketWrapper(rawChannel, livekit.DataPacketKindReliable)
 	readBuf := s.cfg.ReadBuf
 	if readBuf == 0 {
 		readBuf = common.DCBufSize
 	}
-	dcTunnel := rtc.NewChunkedDCTunnelFromRaw(readWrapped, writeWrapped, s.cfg.Obfuscator, readBuf, s.cfg.LogFn)
+	dcTunnel := rtc.NewChunkedDCTunnelFromRaw(wrapped, wrapped, s.cfg.Obfuscator, readBuf, s.cfg.LogFn)
 	s.mu.Lock()
 	s.dctun = dcTunnel
 	s.mu.Unlock()
-	s.cfg.LogFn("[lk] dc tunnel ready, pub and sub _reliable")
+	s.cfg.LogFn("[lk] dc tunnel ready over _reliable")
 
 	if s.cfg.TunnelMode == TunnelModeDC {
 		s.fireOnConnected(dcTunnel)
@@ -431,20 +400,9 @@ func (s *Session) AdaptTrackCount(peerCount int) {
 			}
 		}
 	}
-	offer, err := pubPC.CreateOffer(nil)
-	if err != nil {
-		s.cfg.LogFn("[lk] adapt-track-count: create offer: %v", err)
-		return
+	if err := s.lk.Negotiate(); err != nil {
+		s.cfg.LogFn("[lk] adapt-track-count: negotiate: %v", err)
 	}
-	if err := pubPC.SetLocalDescription(offer); err != nil {
-		s.cfg.LogFn("[lk] adapt-track-count: set local offer: %v", err)
-		return
-	}
-	if err := s.lk.SendOffer(offer.SDP); err != nil {
-		s.cfg.LogFn("[lk] adapt-track-count: send offer: %v", err)
-		return
-	}
-	s.cfg.LogFn("[lk] adapt-track-count: renegotiation offer sent, %d bytes", len(offer.SDP))
 }
 
 func (s *Session) removePublisherTrack() bool {
@@ -597,20 +555,6 @@ func (s *Session) readVP8Track(track *webrtc.TrackRemote) {
 		frameBuf = frameBuf[:0]
 		frameValid = false
 	}
-}
-
-func (s *Session) onRemoteDataChannel(channel *webrtc.DataChannel) {
-	s.cfg.LogFn("[lk] remote DC label=%s id=%v", channel.Label(), channel.ID())
-	if channel.Label() != "_reliable" {
-		return
-	}
-	s.mu.Lock()
-	s.subReliableDC = channel
-	s.mu.Unlock()
-	channel.OnOpen(func() {
-		s.cfg.LogFn("[lk] remote _reliable DC open")
-		s.maybeStartDCTunnel()
-	})
 }
 
 func (s *Session) Close() {

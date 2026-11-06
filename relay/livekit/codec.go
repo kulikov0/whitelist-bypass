@@ -1,6 +1,7 @@
 package livekit
 
 import (
+	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"net/url"
@@ -18,6 +19,8 @@ const (
 	EventUpdate
 	EventLeave
 	EventToken
+	EventReconnect
+	EventMediaSections
 )
 
 type TrickleEvent struct {
@@ -26,13 +29,15 @@ type TrickleEvent struct {
 }
 
 type Event struct {
-	Kind         int
-	Join         *JoinResponse
-	SDP          string
-	Trickle      *TrickleEvent
-	Participants []ParticipantInfo
-	Token        string
-	Leave        *LeaveInfo
+	Kind          int
+	Join          *JoinResponse
+	SDP           string
+	Trickle       *TrickleEvent
+	Participants  []ParticipantInfo
+	Token         string
+	Leave         *LeaveInfo
+	ICEServers    []ICEServer
+	MediaSections *MediaSections
 }
 
 type AddTrackParams struct {
@@ -46,10 +51,11 @@ type AddTrackParams struct {
 
 type Codec interface {
 	DialURL(serverURL, token string) (string, error)
+	SinglePCDialURL(serverURL, token string, joinRequest []byte) (string, error)
 	MessageType() int
 	Accepts(messageType int) bool
 	Decode(data []byte) (Event, error)
-	EncodeOffer(sdp string) []byte
+	EncodeOffer(sdp string, id uint32) []byte
 	EncodeAnswer(sdp string) []byte
 	EncodeTrickle(candidate webrtc.ICECandidateInit, target int) []byte
 	EncodeAddTrack(p AddTrackParams) []byte
@@ -72,6 +78,23 @@ func (ProtoCodec) DialURL(serverURL, token string) (string, error) {
 	q.Set("version", SDKVersion)
 	q.Set("auto_subscribe", "1")
 	q.Set("adaptive_stream", "true")
+	u.RawQuery = q.Encode()
+	return u.String(), nil
+}
+
+func (ProtoCodec) SinglePCDialURL(serverURL, token string, joinRequest []byte) (string, error) {
+	u, err := url.Parse(serverURL)
+	if err != nil {
+		return "", fmt.Errorf("parse url: %w", err)
+	}
+	wrapped, err := encWrappedJoinRequest(joinRequest)
+	if err != nil {
+		return "", err
+	}
+	u.Path = "/rtc/v1"
+	q := u.Query()
+	q.Set("access_token", token)
+	q.Set("join_request", base64.URLEncoding.EncodeToString(wrapped))
 	u.RawQuery = q.Encode()
 	return u.String(), nil
 }
@@ -130,12 +153,21 @@ func (ProtoCodec) Decode(data []byte) (Event, error) {
 		}
 		ev.Kind = EventUpdate
 		ev.Participants = sr.Participants
+	case signalRespReconnect:
+		ev.Kind = EventReconnect
+		ev.ICEServers = sr.ICEServers
+	case signalRespMediaSections:
+		if sr.MediaSections == nil {
+			return ev, nil
+		}
+		ev.Kind = EventMediaSections
+		ev.MediaSections = sr.MediaSections
 	}
 	return ev, nil
 }
 
-func (ProtoCodec) EncodeOffer(sdp string) []byte {
-	return encSignalRequestOffer(sessionDescription{Type: "offer", SDP: sdp})
+func (ProtoCodec) EncodeOffer(sdp string, id uint32) []byte {
+	return encSignalRequestOffer(sessionDescription{Type: "offer", SDP: sdp, ID: id})
 }
 
 func (ProtoCodec) EncodeAnswer(sdp string) []byte {
@@ -208,6 +240,10 @@ type jsonAddTrack struct {
 type JSONCodec struct{}
 
 func (JSONCodec) DialURL(serverURL, _ string) (string, error) { return serverURL, nil }
+
+func (JSONCodec) SinglePCDialURL(string, string, []byte) (string, error) {
+	return "", fmt.Errorf("livekit: single peer connection needs the proto codec")
+}
 
 func (JSONCodec) MessageType() int { return websocket.TextMessage }
 
@@ -289,7 +325,7 @@ func (JSONCodec) encode(envelope string, payload any) []byte {
 	return body
 }
 
-func (c JSONCodec) EncodeOffer(sdp string) []byte {
+func (c JSONCodec) EncodeOffer(sdp string, _ uint32) []byte {
 	return c.encode("offer", jsonSDP{SDP: sdp, Type: "offer"})
 }
 
