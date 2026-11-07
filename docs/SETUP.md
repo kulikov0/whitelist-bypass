@@ -184,7 +184,7 @@ Creator и joiner должны входить **отдельно** - один в
 | `--name <name>` | - | - | да | да | - | - | Отображаемое имя в комнате |
 | `--resources <mode>` | да | да | да | да | да | да | `default` / `moderate` / `unlimited` / `custom`; у DION без `custom` |
 | `--read-buf <bytes>` | да | да | да | - | да | да | Размер read-буфера, только с `--resources custom` |
-| `--max-dc-buf <bytes>` | да | - | - | - | - | - | Порог `BufferedAmountLowThreshold` DC, только с `--resources custom` |
+| `--max-dc-buf <bytes>` | да | - | да | - | да | да | Порог буфера DC: отправка ждёт, пока буфер выше порога; только с `--resources custom` |
 | `--mem-limit <bytes>` | да | да | да | - | - | да | Soft memory limit Go рантайма, только с `--resources custom` |
 | `--write-file <path>` | да | да | да | да | да | да | Файл, куда записывается активная ссылка на звонок |
 | `--upstream-socks <host:port>` | да | да | да | да | да | да | Гнать трафик joiner-а через локальный SOCKS5 прокси, например VPN-клиент |
@@ -214,10 +214,10 @@ SOCKS5-инбаунд VPN-клиента должен поддерживать U
 
 ### Режимы ресурсов
 
-| Режим | `read-buf` | `max-dc-buf` (VK) | `mem-limit` | Когда использовать |
+| Режим | `read-buf` | `max-dc-buf` | `mem-limit` | Когда использовать |
 |---|---|---|---|---|
 | `moderate` | 16 KB | 1 MB | 64 MB | VPS с малой RAM |
-| `default`  | 32 KB | 4 MB | 128 MB | Обычное использование |
+| `default`  | 32 KB | 1 MB | 128 MB | Обычное использование |
 | `unlimited`| 64 KB | 8 MB | 256 MB | Максимум пропускной способности (может троттлить из-за congestion control) |
 | `custom`   | из `--read-buf` | из `--max-dc-buf` | из `--mem-limit` | Тонкая настройка |
 

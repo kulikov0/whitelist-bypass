@@ -220,7 +220,7 @@ Blink has no guest access and no password login. Run the creator or the joiner w
 | `--write-file <path>` | yes | yes | yes | yes | yes | yes | append the active join link to this file (one link per line) |
 | `--resources <mode>` | yes | yes | yes | yes | yes | yes | `default` / `moderate` / `unlimited` / `custom` (see below); DION has no `custom` |
 | `--read-buf <bytes>` | yes | yes | yes | - | yes | yes | DC/RTP read buffer; only consulted with `--resources custom` |
-| `--max-dc-buf <bytes>` | yes | - | - | - | - | - | DataChannel `BufferedAmountLowThreshold`; only with `--resources custom` |
+| `--max-dc-buf <bytes>` | yes | - | yes | - | yes | yes | pause sending when the DataChannel buffered amount exceeds this; only with `--resources custom` |
 | `--mem-limit <bytes>` | yes | yes | yes | - | - | yes | Go soft memory limit (`debug.SetMemoryLimit`); only with `--resources custom` |
 
 The full per-platform flag list, including the upstream SOCKS5 and local network options, is in [docs/SETUP.md](docs/SETUP.md).
@@ -242,10 +242,10 @@ Mutually exclusive with the call-creation flags (`--peer-id` for VK; the others 
 
 #### Resource modes
 
-| Mode | `read-buf` | `max-dc-buf` (VK) | `mem-limit` |
+| Mode | `read-buf` | `max-dc-buf` | `mem-limit` |
 |---|---|---|---|
 | `moderate` | 16 KB | 1 MB | 64 MB |
-| `default`  | 32 KB | 4 MB | 128 MB |
+| `default`  | 32 KB | 1 MB | 128 MB |
 | `unlimited`| 64 KB | 8 MB | 256 MB |
 | `custom`   | from `--read-buf` | from `--max-dc-buf` | from `--mem-limit` |
 
@@ -258,7 +258,7 @@ Mutually exclusive with the call-creation flags (`--peer-id` for VK; the others 
 ```
 
 - `read-buf` - TCP/DC read buffer size. Smaller = more frequent backpressure checks, less bursty memory
-- `max-dc-buf` - pauses TCP reads when the DataChannel buffered amount exceeds this; only wired in VK (Pion `BufferedAmountLowThreshold`)
+- `max-dc-buf` - pauses sending when the DataChannel buffered amount exceeds this, resumes at half of it; VK, WB Stream, Bitrix and Blink creators, joiners use 1 MB
 - `mem-limit` - Go runtime soft memory limit; makes GC more aggressive near the cap
 
 ## License
