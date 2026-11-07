@@ -658,16 +658,16 @@ func main() {
 	switch *resources {
 	case "moderate":
 		readBuf = 16384
-		maxDCBuf = 1 * 1024 * 1024
-		memLimit = 64 * 1024 * 1024
+		maxDCBuf = 1 << 20
+		memLimit = 64 << 20
 	case "default":
-		readBuf = 32768
-		maxDCBuf = 4 * 1024 * 1024
-		memLimit = 128 * 1024 * 1024
+		readBuf = common.DCBufSize
+		maxDCBuf = common.MaxDCBufSize
+		memLimit = 128 << 20
 	case "unlimited":
 		readBuf = common.RTPBufSize
-		maxDCBuf = 8 * 1024 * 1024
-		memLimit = 256 * 1024 * 1024
+		maxDCBuf = 8 << 20
+		memLimit = 256 << 20
 	case "custom":
 		readBuf = *customReadBuf
 		if readBuf == 0 {
@@ -675,11 +675,11 @@ func main() {
 		}
 		maxDCBuf = uint64(*customMaxDCBuf)
 		if maxDCBuf == 0 {
-			maxDCBuf = 8 * 1024 * 1024
+			maxDCBuf = 8 << 20
 		}
 		memLimit = *customMemLimit
 		if memLimit == 0 {
-			memLimit = 256 * 1024 * 1024
+			memLimit = 256 << 20
 		}
 	default:
 		log.Fatalf("[config] unknown resources mode: %s (use moderate, default, unlimited, custom)", *resources)

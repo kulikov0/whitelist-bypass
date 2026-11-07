@@ -46,6 +46,7 @@ type SessionConfig struct {
 	RoomID                 string
 	AccessToken            string
 	ReadBuf                int
+	MaxDCBuf               uint64
 	ScreenShare            bool // when true, publish a second VP8 track as ScreenShare and shard outbound across both
 	IsJoiner               bool // when true, run the configPingPong loop; only the joiner sends VP8 config to the peer
 	Reliable               bool
@@ -336,7 +337,11 @@ func (s *Session) maybeStartDCTunnel() {
 	if readBuf == 0 {
 		readBuf = common.DCBufSize
 	}
-	dctun := rtc.NewChunkedDCTunnelFromRaw(readWrapped, writeWrapped, s.cfg.Obfuscator, readBuf, s.cfg.LogFn)
+	maxDCBuf := s.cfg.MaxDCBuf
+	if maxDCBuf == 0 {
+		maxDCBuf = common.MaxDCBufSize
+	}
+	dctun := rtc.NewChunkedDCTunnelFromRaw(readWrapped, writeWrapped, pubDC, s.cfg.Obfuscator, readBuf, maxDCBuf, s.cfg.LogFn)
 	s.mu.Lock()
 	s.dctun = dctun
 	s.mu.Unlock()

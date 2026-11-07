@@ -34,6 +34,7 @@ type SessionConfig struct {
 	VP8FPS                 int
 	VP8Batch               int
 	ReadBuf                int
+	MaxDCBuf               uint64
 	ScreenShare            bool
 	IsJoiner               bool
 	Reliable               bool
@@ -286,7 +287,11 @@ func (s *Session) maybeStartDCTunnel() {
 	if readBuf == 0 {
 		readBuf = common.DCBufSize
 	}
-	dcTunnel := rtc.NewChunkedDCTunnelFromRaw(wrapped, wrapped, s.cfg.Obfuscator, readBuf, s.cfg.LogFn)
+	maxDCBuf := s.cfg.MaxDCBuf
+	if maxDCBuf == 0 {
+		maxDCBuf = common.MaxDCBufSize
+	}
+	dcTunnel := rtc.NewChunkedDCTunnelFromRaw(wrapped, wrapped, reliableChannel, s.cfg.Obfuscator, readBuf, maxDCBuf, s.cfg.LogFn)
 	s.mu.Lock()
 	s.dctun = dcTunnel
 	s.mu.Unlock()

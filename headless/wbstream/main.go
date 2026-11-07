@@ -21,6 +21,7 @@ func main() {
 	displayName := flag.String("name", "Headless", "display name in the room")
 	resources := flag.String("resources", "default", "resource mode: default, moderate, unlimited, custom")
 	customReadBuf := flag.Int("read-buf", 0, "DC read buffer size in bytes, used with -resources custom")
+	customMaxDCBuf := flag.Int("max-dc-buf", 0, "max DC buffer size in bytes, used with -resources custom")
 	customMemLimit := flag.Int64("mem-limit", 0, "memory limit in bytes, used with -resources custom")
 	writeFile := flag.String("write-file", "", "path to file where active room id is appended")
 	upstreamSocks := flag.String("upstream-socks", "", "route tunneled egress through this SOCKS5 proxy (host:port), e.g. a local VPN client")
@@ -35,21 +36,29 @@ func main() {
 	common.AllowLoopbackDst = *allowLoopback
 
 	var readBuf int
+	var maxDCBuf uint64
 	var memLimit int64
 	switch *resources {
 	case "moderate":
 		readBuf = 16384
+		maxDCBuf = 1 << 20
 		memLimit = 64 << 20
 	case "default":
 		readBuf = common.DCBufSize
+		maxDCBuf = common.MaxDCBufSize
 		memLimit = 128 << 20
 	case "unlimited":
 		readBuf = common.RTPBufSize
+		maxDCBuf = 8 << 20
 		memLimit = 256 << 20
 	case "custom":
 		readBuf = *customReadBuf
 		if readBuf == 0 {
 			readBuf = common.RTPBufSize
+		}
+		maxDCBuf = uint64(*customMaxDCBuf)
+		if maxDCBuf == 0 {
+			maxDCBuf = 8 << 20
 		}
 		memLimit = *customMemLimit
 		if memLimit == 0 {
@@ -61,7 +70,7 @@ func main() {
 	if memLimit > 0 {
 		debug.SetMemoryLimit(memLimit)
 	}
-	log.Printf("[config] resources=%s read-buf=%d mem-limit=%d", *resources, readBuf, memLimit)
+	log.Printf("[config] resources=%s read-buf=%d max-dc-buf=%d mem-limit=%d", *resources, readBuf, maxDCBuf, memLimit)
 
 	if *cookiesPath == "" {
 		log.Fatalf("[auth] --cookies is required")
@@ -108,6 +117,7 @@ func main() {
 			RoomID:      roomID,
 			AccessToken: access,
 			ReadBuf:     readBuf,
+			MaxDCBuf:    maxDCBuf,
 		})
 		sess.OnConnected = func(tun tunnel.DataTunnel) {
 			if activeBridge != nil {

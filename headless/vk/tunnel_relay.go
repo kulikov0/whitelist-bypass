@@ -31,9 +31,10 @@ type TunnelRelay struct {
 	externalICE func(*webrtc.ICECandidate)
 	externalCSC func(webrtc.PeerConnectionState)
 
-	dc    *webrtc.DataChannel
-	dcMu  sync.Mutex
-	conns sync.Map
+	dc         *webrtc.DataChannel
+	dcMu       sync.Mutex
+	dcFlowGate *rtc.DCFlowGate
+	conns      sync.Map
 
 	sampleTrack *webrtc.TrackLocalStaticSample
 	tun         *rtc.VP8DataTunnel
@@ -85,6 +86,7 @@ func (u *TunnelRelay) Init(iceServers []webrtc.ICEServer) error {
 		log.Printf("[relay] warning: could not create tunnel DC: %v", err)
 	} else {
 		u.dc = dc
+		u.dcFlowGate = rtc.NewDCFlowGate(dc, u.maxDCBuf)
 		dc.OnOpen(func() {
 			log.Printf("[relay] tunnel DC open (readyState=%v)", dc.ReadyState())
 		})
@@ -336,6 +338,10 @@ func (u *TunnelRelay) handleDCMessage(data []byte) {
 }
 
 func (u *TunnelRelay) sendDCFrame(connID uint32, mt byte, payload []byte) {
+	if mt == tunnel.MsgData && u.dcFlowGate != nil {
+		u.dcFlowGate.Acquire()
+		defer u.dcFlowGate.Release()
+	}
 	u.dcMu.Lock()
 	defer u.dcMu.Unlock()
 	if u.dc == nil {
@@ -393,16 +399,6 @@ func (u *TunnelRelay) connectTCP(connID uint32, addr string) {
 	buf := make([]byte, bufSz)
 	sent := 0
 	for {
-		if u.maxDCBuf > 0 {
-			u.dcMu.Lock()
-			dc := u.dc
-			u.dcMu.Unlock()
-			if dc != nil {
-				for dc.BufferedAmount() > u.maxDCBuf {
-					time.Sleep(5 * time.Millisecond)
-				}
-			}
-		}
 		n, err := conn.Read(buf)
 		if n > 0 {
 			u.sendDCFrame(connID, tunnel.MsgData, buf[:n])

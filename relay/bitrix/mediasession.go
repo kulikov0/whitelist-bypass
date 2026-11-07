@@ -29,6 +29,7 @@ type MediaParams struct {
 	Reliable  bool
 	DualTrack bool
 	ReadBuf   int
+	MaxDCBuf  uint64
 	LogFn     func(string, ...any)
 }
 
@@ -253,7 +254,11 @@ func (s *MediaSession) maybeStartDCTunnel() {
 	if readBuf == 0 {
 		readBuf = common.DCBufSize
 	}
-	dctun := rtc.NewChunkedDCTunnelFromRaw(readWrapped, writeWrapped, s.obf, readBuf, s.p.LogFn)
+	maxDCBuf := s.p.MaxDCBuf
+	if maxDCBuf == 0 {
+		maxDCBuf = common.MaxDCBufSize
+	}
+	dctun := rtc.NewChunkedDCTunnelFromRaw(readWrapped, writeWrapped, pubDC, s.obf, readBuf, maxDCBuf, s.p.LogFn)
 	s.mu.Lock()
 	s.dctun = dctun
 	s.mu.Unlock()

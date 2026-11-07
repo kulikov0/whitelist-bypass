@@ -35,6 +35,7 @@ type DCTunnel struct {
 	obf      *tunnel.TunnelObfuscator
 	chunked  bool
 	readBuf  int
+	flowGate *DCFlowGate
 
 	recvBufs  sync.Map
 	sendMsgID uint32
@@ -45,8 +46,8 @@ type DCTunnel struct {
 	sendMsgs  atomic.Uint64
 }
 
-func NewDCTunnel(dc *webrtc.DataChannel, obf *tunnel.TunnelObfuscator, readBuf int, logFn func(string, ...any)) *DCTunnel {
-	t := &DCTunnel{dc: dc, obf: obf, readBuf: readBuf, logFn: logFn}
+func NewDCTunnel(dc *webrtc.DataChannel, obf *tunnel.TunnelObfuscator, readBuf int, maxDCBuf uint64, logFn func(string, ...any)) *DCTunnel {
+	t := &DCTunnel{dc: dc, obf: obf, readBuf: readBuf, flowGate: NewDCFlowGate(dc, maxDCBuf), logFn: logFn}
 
 	raw, err := dc.Detach()
 	if err != nil {
@@ -69,25 +70,25 @@ func NewDCTunnel(dc *webrtc.DataChannel, obf *tunnel.TunnelObfuscator, readBuf i
 	return t
 }
 
-func NewDCTunnelFromRaw(dc *webrtc.DataChannel, raw datachannel.ReadWriteCloser, obf *tunnel.TunnelObfuscator, readBuf int, logFn func(string, ...any)) *DCTunnel {
-	t := &DCTunnel{dc: dc, raw: raw, obf: obf, readBuf: readBuf, logFn: logFn}
+func NewDCTunnelFromRaw(dc *webrtc.DataChannel, raw datachannel.ReadWriteCloser, obf *tunnel.TunnelObfuscator, readBuf int, maxDCBuf uint64, logFn func(string, ...any)) *DCTunnel {
+	t := &DCTunnel{dc: dc, raw: raw, obf: obf, readBuf: readBuf, flowGate: NewDCFlowGate(dc, maxDCBuf), logFn: logFn}
 	go t.readLoop()
 	return t
 }
 
-func NewChunkedDCTunnel(readRaw datachannel.ReadWriteCloser, writeDC *webrtc.DataChannel, obf *tunnel.TunnelObfuscator, readBuf int, logFn func(string, ...any)) *DCTunnel {
+func NewChunkedDCTunnel(readRaw datachannel.ReadWriteCloser, writeDC *webrtc.DataChannel, obf *tunnel.TunnelObfuscator, readBuf int, maxDCBuf uint64, logFn func(string, ...any)) *DCTunnel {
 	writeRaw, err := writeDC.Detach()
 	if err != nil {
 		logFn("dctunnel: write DC detach failed: %v", err)
 		return nil
 	}
-	t := &DCTunnel{raw: readRaw, writeRaw: writeRaw, obf: obf, readBuf: readBuf, logFn: logFn, chunked: true}
+	t := &DCTunnel{raw: readRaw, writeRaw: writeRaw, obf: obf, readBuf: readBuf, flowGate: NewDCFlowGate(writeDC, maxDCBuf), logFn: logFn, chunked: true}
 	go t.readLoop()
 	return t
 }
 
-func NewChunkedDCTunnelFromRaw(readRaw, writeRaw datachannel.ReadWriteCloser, obf *tunnel.TunnelObfuscator, readBuf int, logFn func(string, ...any)) *DCTunnel {
-	t := &DCTunnel{raw: readRaw, writeRaw: writeRaw, obf: obf, readBuf: readBuf, logFn: logFn, chunked: true}
+func NewChunkedDCTunnelFromRaw(readRaw, writeRaw datachannel.ReadWriteCloser, writeDC *webrtc.DataChannel, obf *tunnel.TunnelObfuscator, readBuf int, maxDCBuf uint64, logFn func(string, ...any)) *DCTunnel {
+	t := &DCTunnel{raw: readRaw, writeRaw: writeRaw, obf: obf, readBuf: readBuf, flowGate: NewDCFlowGate(writeDC, maxDCBuf), logFn: logFn, chunked: true}
 	go t.readLoop()
 	return t
 }
@@ -241,6 +242,10 @@ func (t *DCTunnel) SendData(data []byte) {
 			if wire == nil {
 				return
 			}
+		}
+		if msgType == tunnel.MsgData {
+			t.flowGate.Acquire()
+			defer t.flowGate.Release()
 		}
 		if t.chunked {
 			t.sendChunked(wire)

@@ -26,6 +26,7 @@ func main() {
 	roomFlag := flag.String("room", "", "conference link https://portal/video/CODE or alias to rejoin as host (empty = create new room)")
 	resources := flag.String("resources", "default", "resource mode: moderate, default, unlimited, custom")
 	customReadBuf := flag.Int("read-buf", 0, "DC read buffer size in bytes, used with -resources custom")
+	customMaxDCBuf := flag.Int("max-dc-buf", 0, "max DC buffer size in bytes, used with -resources custom")
 	writeFile := flag.String("write-file", "", "path to file where the active guest link is appended")
 	upstreamSocks := flag.String("upstream-socks", "", "route tunneled egress through this SOCKS5 proxy (host:port), e.g. a local VPN client")
 	upstreamUser := flag.String("upstream-user", "", "upstream SOCKS5 username")
@@ -39,21 +40,29 @@ func main() {
 	common.AllowLoopbackDst = *allowLoopback
 
 	var readBuf int
+	var maxDCBuf uint64
 	var memLimit int64
 	switch *resources {
 	case "moderate":
 		readBuf = 16384
+		maxDCBuf = 1 << 20
 		memLimit = 64 << 20
 	case "default":
 		readBuf = common.DCBufSize
+		maxDCBuf = common.MaxDCBufSize
 		memLimit = 128 << 20
 	case "unlimited":
 		readBuf = common.RTPBufSize
+		maxDCBuf = 8 << 20
 		memLimit = 256 << 20
 	case "custom":
 		readBuf = *customReadBuf
 		if readBuf == 0 {
 			readBuf = common.RTPBufSize
+		}
+		maxDCBuf = uint64(*customMaxDCBuf)
+		if maxDCBuf == 0 {
+			maxDCBuf = 8 << 20
 		}
 		memLimit = 256 << 20
 	default:
@@ -62,7 +71,7 @@ func main() {
 	if memLimit > 0 {
 		debug.SetMemoryLimit(memLimit)
 	}
-	log.Printf("[config] resources=%s read-buf=%d", *resources, readBuf)
+	log.Printf("[config] resources=%s read-buf=%d max-dc-buf=%d", *resources, readBuf, maxDCBuf)
 
 	if *cookiesPath == "" {
 		log.Fatalf("[FATAL] --cookies is required")
@@ -190,13 +199,14 @@ func main() {
 	}
 
 	ms, err := bitrix.NewMediaSession(bitrix.MediaParams{
-		Signal:  sig,
-		Alias:   alias,
-		Mode:    bitrix.TunnelModeAuto,
-		FPS:     24,
-		Batch:   30,
-		ReadBuf: readBuf,
-		LogFn:   log.Printf,
+		Signal:   sig,
+		Alias:    alias,
+		Mode:     bitrix.TunnelModeAuto,
+		FPS:      24,
+		Batch:    30,
+		ReadBuf:  readBuf,
+		MaxDCBuf: maxDCBuf,
+		LogFn:    log.Printf,
 	})
 	if err != nil {
 		log.Fatalf("[FATAL] media session: %v", err)
