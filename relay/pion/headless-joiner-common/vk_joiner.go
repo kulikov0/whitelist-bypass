@@ -30,6 +30,8 @@ const vkTopologyDirect = "DIRECT"
 
 const vkOrigin = "https://vk.ru"
 
+var errVKServerTopology = errors.New("VK moved this call to server topology, it cannot be tunneled, create a new call and connect again")
+
 type vkAuthRottenError struct {
 	Code string
 	Msg  string
@@ -109,6 +111,7 @@ type VKHeadlessJoiner struct {
 
 	configAck        configAckTracker
 	reconnectAttempt atomic.Int32
+	serverTopology   atomic.Bool
 	stopCh           chan struct{}
 	stopOnce         sync.Once
 }
@@ -177,7 +180,7 @@ func (h *VKHeadlessJoiner) RunWithParams(jsonParams string) {
 		h.Status.EmitStatus(common.StatusReconnecting)
 		if err := h.runOnce(); err != nil {
 			var authRotten *vkAuthRottenError
-			if errors.As(err, &authRotten) {
+			if errors.As(err, &authRotten) || errors.Is(err, errVKServerTopology) {
 				h.logFn("vk-joiner: %v, surrendering", err)
 				h.Status.EmitStatusError("call failed: " + err.Error())
 				return
@@ -193,6 +196,9 @@ func (h *VKHeadlessJoiner) runOnce() error {
 		return err
 	}
 	h.connectSFU()
+	if h.serverTopology.Load() {
+		return errVKServerTopology
+	}
 	return nil
 }
 
@@ -260,6 +266,12 @@ func (h *VKHeadlessJoiner) Close() {
 	if h.pc != nil {
 		h.pc.Close()
 	}
+}
+
+func (h *VKHeadlessJoiner) failForServerTopology(reason string) {
+	h.logFn("vk-joiner: %s -> %v", reason, errVKServerTopology)
+	h.serverTopology.Store(true)
+	h.closeTransport()
 }
 
 func (h *VKHeadlessJoiner) closeTransport() {
@@ -465,7 +477,9 @@ func (h *VKHeadlessJoiner) readLoop() {
 		msg, err := sfu.Recv()
 		if err != nil {
 			h.logFn("vk-joiner: WebTransport closed: %s", common.MaskError(err))
-			h.Status.EmitStatus(common.StatusTunnelLost)
+			if !h.serverTopology.Load() {
+				h.Status.EmitStatus(common.StatusTunnelLost)
+			}
 			return
 		}
 		if string(msg) == "ping" {
@@ -505,8 +519,7 @@ func (h *VKHeadlessJoiner) handleVKMessage(raw []byte) {
 			topo, _ := msg["topology"].(string)
 			h.logFn("vk-joiner: topology: %s", topo)
 			if topo != "" && topo != vkTopologyDirect {
-				h.logFn("vk-joiner: %s topology -> closing transport to reconnect and recover DIRECT", topo)
-				h.closeTransport()
+				h.failForServerTopology(topo + " topology")
 			}
 		case "participant-joined", "participant-added":
 			h.logFn("vk-joiner: <- %s", notif)
@@ -532,6 +545,10 @@ func (h *VKHeadlessJoiner) handleConnection(msg map[string]interface{}) {
 	if conv, ok := msg["conversation"].(map[string]interface{}); ok {
 		topo, _ := conv["topology"].(string)
 		h.logFn("vk-joiner: connection topology=%q", topo)
+		if topo != "" && topo != vkTopologyDirect {
+			h.failForServerTopology("joined under " + topo)
+			return
+		}
 	}
 	convParams, ok := msg["conversationParams"].(map[string]interface{})
 	if !ok {

@@ -160,9 +160,13 @@ func StartCaptchaProxy(redirectURI string, resolveFn ResolveFunc) int {
 		w.Header().Set("Access-Control-Allow-Origin", "*")
 		fmt.Fprint(w, "ok")
 	})
-	mux.HandleFunc("/generic_proxy", func(w http.ResponseWriter, r *http.Request) {
-		proxyURL := r.URL.Query().Get("proxy_url")
-		parsed, err := url.Parse(proxyURL)
+	mux.HandleFunc("/generic_proxy/", func(w http.ResponseWriter, r *http.Request) {
+		scheme, hostAndPath, found := strings.Cut(strings.TrimPrefix(r.URL.EscapedPath(), "/generic_proxy/"), "/")
+		if !found || (scheme != "http" && scheme != "https") {
+			http.Error(w, "Bad URL", http.StatusBadRequest)
+			return
+		}
+		parsed, err := url.Parse(scheme + "://" + hostAndPath)
 		if err != nil || parsed.Host == "" {
 			http.Error(w, "Bad URL", http.StatusBadRequest)
 			return
@@ -173,7 +177,8 @@ func StartCaptchaProxy(redirectURI string, resolveFn ResolveFunc) int {
 				req.Out.URL.Scheme = parsed.Scheme
 				req.Out.URL.Host = parsed.Host
 				req.Out.URL.Path = parsed.Path
-				req.Out.URL.RawQuery = parsed.RawQuery
+				req.Out.URL.RawPath = parsed.RawPath
+				req.Out.URL.RawQuery = r.URL.RawQuery
 				req.Out.Host = parsed.Host
 				req.Out.Header.Del("Accept-Encoding")
 			},
@@ -282,15 +287,24 @@ func rewriteCaptchaHTML(html, localOrigin, upstreamOrigin string) string {
     var localOrigin = %q;
     var upstreamOrigin = %q;
 
+    function proxyUrl(absoluteUrl) {
+        try {
+            var parsed = new URL(absoluteUrl);
+            return '/generic_proxy/' + parsed.protocol.slice(0, -1) + '/' + parsed.host + parsed.pathname + parsed.search + parsed.hash;
+        } catch (e) {
+            return absoluteUrl;
+        }
+    }
+
     function rewriteUrl(urlStr) {
         if (!urlStr || typeof urlStr !== 'string') return urlStr;
         if (urlStr.indexOf(localOrigin) === 0) return urlStr;
         if (urlStr.indexOf(upstreamOrigin) === 0) return localOrigin + urlStr.slice(upstreamOrigin.length);
         if (urlStr.indexOf('//') === 0) {
-            return '/generic_proxy?proxy_url=' + encodeURIComponent(window.location.protocol + urlStr);
+            return proxyUrl(window.location.protocol + urlStr);
         }
         if (urlStr.indexOf('http://') === 0 || urlStr.indexOf('https://') === 0) {
-            return '/generic_proxy?proxy_url=' + encodeURIComponent(urlStr);
+            return proxyUrl(urlStr);
         }
         return urlStr;
     }
