@@ -1,0 +1,36 @@
+# Watchdog config - copy to /etc/whitelist-bypass/watchdog-<instance>.conf
+#
+# Everything here has a default, so an empty file works. Set only what differs.
+# creator-watchdog-replay reads the same file, so tune a threshold here and
+# replay your logs to see what it would have changed.
+
+# Which service to restart, and which log to judge it by. The defaults are
+# derived from the instance name: wbstream@<instance>.service and
+# /var/log/wbstream-<instance>.log. Set them explicitly for anything else -
+# the rules are about relay behaviour, not about WB Stream specifically, so
+# the same watchdog works for the VK, Telemost and DION creators.
+#SERVICE=wbstream@main.service
+#LOG=/var/log/wbstream-main.log
+
+# No payload at all, dying all at once.
+#STALL_WINDOW_SEC=90
+#STALL_MIN_EOF=5
+
+# No payload at all, dying quietly. Backstop for what STALL misses.
+#QUIET_WINDOW_SEC=150
+#QUIET_MIN_EOF=2
+
+# Still twitching, but most connections come back empty. Raise the minimum if
+# your client reconnects often and you see false positives right after a
+# reconnect; that burst of EOFs is normal and should not cost you a restart.
+#DEGRADED_WINDOW_SEC=120
+#DEGRADED_MIN_EOF=25
+
+# Leave a freshly started service alone; minimum gap between restarts; how many
+# useless restarts in a row before the watchdog decides the fault is on the
+# client side and stops trying.
+#GRACE_SEC=180
+#COOLDOWN_SEC=300
+#MAX_STREAK=3
+
+#STATE_DIR=/var/lib/creator-watchdog
