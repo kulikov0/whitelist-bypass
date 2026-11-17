@@ -11,7 +11,9 @@ enum Log {
 
 enum AppIdentifiers {
     static let appGroup = "group.whitelist.bypass.vpn"
-    static let tunnelBundleId = "whitelist.bypass.vpn.PacketTunnel"
+    static var tunnelBundleId: String {
+        (Bundle.main.bundleIdentifier ?? "whitelist.bypass.vpn") + ".PacketTunnel"
+    }
     static let vpnLocalizedDescription = "Whitelist Bypass"
 
     static var relayLogURL: URL? {
