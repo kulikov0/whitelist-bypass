@@ -81,6 +81,11 @@ done
 find "$PAYLOAD_APP" -name "_CodeSignature" -type d -exec rm -rf {} + 2>/dev/null || true
 find "$PAYLOAD_APP" -name "embedded.mobileprovision" -delete 2>/dev/null || true
 
+APP_BIN="$TEMP_DIR/Payload/$APP_NAME/WhitelistBypassVPN"
+EXT_BIN="$TEMP_DIR/Payload/$APP_NAME/PlugIns/PacketTunnel.appex/PacketTunnel"
+codesign --entitlements "$APP_DIR/WhitelistBypassVPN/App.entitlements" --force -s - "$APP_BIN"
+codesign --entitlements "$APP_DIR/PacketTunnel/PacketTunnel.entitlements" --force -s - "$EXT_BIN"
+
 rm -f "$IPA_PATH"
 cd "$TEMP_DIR"
 zip -qr "$IPA_PATH" Payload/ -x "*.DS_Store"
